@@ -1,13 +1,13 @@
 export;
 
-import <vector>;
-import <cstddef>;
-import <optional>;
-import <unordered_map>;
-import <variant>;
-import <string>;
-import <future>;
-import <print>;
+#include <vector>;
+#include <cstddef>;
+#include <optional>;
+#include <unordered_map>;
+#include <variant>;
+#include <string>;
+#include <future>;
+#include <print>;
 
 export module cypher;
 
@@ -22,7 +22,7 @@ public:
 // выполнение шифрующего преобразования
 class IEncryption{
 public:
-	virtual std::vector<std::byte> generateRoundKeys(const std::vector<std::byte>& inputBlock, const std::vector<std::byte>& roundKey) const = 0;
+	virtual std::vector<std::byte> genRoundKeys(const std::vector<std::byte>& inputBlock, const std::vector<std::byte>& roundKey) const = 0;
 
 	virtual ~IEncryption() = default;
 };
@@ -100,6 +100,6 @@ public:
 
 };
 
-export void test_module() {
+export void test_module(){
 	std::print("Meow\n");
 }

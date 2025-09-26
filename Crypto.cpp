@@ -1,8 +1,8 @@
 ﻿// Crypto.cpp: определяет точку входа для приложения.
 //
+import cypher;
 
 #include "Crypto.h"
-import cypher;
 
 using namespace std;
 

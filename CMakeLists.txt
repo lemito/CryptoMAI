@@ -1,15 +1,26 @@
-﻿cmake_minimum_required (VERSION 3.12)
+﻿cmake_minimum_required(VERSION 3.20)
 
-if (POLICY CMP0141)
-  cmake_policy(SET CMP0141 NEW)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+project(Crypto LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_executable(Crypto 
+    Crypto.cpp 
+    Crypto.h 
+    src/perestanovki.cpp 
+)
+
+target_sources(Crypto PRIVATE
+    FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+    "src/cypher.cppm"
+)
+
+target_compile_features(Crypto PRIVATE cxx_std_23)
+
+if(MSVC)
+    target_compile_options(Crypto PRIVATE /std:c++latest)
+else()
+    target_compile_options(Crypto PRIVATE -std=c++23)
 endif()
-
-project ("Crypto")
-
-add_executable (Crypto "Crypto.cpp" "Crypto.h" "src/perestanovki.cpp" "src/cypher.ixx")
-set_property(TARGET Crypto PROPERTY CXX_STANDARD 23)
-if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET Crypto PROPERTY CXX_STANDARD 23)
-endif()
-

@@ -15,7 +15,3 @@ std::vector <std::byte> permutation(const std::vector<std::byte>& in, const auto
 	res.reserve(in.size());
 	return res;
 }
-
-int main() {
-	return 0;
-}
