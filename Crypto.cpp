@@ -1,4 +1,4 @@
-﻿import cypher;
+import cypher;
 
 #include "Crypto.h"
 
