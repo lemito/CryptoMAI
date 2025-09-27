@@ -83,7 +83,7 @@ export class SymmetricCypher : public ISymmetricCypher {
 	ParamContainer _params;
 
 	void setRoundKeys(const std::vector<std::byte>& encryptionKey) override {
-
+		throw std::runtime_error("мюдн дндекюрэ");
 	}
 
 public:
