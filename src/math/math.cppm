@@ -5,20 +5,35 @@ module;
 export module math;
 
 export namespace meow::math {
-using namespace boost::multiprecision;
 
-cpp_int lejandreSymbol(const cpp_int& a, const cpp_int& b) { return {}; }
+boost::multiprecision::cpp_int lejandreSymbol(
+    const boost::multiprecision::cpp_int& a,
+    const boost::multiprecision::cpp_int& b) {
+  return {};
+}
 
-cpp_int jacobiSymbol(const cpp_int& a, const cpp_int& b) { return {}; }
+boost::multiprecision::cpp_int jacobiSymbol(
+    const boost::multiprecision::cpp_int& a,
+    const boost::multiprecision::cpp_int& b) {
+  return {};
+}
 
-cpp_int gcd(const cpp_int& a, const cpp_int& b) { return {}; }
+boost::multiprecision::cpp_int gcd(const boost::multiprecision::cpp_int& a,
+                                   const boost::multiprecision::cpp_int& b) {
+  return {};
+}
 
-cpp_int eGCD(const cpp_int& a, const cpp_int& b) { return {}; }
+boost::multiprecision::cpp_int eGCD(const boost::multiprecision::cpp_int& a,
+                                    const boost::multiprecision::cpp_int& b) {
+  return {};
+}
 
-cpp_int modPow(cpp_int a, cpp_int pow, const cpp_int& mod) {
+boost::multiprecision::cpp_int modPow(
+    boost::multiprecision::cpp_int a, boost::multiprecision::cpp_int pow,
+    const boost::multiprecision::cpp_int& mod) {
   a = (a % mod + mod) % mod;
 
-  cpp_int res = 1;
+  boost::multiprecision::cpp_int res = 1;
 
   while (pow > 0) {
     if (pow & 1) {
