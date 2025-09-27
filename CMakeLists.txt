@@ -16,7 +16,7 @@ add_executable(Crypto
 
 target_sources(Crypto PRIVATE
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-        src/cypher.cppm
+        src/cypher/cypher.cppm src/math/primary/PrimaryTests.cppm src/math/math.cppm
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
