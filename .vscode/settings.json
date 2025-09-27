@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.cppStandard": "c++23",
+    "cmake.generator": "Ninja",
+    "files.associations": {
+        "print": "cpp",
+        "ostream": "cpp",
+        "format": "cpp"
+    }
+}
