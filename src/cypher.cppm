@@ -10,21 +10,13 @@ module;
 #include <variant>
 #include <vector>
 
-// import <vector>;
-// import <cstddef>;
-// import <optional>;
-// import <unordered_map>;
-// import <variant>;
-// import <string>;
-// import <future>;
-// import <print>;
-
 export module cypher;
 
+namespace meow::cypher {
 // генерация раундовых ключей
 class IGenRoundKey {
  public:
-  [[nodiscard]] virtual std::vector<std::vector<std::byte>> generateRoundKeys(
+  [[nodiscard]] virtual std::vector<std::vector<std::byte>> genRoundKeys(
       const std::vector<std::byte>& inputKey) const = 0;
 
   virtual ~IGenRoundKey() = default;
@@ -33,7 +25,7 @@ class IGenRoundKey {
 // выполнение шифрующего преобразования
 class IEncryption {
  public:
-  [[nodiscard]] virtual std::vector<std::byte> genRoundKeys(
+  [[nodiscard]] virtual std::vector<std::byte> encrypt(
       const std::vector<std::byte>& inputBlock,
       const std::vector<std::byte>& roundKey) const = 0;
 
@@ -43,14 +35,19 @@ class IEncryption {
 // (де)шифрование симметричным алгосом
 class ISymmetricCypher {
  public:
-  virtual void encrypt(const std::vector<std::byte>& block,
-                       const std::vector<std::byte>& roundKey,
-                       std::vector<std::byte>& res) const = 0;
-  virtual void decrypt(const std::vector<std::byte>& block,
-                       const std::vector<std::byte>& roundKey,
-                       std::vector<std::byte>& res) const = 0;
-
   virtual void setRoundKeys(const std::vector<std::byte>& encryptionKey) = 0;
+
+  virtual std::future<void> encrypt(const std::vector<std::byte>& in,
+                                    std::vector<std::byte>& res) const = 0;
+
+  virtual std::future<void> decrypt(const std::vector<std::byte>& in,
+                                    std::vector<std::byte>& res) const = 0;
+
+  virtual std::future<void> encrypt(const std::string& inputPath,
+                                    const std::string& outputPath) const = 0;
+
+  virtual std::future<void> decrypt(const std::string& inputPath,
+                                    const std::string& outputPath) const = 0;
 
   virtual ~ISymmetricCypher() = default;
 };
@@ -69,38 +66,39 @@ export using Param =
                  std::vector<std::byte>, char, std::byte, std::string, bool>;
 
 export class ParamContainer {
-  std::unordered_map<std::string, Param> params;
+  std::unordered_map<std::string, Param> _params;
 
  public:
   auto contains(const std::string& key) const -> bool {
-    return params.contains(key);
+    return _params.contains(key);
   }
 
   auto find(const std::string& key) const -> std::optional<Param> {
-    if (const auto it = params.find(key); it != params.end()) {
+    if (const auto it = _params.find(key); it != _params.end()) {
       return it->second;
     }
     return std::nullopt;
   }
 
   void set(const std::string& key, const Param& val) {
-    params.emplace(key, val);
+    _params.insert({key, val});
   }
 };
 
 //
-export class SymmetricCypher : public ISymmetricCypher {
+export class SymmetricCypher : public IGenRoundKey,
+                               public IEncryption,
+                               public ISymmetricCypher {
   std::vector<std::byte> _encryptionKey;
   encryptionMode _encMode;
   paddingMode _padMode;
   std::optional<std::vector<std::byte>> _init_vec;
   ParamContainer _params;
-
-  void setRoundKeys(const std::vector<std::byte>& encryptionKey) override {
-    throw std::runtime_error("НАДО ДОДЕЛАТЬ");
-  }
+  std::vector<std::vector<std::byte>> _roundKeys;
 
  public:
+  void setRoundKeys(const std::vector<std::byte>& encryptionKey) override {}
+
   SymmetricCypher(
       const std::vector<std::byte>& encryptionKey, const encryptionMode encMode,
       const paddingMode padMode,
@@ -115,13 +113,24 @@ export class SymmetricCypher : public ISymmetricCypher {
   };
 
   std::future<void> encrypt(const std::vector<std::byte>& in,
-                            std::vector<std::byte>& res);
-  std::future<void> encrypt(const std::string& inputPath,
-                            const std::string& outputPath);
-  std::future<void> decrypt(const std::vector<std::byte>& in,
-                            std::vector<std::byte>& res);
-  std::future<void> decrypt(const std::string& inputPath,
-                            const std::string& outputPath);
-};
+                            std::vector<std::byte>& res) const override {
+    throw std::runtime_error("НАДО СДЕЛАТЬ!!!");
+  }
 
+  std::future<void> encrypt(const std::string& inputPath,
+                            const std::string& outputPath) const override {
+    throw std::runtime_error("НАДО СДЕЛАТЬ!!!");
+  }
+
+  std::future<void> decrypt(const std::vector<std::byte>& in,
+                            std::vector<std::byte>& res) const override {
+    throw std::runtime_error("НАДО СДЕЛАТЬ!!!");
+  }
+
+  std::future<void> decrypt(const std::string& inputPath,
+                            const std::string& outputPath) const override {
+    throw std::runtime_error("НАДО СДЕЛАТЬ!!!");
+  }
+};
 export void test_module() { std::print("Meow\n"); }
+}  // namespace meow::cypher

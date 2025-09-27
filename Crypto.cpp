@@ -4,9 +4,8 @@ import cypher;
 
 using namespace std;
 
-int main()
-{
-	cout << "Hello CMake." << endl;
-	test_module();
-	return 0;
+int main() {
+  cout << "Hello CMake." << endl;
+  meow::cypher::test_module();
+  return 0;
 }
