@@ -1,20 +1,22 @@
-﻿cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.29)
 
-project(Crypto LANGUAGES CXX)
+project(CryptoMAI LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(Crypto 
-    Crypto.cpp 
-    Crypto.h 
-    src/perestanovki.cpp 
+set(CMAKE_CXX_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/cmodulecache)
+
+add_executable(Crypto
+        Crypto.cpp
+        Crypto.h
+        src/perestanovki.cpp
 )
 
 target_sources(Crypto PRIVATE
-    FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-    "src/cypher.cppm"
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher.cppm
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
