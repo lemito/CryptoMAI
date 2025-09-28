@@ -1,9 +1,18 @@
 {
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=build",
+        "--completion-style=detailed",
+        "--header-insertion=never",
+    ],
     "C_Cpp.default.cppStandard": "c++23",
     "cmake.generator": "Ninja",
     "files.associations": {
         "print": "cpp",
         "ostream": "cpp",
-        "format": "cpp"
-    }
+        "format": "cpp",
+        "stdexcept": "cpp"
+    },
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
+    "C_Cpp.intelliSenseEngine": "disabled"
 }
