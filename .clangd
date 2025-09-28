@@ -1,0 +1,12 @@
+CompileFlags:
+  Add: 
+    - -std=c++23
+    - -fmodules
+    - -Xclang
+    - -fmodules-codegen
+    - -Xclang
+    - -fmodules-debuginfo
+    - --precompile
+    - -I${workspaceFolder}/include
+    - -I${workspaceFolder}/build
+  CompilationDatabase: build
