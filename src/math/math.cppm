@@ -1,29 +1,21 @@
 module;
 
-#include <boost/multiprecision/cpp_int.hpp>
+#include "utils_math.h"
 
 export module math;
 
 export namespace meow::math {
 
-boost::multiprecision::cpp_int LejandreSymbol(
-    const boost::multiprecision::cpp_int& a,
-    const boost::multiprecision::cpp_int& p) {
+BI LejandreSymbol(const BI& a, const BI& p) { return {}; }
 
-  return {};
-}
-
-boost::multiprecision::cpp_int JacobiSymbol(
-    const boost::multiprecision::cpp_int& a,
-    const boost::multiprecision::cpp_int& n) {
+BI JacobiSymbol(const BI& a, const BI& n) {
   if (a % n == 0) {
     return 0;
   }
   return {};
 }
 
-constexpr boost::multiprecision::cpp_int GCD(boost::multiprecision::cpp_int a,
-                                             boost::multiprecision::cpp_int b) {
+constexpr BI GCD(BI a, BI b) {
   while (b > 0) {
     std::tie(a, b) = std::tuple(b, a % b);
   }
@@ -38,26 +30,20 @@ constexpr boost::multiprecision::cpp_int GCD(boost::multiprecision::cpp_int a,
  * https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm
  * http://e-maxx.ru/algo/extended_euclid_algorithm
  */
-constexpr std::tuple<boost::multiprecision::cpp_int,
-                     boost::multiprecision::cpp_int,
-                     boost::multiprecision::cpp_int>
-eGCD(const boost::multiprecision::cpp_int& a,
-     const boost::multiprecision::cpp_int& b) {
+constexpr std::tuple<BI, BI, BI> eGCD(const BI& a, const BI& b) {
   if (a == 0) {
     return {b, 0, 1};
   }
   auto [d, x1, y1] = eGCD(b % a, a);
-  boost::multiprecision::cpp_int x = y1 - (b / a) * x1;
-  boost::multiprecision::cpp_int y = x1;
+  BI x = y1 - (b / a) * x1;
+  BI y = x1;
   return {d, x, y};
 }
 
-constexpr boost::multiprecision::cpp_int modPow(
-    boost::multiprecision::cpp_int a, boost::multiprecision::cpp_int pow,
-    const boost::multiprecision::cpp_int& mod) {
+constexpr BI modPow(BI a, BI pow, const BI& mod) {
   a = (a % mod + mod) % mod;
 
-  boost::multiprecision::cpp_int res = 1;
+  BI res = 1;
 
   while (pow > 0) {
     if (pow & 1) {
