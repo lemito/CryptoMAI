@@ -35,7 +35,7 @@ class AbstractPrimaryTest : public IPrimaryTest {
   static constexpr size_t probabilisticCoeff =
       2;  // для Рабина-Миллера он 4 (у него вероятность 1-1/4)
 
-  virtual bool _isPrimary(const boost::multiprecision::cpp_int& number,
+  [[nodiscard]] virtual bool _isPrimary(const boost::multiprecision::cpp_int& number,
                           const boost::multiprecision::cpp_int& a) const = 0;
 
  public:
@@ -78,14 +78,14 @@ class AbstractPrimaryTest : public IPrimaryTest {
 };
 
 class FermatTest final : public AbstractPrimaryTest {
-  bool _isPrimary(const boost::multiprecision::cpp_int& number,
+  [[nodiscard]] bool _isPrimary(const boost::multiprecision::cpp_int& number,
                   const boost::multiprecision::cpp_int& a) const override {
     return true;
   }
 };
 
 class SoloveyStrassenTest final : public AbstractPrimaryTest {
-  bool _isPrimary(const boost::multiprecision::cpp_int& number,
+  [[nodiscard]] bool _isPrimary(const boost::multiprecision::cpp_int& number,
                   const boost::multiprecision::cpp_int& a) const override {
     return true;
   }
@@ -95,7 +95,7 @@ class MillerRabinTest final : public AbstractPrimaryTest {
   static constexpr size_t probabilisticCoeff =
       4;  // для Рабина-Миллера он 4 (у него вероятность 1-1/4)
 
-  bool _isPrimary(const boost::multiprecision::cpp_int& number,
+  [[nodiscard]] bool _isPrimary(const boost::multiprecision::cpp_int& number,
                   const boost::multiprecision::cpp_int& a) const override {
     return true;
   }
