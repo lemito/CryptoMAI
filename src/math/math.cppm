@@ -6,15 +6,19 @@ export module math;
 
 export namespace meow::math {
 
-boost::multiprecision::cpp_int lejandreSymbol(
+boost::multiprecision::cpp_int LejandreSymbol(
     const boost::multiprecision::cpp_int& a,
-    const boost::multiprecision::cpp_int& b) {
+    const boost::multiprecision::cpp_int& p) {
+
   return {};
 }
 
-boost::multiprecision::cpp_int jacobiSymbol(
+boost::multiprecision::cpp_int JacobiSymbol(
     const boost::multiprecision::cpp_int& a,
-    const boost::multiprecision::cpp_int& b) {
+    const boost::multiprecision::cpp_int& n) {
+  if (a % n == 0) {
+    return 0;
+  }
   return {};
 }
 
