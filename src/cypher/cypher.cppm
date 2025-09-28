@@ -52,7 +52,7 @@ class ISymmetricCypher {
   virtual ~ISymmetricCypher() = default;
 };
 
-export enum class encryptionMode : int8_t {
+export enum class encryptionMode : std::int8_t {
   ECB,
   CBC,
   PCBC,
@@ -60,9 +60,14 @@ export enum class encryptionMode : int8_t {
   CTR,
   RandomDelta
 };
-export enum class paddingMode : int8_t { Zeros, AnsiX923, PKCS7, ISO10126 };
+export enum class paddingMode : std::int8_t {
+  Zeros,
+  AnsiX923,
+  PKCS7,
+  ISO10126
+};
 export using Param =
-    std::variant<std::monostate, int32_t, int64_t, size_t,
+    std::variant<std::monostate, std::int32_t, std::int64_t, std::size_t,
                  std::vector<std::byte>, char, std::byte, std::string, bool>;
 
 export class ParamContainer {
