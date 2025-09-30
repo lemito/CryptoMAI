@@ -11,8 +11,8 @@ int main() {
   auto [d, x, y] = meow::math::eGCD(240, 46);
   const meow::math::primary::FermatTest f;
   const meow::math::primary::MillerRabinTest mr;
-  std::cout << f.roundCnt(0.9998) << std::endl;
-  std::cout << mr.roundCnt(0.9998) << std::endl;
+  std::cout << f.roundCnt(0.9998)  << ' ' << f.probabilisticCoeff << std::endl;
+  std::cout << mr.roundCnt(0.9998) << ' ' << mr.probabilisticCoeff <<std::endl;
   std::cout << d << " " << x << ' ' << y << std::endl;
   std::cout << "GCD(48, 18) = " << meow::math::GCD(48, 18) << std::endl;
   std::cout << "GCD(17, 13) = " << meow::math::GCD(17, 13) << std::endl;
