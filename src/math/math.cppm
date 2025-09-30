@@ -98,7 +98,8 @@ BI JacobiSymbol(const BI& a, const BI& n) {
   if (GCD(a, n) != 1) {
     return 0;
   }
-  // TODO:
+  // TODO: тут доделать
+
   return {};
 }
 }  // namespace meow::math

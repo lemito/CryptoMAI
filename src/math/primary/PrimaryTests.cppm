@@ -66,10 +66,12 @@ class AbstractPrimaryTest : public IPrimaryTest {
       throw std::invalid_argument("Вероятность точности должна быть [0.5; 1)");
     }
 
+    /// TODO: тут доделать
     const BI a = number + 100;
 
     const std::size_t rounds = roundCnt(probability);
     for (size_t cnt = 0; cnt < rounds; ++cnt) {
+      /// TODO: тут доделать
       std::printf("%lu\n", rounds);
 
       if (!_isPrimary(number, a)) {
