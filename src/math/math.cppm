@@ -23,8 +23,14 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
 }
 
 constexpr BI GCD(BI a, BI b) {
-  while (b > 0) {
-    std::tie(a, b) = std::tuple(b, a % b);
+  // while (b != 0) {
+  //   std::tie(a, b) = std::tuple(b, a % b);
+  // }
+  // return a;
+  while (b != 0) {
+    const BI temp = b;
+    b = a % b;
+    a = temp;
   }
   return a;
 }
@@ -51,7 +57,7 @@ constexpr std::tuple<BI, BI, BI> eGCD(const BI& a, const BI& b) {
  * https://en.wikipedia.org/wiki/Legendre_symbol
  * https://neerc.ifmo.ru/wiki/index.php?title=%D0%A1%D0%B8%D0%BC%D0%B2%D0%BE%D0%BB_%D0%9B%D0%B5%D0%B6%D0%B0%D0%BD%D0%B4%D1%80%D0%B0,_%D0%BA%D1%80%D0%B8%D1%82%D0%B5%D1%80%D0%B8%D0%B9_%D0%AD%D0%B9%D0%BB%D0%B5%D1%80%D0%B0
  */
-BI LejandreSymbol(const BI& a, const BI& p) {
+constexpr BI LejandreSymbol(const BI& a, const BI& p) {
   if (p <= 2) {
     throw std::invalid_argument("P должно быть > 2");
   }
@@ -65,6 +71,7 @@ BI LejandreSymbol(const BI& a, const BI& p) {
     return 0;
   }
 
+  // тупо волшебная формула
   const BI pow = (p - 1) / 2;
   if (const BI res = modPow(modA, pow, p); res == 1) {
     return 1;
@@ -78,10 +85,11 @@ BI LejandreSymbol(const BI& a, const BI& p) {
 
 /*
  * https://en.wikipedia.org/wiki/Jacobi_symbol
+ * https://studfile.net/preview/4292372/page:3/
  * https://neerc.ifmo.ru/wiki/index.php?title=%D0%90%D0%BB%D0%B3%D0%BE%D1%80%D0%B8%D1%82%D0%BC_%D0%B2%D1%8B%D1%87%D0%B8%D1%81%D0%BB%D0%B5%D0%BD%D0%B8%D1%8F_%D1%81%D0%B8%D0%BC%D0%B2%D0%BE%D0%BB%D0%B0_%D0%AF%D0%BA%D0%BE%D0%B1%D0%B8
  * O(loga logb)
  */
-BI JacobiSymbol(const BI& a, const BI& n) {
+constexpr BI JacobiSymbol(const BI& a, BI n) {
   if (n <= 0) {
     throw std::invalid_argument("n должно быть > 0");
   }
@@ -89,17 +97,46 @@ BI JacobiSymbol(const BI& a, const BI& n) {
     throw std::invalid_argument("n должно быть нечетным");
   }
 
-  const BI modA = (a % n + n) % n;
+  BI modA = (a % n + n) % n;
 
   if (modA == 0) {
     return 0;
   }
 
-  if (GCD(a, n) != 1) {
+  if (GCD(modA, n) != 1) {
     return 0;
   }
-  // TODO: тут доделать
 
-  return {};
+  int8_t sign = 1;
+  while (modA) {
+    // (4^meow|n) === (2|n)^2*meow === 1 => нафиг все что делится на 4 (мультпликат.)
+    while (modA % 4 == 0) {
+      modA /= 4;
+    }
+    if ((modA & 1) == 0) {
+      // n==8k+r r=[1,3,5,7] n-нечет
+      // (2|n) == (-1)^((n*n-1)/8) => 1(n=1,7mod8) -1(n=3,5mod8) => замена знака при нечет => (n*n-1)/8 тоже нечет
+      if (const auto tmp = (n * n - 1) / 8; tmp & 1) {
+        sign *= -1;
+      }
+      modA /= 2;
+    }
+
+    if (modA > 1) {
+      // https://en.wikipedia.org/wiki/Quadratic_reciprocity -- закон : (mNn) = (n|m) * (-1)^{((m-1)/2)*((n-1)/2)} -< туть должен стать минус
+      // (m|n)*(n|m) мб 1 [один знак] (n=m=1 mod 4) или -1[разный знак] (n=m=3mod4) при перестановке => ловим второй варик
+      if (modA % 4 == 3 && n % 4 == 3) {
+        sign = -sign;
+      }
+      // и переставляем местами (n|a)==(n%a|a) поменяв знаки ранее... ну и продолжаем считать
+      const auto rem = n % modA;
+      std::swap(n, modA);
+      modA = rem;
+    } else {
+      break;
+    }
+  }
+
+  return sign;
 }
 }  // namespace meow::math

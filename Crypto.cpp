@@ -15,5 +15,6 @@ int main() {
   std::cout << mr.roundCnt(0.9998) << std::endl;
   std::cout << d << " " << x << ' ' << y << std::endl;
   std::cout << meow::math::LejandreSymbol(12345, 331) << std::endl;
+  std::cout << meow::math::JacobiSymbol(219, 383) << std::endl;
   return 0;
 }
