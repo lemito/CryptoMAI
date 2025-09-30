@@ -1,6 +1,7 @@
 module;
 
 #include "utils_math.h"
+#include <tuple>
 
 export module math;
 
@@ -22,15 +23,9 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
   return res;
 }
 
-constexpr BI GCD(BI a, BI b) {
-  // while (b != 0) {
-  //   std::tie(a, b) = std::tuple(b, a % b);
-  // }
-  // return a;
+BI GCD(BI a, BI b) {
   while (b != 0) {
-    const BI temp = b;
-    b = a % b;
-    a = temp;
+        std::tie(a, b) = std::tuple<BI, BI>(b, a % b);
   }
   return a;
 }
@@ -97,7 +92,7 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
     throw std::invalid_argument("n должно быть нечетным");
   }
 
-  BI modA = (a % n + n) % n;
+  BI modA = a % n;
 
   if (modA == 0) {
     return 0;
@@ -129,9 +124,7 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
         sign = -sign;
       }
       // и переставляем местами (n|a)==(n%a|a) поменяв знаки ранее... ну и продолжаем считать
-      const auto rem = n % modA;
-      std::swap(n, modA);
-      modA = rem;
+      std::tie(modA, n) = std::tuple( n % modA, modA);
     } else {
       break;
     }
