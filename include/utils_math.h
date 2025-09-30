@@ -2,6 +2,7 @@
 #define CRYPTOMAI_MATH_H
 
 #include <boost/multiprecision/gmp.hpp>
+#include <algorithm>
 
 using BI = boost::multiprecision::mpz_int;
 
