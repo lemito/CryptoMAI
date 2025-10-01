@@ -6,6 +6,8 @@ module;
 
 #include "utils_math.h"
 
+import math;
+
 export module PrimaryTests;
 
 export namespace meow::math::primary {
@@ -31,6 +33,11 @@ class IPrimaryTest {
   // propability [0.5, 1)
   [[nodiscard]] virtual bool isPrimary(const BI& number,
                                        double probability) const = 0;
+  virtual BI genRandom(const BI&a, const BI& b) const {
+    boost::random::mt19937 randgen;
+    const boost::random::uniform_int_distribution dist(a,b);
+    return dist(randgen);
+  };
   virtual ~IPrimaryTest() = default;
 };
 
@@ -67,14 +74,13 @@ class AbstractPrimaryTest : public IPrimaryTest {
     }
 
     /// TODO: тут доделать
-    const BI a = number + 100;
+    // const BI a = number + 100;
 
     const std::size_t rounds = roundCnt(probability);
+    std::println(std::cout, "{}", rounds);
     for (size_t cnt = 0; cnt < rounds; ++cnt) {
       /// TODO: тут доделать
-      std::printf("%lu\n", rounds);
-
-      if (!_isPrimary(number, a)) {
+      if (auto a = genRandom(2, number - 1); !_isPrimary(number, a)) {
         return false;
       }
     }
@@ -85,7 +91,17 @@ class AbstractPrimaryTest : public IPrimaryTest {
 
 class FermatTest final : public AbstractPrimaryTest {
   [[nodiscard]] bool _isPrimary(const BI& number, const BI& a) const override {
-    return true;
+    // самый добрый тест
+    /// https://en.wikipedia.org/wiki/Fermat_primality_test
+    /// просто должны быть взаимопросты
+    /// O(klog^nloglogn) - n число; k-cnt
+    if (GCD(a, number) != 1) {
+      return false;
+    }
+    if (const auto res = modPow(a, number - 1, number); res == 1) {
+      return true;
+    }
+    return false;
   }
 };
 
