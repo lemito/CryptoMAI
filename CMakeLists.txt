@@ -26,7 +26,7 @@ target_include_directories(Crypto PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_sources(Crypto PRIVATE
     FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-    src/cypher/cypher.cppm src/math/primary/PrimaryTests.cppm src/math/math.cppm
+    src/cypher/cypher.cppm src/math/primary/PrimaryTests.cppm src/math/math.cppm src/cypher/RSA/RSA.cppm
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
