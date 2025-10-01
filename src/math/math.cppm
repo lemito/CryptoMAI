@@ -1,7 +1,8 @@
 module;
 
-#include "utils_math.h"
 #include <tuple>
+
+#include "utils_math.h"
 
 export module math;
 
@@ -24,8 +25,9 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
 }
 
 BI GCD(BI a, BI b) {
-  while (b != 0) {
-        std::tie(a, b) = std::tuple<BI, BI>(b, a % b);
+  const auto ZERO = BI(0);
+  while (b != ZERO) {
+    std::tie(a, b) = std::tuple<BI, BI>(b, a % b);
   }
   return a;
 }
@@ -104,13 +106,15 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
 
   int8_t sign = 1;
   while (modA) {
-    // (4^meow|n) === (2|n)^2*meow === 1 => нафиг все что делится на 4 (мультпликат.)
+    // (4^meow|n) === (2|n)^2*meow === 1 => нафиг все что делится на 4
+    // (мультпликат.)
     while (modA % 4 == 0) {
       modA /= 4;
     }
     if ((modA & 1) == 0) {
       // n==8k+r r=[1,3,5,7] n-нечет
-      // (2|n) == (-1)^((n*n-1)/8) => 1(n=1,7mod8) -1(n=3,5mod8) => замена знака при нечет => (n*n-1)/8 тоже нечет
+      // (2|n) == (-1)^((n*n-1)/8) => 1(n=1,7mod8) -1(n=3,5mod8) => замена знака
+      // при нечет => (n*n-1)/8 тоже нечет
       if (const auto tmp = (n * n - 1) / 8; tmp & 1) {
         sign *= -1;
       }
@@ -118,13 +122,16 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
     }
 
     if (modA > 1) {
-      // https://en.wikipedia.org/wiki/Quadratic_reciprocity -- закон : (mNn) = (n|m) * (-1)^{((m-1)/2)*((n-1)/2)} -< туть должен стать минус
-      // (m|n)*(n|m) мб 1 [один знак] (n=m=1 mod 4) или -1[разный знак] (n=m=3mod4) при перестановке => ловим второй варик
+      // https://en.wikipedia.org/wiki/Quadratic_reciprocity -- закон : (mNn) =
+      // (n|m) * (-1)^{((m-1)/2)*((n-1)/2)} -< туть должен стать минус
+      // (m|n)*(n|m) мб 1 [один знак] (n=m=1 mod 4) или -1[разный знак]
+      // (n=m=3mod4) при перестановке => ловим второй варик
       if (modA % 4 == 3 && n % 4 == 3) {
         sign = -sign;
       }
-      // и переставляем местами (n|a)==(n%a|a) поменяв знаки ранее... ну и продолжаем считать
-      std::tie(modA, n) = std::tuple( n % modA, modA);
+      // и переставляем местами (n|a)==(n%a|a) поменяв знаки ранее... ну и
+      // продолжаем считать
+      std::tie(modA, n) = std::tuple(n % modA, modA);
     } else {
       break;
     }
