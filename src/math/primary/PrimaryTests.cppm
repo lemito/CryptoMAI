@@ -33,9 +33,9 @@ class IPrimaryTest {
   // propability [0.5, 1)
   [[nodiscard]] virtual bool isPrimary(const BI& number,
                                        double probability) const = 0;
-  virtual BI genRandom(const BI&a, const BI& b) const {
+  [[nodiscard]] virtual BI genRandom(const BI& a, const BI& b) const {
     boost::random::mt19937 randgen;
-    const boost::random::uniform_int_distribution dist(a,b);
+    const boost::random::uniform_int_distribution dist(a, b);
     return dist(randgen);
   };
   virtual ~IPrimaryTest() = default;
@@ -107,6 +107,13 @@ class FermatTest final : public AbstractPrimaryTest {
 
 class SoloveyStrassenTest final : public AbstractPrimaryTest {
   [[nodiscard]] bool _isPrimary(const BI& number, const BI& a) const override {
+    if (GCD(a, number) != 1) {
+      return false;
+    }
+    const auto symbol = JacobiSymbol(a, number);
+    if (const auto exp = modPow(a, (number - 1) / 2, number);
+        symbol != exp || symbol == 0)
+      return false;
     return true;
   }
 };
@@ -136,7 +143,23 @@ class MillerRabinTest final : public AbstractPrimaryTest {
 
  private:
   [[nodiscard]] bool _isPrimary(const BI& number, const BI& a) const override {
-    return true;
+    if (GCD(a, number) != 1) {
+      return false;
+    }
+    if ((number & 1) == 1 && (number + 1 & 1) == 0) {
+      /// n+1 == s*2^d
+      BI d, s;
+
+      if (modPow(a, s, number) == 1) {
+        return true;
+      }
+      for (auto i = 0; i < d; ++i) {
+        if (modPow(a, i * s, number) == 1) {
+          return false;
+        }
+      }
+    }
+    return false;
   }
 };
 }  // namespace meow::math::primary
