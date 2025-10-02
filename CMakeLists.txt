@@ -1,4 +1,7 @@
-﻿cmake_minimum_required(VERSION 3.29)
+﻿cmake_minimum_required(VERSION 3.30...3.32)
+
+set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
+set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
 
 project(CryptoMAI LANGUAGES CXX)
 
@@ -8,8 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/cmodulecache)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-fmodules)
-endif ()
+    add_compile_options(-fmodules) # -fmodules-cache-path=${CMAKE_CXX_MODULE_DIRECTORY}
+endif()
+
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
