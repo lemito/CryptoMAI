@@ -1,8 +1,9 @@
 module;
 
-import PrimaryTests;
+import math.PrimaryTests;
+import cypher;
 
-export module RSA;
+export module cypher.RSA;
 
 namespace meow::cypher::RSA{
 
