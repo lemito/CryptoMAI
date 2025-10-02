@@ -2,18 +2,15 @@
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fimplicit-modules -fimplicit-module-maps -stdlib=libc++")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fimplicit-modules -stdlib=libc++")
 
 project(CryptoMAI LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/cmodulecache)
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    add_compile_options(-fmodules) # -fmodules-cache-path=${CMAKE_CXX_MODULE_DIRECTORY}
-endif()
-
+#set(CMAKE_CXX_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/cmodulecache)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -48,7 +45,14 @@ target_sources(Crypto PUBLIC
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
+# Remove or modify these flags
+target_compile_options(Crypto PRIVATE
+        -fmodules
+#        -fbuiltin-module-map
+        -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
+)
 
+target_compile_options(Crypto PRIVATE -fno-modules)
 if (MSVC)
     target_compile_options(Crypto PRIVATE /std:c++latest)
 else ()
