@@ -9,6 +9,7 @@ module;
 #include <utility>
 #include <variant>
 #include <vector>
+#include <cstdint>
 
 export module cypher;
 
