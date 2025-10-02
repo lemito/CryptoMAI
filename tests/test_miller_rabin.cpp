@@ -32,7 +32,7 @@ TEST(MillerRabinTest, MediumPrimes) {
 
 TEST(MillerRabinTest, MediumComposites) {
   const meow::math::primary::MillerRabinTest mr;
-  std::vector<BI> composites = {100, 102, 104, 105, 106,
+  const std::vector<BI> composites = {100, 102, 104, 105, 106,
                                 108, 110, 111, 112, 114};
   for (const auto& composite : composites) {
     EXPECT_FALSE(mr.isPrimary(composite, 0.9998));
@@ -72,7 +72,7 @@ TEST(MillerRabinTest, LargePrimes) {
 
 TEST(MillerRabinTest, LargeComposites) {
   const meow::math::primary::MillerRabinTest mr;
-  std::vector<BI> composites = {
+  const std::vector<BI> composites = {
     BI("115792089237316195423570985008687907853269984665640564039457584007913"
        "129639937"),
     BI("9999999999999999999999999999999999999999"),
