@@ -1,12 +1,27 @@
 module;
 
-#include <tuple>
+#include <tuple>;
 
 #include "utils_math.h"
 
 export module math;
 
 export namespace meow::math {
+
+constexpr BI pow(BI a, BI pow) {
+  if (pow < 0) {
+    throw std::invalid_argument("степень должна быть положительной");
+  }
+  BI res = 1;
+  while (pow > 0) {
+    if (pow & 1) {
+      res = (res * a);
+    }
+    a = (a * a);
+    pow >>= 1;
+  }
+  return res;
+}
 
 constexpr BI modPow(BI a, BI pow, const BI& mod) {
   if (pow < 0) {
@@ -95,6 +110,12 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
   }
 
   BI modA = a % n;
+  if (modA < 0) {
+    modA += n;
+  }
+  if (n == 1 || modA == 1) {
+    return 1;
+  }
 
   if (modA == 0) {
     return 0;
