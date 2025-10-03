@@ -40,12 +40,11 @@ class IPrimaryTest {
 class AbstractPrimaryTest : public IPrimaryTest {
   static constexpr size_t probabilisticCoeff =
       2;  // для Рабина-Миллера он 4 (у него вероятность 1-1/4)
+  boost::random::mt19937 randgen{static_cast<unsigned int>(std::time(nullptr))};
 
   [[nodiscard]] virtual bool _isPrimary(const BI& number,
                                         const BI& a) const = 0;
   [[nodiscard]] virtual BI genRandom(const BI& a, const BI& b) const {
-    static boost::random::mt19937 randgen(
-        static_cast<unsigned int>(std::time(nullptr)));
     const boost::random::uniform_int_distribution dist(a, b);
     return dist(randgen);
   }
