@@ -27,13 +27,17 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
   if (pow < 0) {
     throw std::invalid_argument("степень должна быть положительной");
   }
+  if (mod == 0) {
+    throw std::invalid_argument(
+        std::format("низя mod=0 {}^{}", to_string(a), to_string(pow)));
+  }
   a = (a % mod + mod) % mod;
   BI res = 1;
   while (pow > 0) {
     if (pow & 1) {
-      res = (res * a) % mod;
+      res = res * a % mod;
     }
-    a = (a * a) % mod;
+    a = a * a % mod;
     pow >>= 1;
   }
   return res;
@@ -41,8 +45,8 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
 
 BI GCD(BI a, BI b) {
   const auto ZERO = BI(0);
-  while (b != ZERO) {
-    std::tie(a, b) = std::tuple<BI, BI>(b, a % b);
+  while (b > ZERO) {
+    std::tie(a, b) = std::make_tuple<BI, BI>(std::move(b), a % b);
   }
   return a;
 }
