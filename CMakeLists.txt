@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.30...3.32)
+﻿cmake_minimum_required(VERSION 3.29.3...3.32)
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
