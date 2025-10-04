@@ -152,7 +152,7 @@ class RSAService {
         d = x;
         c++;
         if (c >= INT_MAX) throw std::runtime_error("c>=INT_MAX");
-      } while (!good4WiennerAttack(d, N));
+      } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
 
       return {PublicKey(e, N), PrivateKey(d, N)};
     }
