@@ -46,13 +46,52 @@ class RSAService {
 
     constexpr BI genPrimeNumber() {
       BI number;
-      size_t cnt = 0;
       do {
         number = genRandNumber();
-        ++cnt;
-        if (cnt >= INT_MAX) throw std::runtime_error("cnt>=INT_MAX");
       } while (!_primaryTest->isPrimary(number, _probability));
       return number;
+    }
+
+    constexpr std::tuple<BI, BI, BI> _setExponents() {
+      BI e;
+      BI q;
+      const BI p = genPrimeNumber();
+      do {
+        q = genPrimeNumber();
+      } while (!good4FermatAttack(p, q));
+      BI N = p * q;
+      const auto phi = EulerFuncN(p, q);
+
+      // 49081 -- просто рандомное простое число из https://oeis.org/A004023
+      const boost::random::uniform_int_distribution<BI> dist(49081, phi);
+
+      do {
+        e = dist(_gen);
+      } while (math::GCD(e, phi) != 1);
+
+      // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
+      const auto [gcd, x, y] = math::eGCD(e, phi);
+      BI d = x;
+
+      return {e, d, N};
+    }
+
+    constexpr std::pair<PublicKey, PrivateKey> _genKeys(
+        const bool needHackedByWienner = false) {
+      BI e;
+      BI d;
+      BI N;
+      if (needHackedByWienner) {
+        do {
+          std::tie(e, d, N) = _setExponents();
+        } while (e <= 0 || d <= 0);
+      } else {
+        do {
+          std::tie(e, d, N) = _setExponents();
+        } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+      }
+
+      return {PublicKey(e, N), PrivateKey(d, N)};
     }
 
    public:
@@ -122,39 +161,8 @@ class RSAService {
       return true;
     }
 
-    std::pair<PublicKey, PrivateKey> genKeys() {
-      BI e;
-      BI d;
-      BI N;
-      size_t a = 0, b = 0, c = 0;
-      do {
-        BI q;
-        BI p = genPrimeNumber();
-        do {
-          q = genPrimeNumber();
-          a++;
-          if (a >= INT_MAX) throw std::runtime_error("a>=INT_MAX");
-        } while (!good4FermatAttack(p, q));
-        N = p * q;
-        const auto phi = EulerFuncN(p, q);
-
-        // 49081 -- просто рандомное простое число из https://oeis.org/A004023
-        const boost::random::uniform_int_distribution<BI> dist(49081, phi);
-
-        do {
-          e = dist(_gen);
-          b++;
-          if (b >= INT_MAX) throw std::runtime_error("b>=INT_MAX");
-        } while (math::GCD(e, phi) != 1);
-
-        // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
-        const auto [gcd, x, y] = math::eGCD(e, phi);
-        d = x;
-        c++;
-        if (c >= INT_MAX) throw std::runtime_error("c>=INT_MAX");
-      } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
-
-      return {PublicKey(e, N), PrivateKey(d, N)};
+    constexpr std::pair<PublicKey, PrivateKey> genKeys() {
+      return _genKeys(false);
     }
   };
 
