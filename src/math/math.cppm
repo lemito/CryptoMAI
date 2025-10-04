@@ -9,8 +9,9 @@ export module math;
 export namespace meow::math {
 
 constexpr BI pow(BI a, BI pow) {
+  if (pow == 0) return 1;
   if (pow < 0) {
-    throw std::invalid_argument("степень должна быть положительной");
+    throw std::invalid_argument("pow: степень должна быть положительной");
   }
   BI res = 1;
   while (pow > 0) {
@@ -24,12 +25,13 @@ constexpr BI pow(BI a, BI pow) {
 }
 
 constexpr BI modPow(BI a, BI pow, const BI& mod) {
-  if (pow < 0) {
-    throw std::invalid_argument("степень должна быть положительной");
-  }
   if (mod == 0) {
     throw std::invalid_argument(
         std::format("низя mod=0 {}^{}", to_string(a), to_string(pow)));
+  }
+  if (pow == 0) return 1;
+  if (pow < 0) {
+    throw std::invalid_argument("modPow: степень должна быть положительной");
   }
   a = (a % mod + mod) % mod;
   BI res = 1;
