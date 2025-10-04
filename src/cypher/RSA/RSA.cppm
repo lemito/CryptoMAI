@@ -4,11 +4,12 @@ module;
 #include <utility>
 
 #include "utils_math.h"
+
+export module cypher.RSA;
+
 import math;
 import math.PrimaryTests;
 import cypher;
-
-export module cypher.RSA;
 
 export namespace meow::cypher::RSA {
 class RSAService {

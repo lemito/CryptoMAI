@@ -6,9 +6,10 @@ module;
 #include <stdexcept>
 
 #include "utils_math.h"
-import math;
 
 export module math.PrimaryTests;
+
+import math;
 
 export namespace meow::math::primary {
 constexpr double default_epsilon = std::numeric_limits<double>::epsilon();
