@@ -42,6 +42,7 @@ target_sources(Crypto PUBLIC
         src/math/primary/PrimaryTests.cppm
         src/math/math.cppm
         src/cypher/RSA/RSA.cppm
+        src/cypher/RSA/BadRSA.cppm
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
