@@ -14,6 +14,10 @@ class WiennerAttackService {
     BI numerator;
     BI denominator;
 
+    bool operator==(const Fraction& other) const {
+      return numerator == other.numerator && denominator == other.denominator;
+    }
+
     friend std::ostream& operator<<(std::ostream& ofs,
                                     const Fraction& fraction) {
       ofs << fraction.numerator << "/" << fraction.denominator;
@@ -45,7 +49,7 @@ class WiennerAttackService {
       BI c = coefficients[0];
       BI d = 1;
 
-      convergents.push_back({a, b});
+      // convergents.push_back({a, b});
       convergents.push_back({c, d});
 
       for (const auto& coeff : coefficients | std::views::drop(1)) {
@@ -94,12 +98,13 @@ class WiennerAttackService {
     const auto coefs = ContinuedFraction::calcCoeffs(fr);
 
     for (const auto convs = ContinuedFraction::convergentsCF(coefs);
-         const auto& [numerator, denominator] : convs | std::views::drop(1)) {
+         const auto& [numerator, denominator] : convs | std::views::drop(0)) {
       const BI Ki = numerator;
       const BI Di = denominator;  // потенциальный дешифратор
       if (Ki == 0) continue;
-      if (((e * Di) - 1) % Ki != 0) continue;
-      const BI phi = (e * Di - 1) / Ki;
+      const BI ed1 = e * Di - 1;
+      if (ed1 % Ki != 0) continue;
+      const BI phi = ed1 / Ki;
 
       // x^2 - (-phi + N + 1)x + N = 0
       // 1x^2 + bx + c = 0
@@ -107,7 +112,12 @@ class WiennerAttackService {
 
       if (const auto [P, Q] = solve_quadratic(b, N);
           P * Q == N && P > 0 && Q > 0) {
+        std::cout << "Ха-ха, я взломал твоё сообщение" << std::endl;
         return {Di, phi, convs};
+      } else {
+        std::cout << "  Не подходит: P*Q=" << (P * Q) << " (ожидалось " << N
+                  << ")" << "Ki " << Ki << " Di " << Di << " b " << b
+                  << std::endl;
       }
     }
 

@@ -34,8 +34,8 @@ class RSAService {
   PublicKey public_key_;
   class KeyGen final {
     std::shared_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
-    double _probability = 0.89;
-    size_t _bitLength = 1024;
+    double _probability;
+    size_t _bitLength;
     boost::random::mt19937 _gen{static_cast<unsigned>(std::time(nullptr))};
 
     constexpr BI genRandNumber() {
@@ -64,8 +64,8 @@ class RSAService {
       BI N = p * q;
       const auto phi = EulerFuncN(p, q);
 
-      // 49081 -- просто рандомное простое число из https://oeis.org/A004023
-      const boost::random::uniform_int_distribution<BI> dist(49081, phi);
+      // 49081 -- просто рандомное простое число из https://oeis.org/A004023 UPD с 3 теперь
+      const boost::random::uniform_int_distribution<BI> dist(3, phi);
 
       do {
         e = dist(_gen);
@@ -84,14 +84,15 @@ class RSAService {
       BI e;
       BI d;
       BI N;
+
       if (needHackedByWienner) {
         do {
           std::tie(e, d, N) = _setExponents();
-        } while (e <= 0 || d <= 0);
+        } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
       } else {
         do {
           std::tie(e, d, N) = _setExponents();
-        } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+        } while (good4WiennerAttack(d, N) || e <= 0 || d <= 0);
       }
 
       return {PublicKey(e, N), PrivateKey(d, N)};
@@ -151,7 +152,7 @@ class RSAService {
         diff = q - p;
       }
 
-      constexpr size_t window = 100;
+      constexpr size_t window = 16;
       const size_t coeff = _bitLength / 2 - window;
       const BI good_diff = BI(1) << coeff;
 
@@ -160,11 +161,8 @@ class RSAService {
     /// проверка на восприимчивость к атаке Виннера
     static constexpr bool good4WiennerAttack(const BI &d, const BI &N) {
       // d < 1/3 * N^(1/4) === d^4 < 1/81 * N
-      if (math::pow(d, 4) < N / 81) {
-        // атака отработала и сломала моё милое сообщение
-        return false;
-      }
-      return true;
+      // атака отработала и сломала моё милое сообщение
+      return math::pow(d, 4) < N / 81;
     }
 
     constexpr std::pair<PublicKey, PrivateKey> genKeys(

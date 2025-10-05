@@ -45,6 +45,39 @@ TEST(Convergents, Basic) {
   }
 }
 
+TEST(Convergents, Basic0) {
+  const BI a = 13;
+  const BI b = 17;
+  const std::vector<meow::cypher::RSA::attack::WiennerAttackService::Fraction>
+      expect = {{0, 1}, {1, 1}, {3, 4}, {13, 17}};
+  const auto res = meow::cypher::RSA::attack::WiennerAttackService::
+      ContinuedFraction::calcCoeffs({a, b});
+  const auto conv = meow::cypher::RSA::attack::WiennerAttackService::
+      ContinuedFraction::convergentsCF(res);
+  for (const auto& elem : conv) {
+    std::cout << elem << std::endl;
+  }
+  ASSERT_TRUE(conv == expect);
+}
+
+TEST(Convergents, Basic1) {
+  const BI a = 17993;
+  const BI b = 90581;
+  const std::vector<meow::cypher::RSA::attack::WiennerAttackService::Fraction>
+      expect = {
+          {0, 1},      {1, 5},       {29, 146},     {117, 589},     {146, 735},
+          {555, 2794}, {1256, 6323}, {5579, 28086}, {17993, 90581},
+      };
+  const auto res = meow::cypher::RSA::attack::WiennerAttackService::
+      ContinuedFraction::calcCoeffs({a, b});
+  const auto conv = meow::cypher::RSA::attack::WiennerAttackService::
+      ContinuedFraction::convergentsCF(res);
+  for (const auto& elem : conv) {
+    std::cout << elem << std::endl;
+  }
+  ASSERT_TRUE(conv == expect);
+}
+
 TEST(BadRSA, Simple) {
   const auto some_msg = BI("74123657855656565836662666");
   const meow::cypher::RSA::BadRSA::BadRSAService service{
@@ -61,7 +94,7 @@ TEST(BadRSA, Hack) {
   const meow::cypher::RSA::BadRSA::BadRSAService service{
       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
           MillerRabinTest,
-      0.98, 2048};
+      0.98, 1024};
   const auto res = service.encrypt(some_msg);
   const auto res2 = service.decrypt(res);
   std::cout << "e= " << service.public_key_.encrypt_word
