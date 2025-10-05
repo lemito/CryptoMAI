@@ -16,6 +16,8 @@ class RSAService {
   static constexpr BI EulerFuncN(const BI &p, const BI &q) {
     return (p - 1) * (q - 1);
   }
+
+ protected:
   struct PublicKey {
     BI encrypt_word{};
     BI N{};
@@ -26,12 +28,11 @@ class RSAService {
     BI N{};
     PrivateKey(BI d, BI n) : decrypt_word(std::move(d)), N(std::move(n)) {}
   };
-
-  PublicKey public_key_;
   PrivateKey private_key_;
 
  public:
-  class KeyGen {
+  PublicKey public_key_;
+  class KeyGen final {
     std::shared_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
     double _probability = 0.89;
     size_t _bitLength = 1024;
@@ -77,6 +78,7 @@ class RSAService {
       return {e, d, N};
     }
 
+   protected:
     constexpr std::pair<PublicKey, PrivateKey> _genKeys(
         const bool needHackedByWienner = false) {
       BI e;
@@ -109,6 +111,9 @@ class RSAService {
           math::primary::doubleGreaterEq(probability, 1.0)) {
         throw std::invalid_argument(
             "Вероятность должна быть в пределах [0.5;1)");
+      }
+      if (bitLength < 256 || (bitLength & 1) == 1) {
+        throw std::invalid_argument("Слишком малый размер");
       }
       switch (test) {
         case PrimaryTests::FermatTest: {
@@ -162,34 +167,38 @@ class RSAService {
       return true;
     }
 
-    constexpr std::pair<PublicKey, PrivateKey> genKeys() {
-      return _genKeys(false);
+    constexpr std::pair<PublicKey, PrivateKey> genKeys(
+        const bool needHackedByWienner = false) {
+      return _genKeys(needHackedByWienner);
     }
   };
 
+ private:
   std::shared_ptr<KeyGen> _keyGen;
+  constexpr void _init(const bool get_wienner_flag) {
+    !get_wienner_flag ? std::println("Безопасный сервис")
+                      : std::println("НеБезопасный сервис");
+    auto [x, y] = _keyGen->genKeys(get_wienner_flag);
+    public_key_ = std::move(x);
+    private_key_ = std::move(y);
+  }
 
+ public:
   RSAService(const KeyGen::PrimaryTests test, const double probability,
-             const size_t bitLength)
-      : public_key_(0, 0), private_key_(0, 0) {
+             const size_t bitLength, const bool needForWiennerAttack = false)
+      : private_key_(0, 0), public_key_(0, 0) {
     if (math::primary::doubleLess(probability, 0.5) ||
         math::primary::doubleGreaterEq(probability, 1.0)) {
       throw std::invalid_argument("Вероятность должна быть в пределах [0.5;1)");
     }
     _keyGen = std::make_shared<KeyGen>(test, probability, bitLength);
-
-    auto [x, y] = _keyGen->genKeys();
-    // std::print(std::cout, "{}\n", to_string(x.encrypt_word));
-    public_key_.encrypt_word = x.encrypt_word;
-    public_key_.N = x.N;
-    private_key_.decrypt_word = y.decrypt_word;
-    private_key_.N = x.N;
+    _init(needForWiennerAttack);
   }
   RSAService(const RSAService &) = delete;
   RSAService(RSAService &&) = delete;
   RSAService &operator=(const RSAService &) = delete;
   RSAService &operator=(RSAService &&) = delete;
-  ~RSAService() = default;
+  virtual ~RSAService() = default;
 
   [[nodiscard]] constexpr BI encrypt(const BI &msg) const {
     return math::modPow(msg, public_key_.encrypt_word, public_key_.N);

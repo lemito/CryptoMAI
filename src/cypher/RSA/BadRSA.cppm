@@ -6,15 +6,19 @@ module;
 
 #include "utils_math.h"
 
-export module BadRSA;
+export module cypher.BadRSA;
 
 import cypher.RSA;
+import cypher.RSA.WiennerAttack;
 
-namespace meow::cypher::RSA::BadRSA {
-class BadRSAService : RSAService {
+export namespace meow::cypher::RSA::BadRSA {
+
+class BadRSAService final : public RSAService,
+                            public attack::WiennerAttackService {
  public:
+  ~BadRSAService() override = default;
   BadRSAService(const KeyGen::PrimaryTests test, const double probability,
                 const size_t bitLength)
-      : RSAService(test, probability, bitLength) {}
+      : RSAService(test, probability, bitLength, true) {}
 };
 };  // namespace meow::cypher::RSA::BadRSA

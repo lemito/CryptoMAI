@@ -43,13 +43,12 @@ target_sources(Crypto PUBLIC
         src/math/math.cppm
         src/cypher/RSA/RSA.cppm
         src/cypher/RSA/BadRSA.cppm
+        src/cypher/RSA/attack/WiennerAttack.cppm
 )
 
 target_compile_features(Crypto PRIVATE cxx_std_23)
-# Remove or modify these flags
 target_compile_options(Crypto PRIVATE
         -fmodules -fbuiltin-module-map -fimplicit-modules
-#        -fbuiltin-module-map
         -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
 )
 
