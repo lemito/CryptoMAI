@@ -83,7 +83,7 @@ TEST(BadRSA, Simple) {
   const meow::cypher::RSA::BadRSA::BadRSAService service{
       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
           MillerRabinTest,
-      0.98, 1024};
+      0.98, 256};
   const auto res = service.encrypt(some_msg);
   const auto res2 = service.decrypt(res);
   ASSERT_TRUE(some_msg == res2);
@@ -94,7 +94,7 @@ TEST(BadRSA, Hack) {
   const meow::cypher::RSA::BadRSA::BadRSAService service{
       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
           MillerRabinTest,
-      0.98, 1024};
+      0.98, 256};
   const auto res = service.encrypt(some_msg);
   const auto res2 = service.decrypt(res);
   std::cout << "e= " << service.public_key_.encrypt_word

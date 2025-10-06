@@ -44,7 +44,7 @@ class AbstractPrimaryTest : public IPrimaryTest {
   [[nodiscard]] virtual bool _isPrimary(const BI& number,
                                         const BI& a) const = 0;
   [[nodiscard]] virtual BI genRandom(const BI& a, const BI& b) const {
-    static boost::random::mt19937 randgen{
+    static thread_local boost::random::mt19937 randgen{
         static_cast<unsigned int>(std::time(nullptr))};
     const boost::random::uniform_int_distribution dist(a, b);
     return dist(randgen);

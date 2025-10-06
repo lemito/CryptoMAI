@@ -1,6 +1,7 @@
 module;
 #include <memory>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 #include "utils_math.h"
@@ -36,9 +37,14 @@ class RSAService {
     std::shared_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
     double _probability;
     size_t _bitLength;
-    boost::random::mt19937 _gen{static_cast<unsigned>(std::time(nullptr))};
+
+    bool needHackedByWienner;
+    std::atomic<bool> found{false};
+    mutable std::mutex keyMutex;
+    std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
     constexpr BI genRandNumber() {
+      static thread_local boost::random::mt19937 _gen;
       const BI min_val = BI(1) << (_bitLength - 1);
       const BI max_val = (BI(1) << _bitLength) - 1;
 
@@ -57,6 +63,8 @@ class RSAService {
     constexpr std::tuple<BI, BI, BI> _setExponents() {
       BI e;
       BI q;
+      static thread_local boost::random::mt19937 _gen;
+
       const BI p = genPrimeNumber();
       do {
         q = genPrimeNumber();
@@ -64,8 +72,8 @@ class RSAService {
       BI N = p * q;
       const auto phi = EulerFuncN(p, q);
 
-      // 49081 -- просто рандомное простое число из https://oeis.org/A004023 UPD с 3 теперь
-      const boost::random::uniform_int_distribution<BI> dist(3, phi);
+      // 49081 -- просто рандомное простое число из https://oeis.org/A004023
+      const boost::random::uniform_int_distribution<BI> dist(49081, phi);
 
       do {
         e = dist(_gen);
@@ -80,22 +88,48 @@ class RSAService {
 
    protected:
     constexpr std::pair<PublicKey, PrivateKey> _genKeys(
-        const bool needHackedByWienner = false) {
-      BI e;
-      BI d;
-      BI N;
-
-      if (needHackedByWienner) {
-        do {
-          std::tie(e, d, N) = _setExponents();
-        } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
-      } else {
-        do {
-          std::tie(e, d, N) = _setExponents();
-        } while (good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+        const bool needHackedByWienner) {
+      // BI e;
+      // BI d;
+      // BI N;
+      //
+      // if (needHackedByWienner) {
+      //   do {
+      //     std::tie(e, d, N) = _setExponents();
+      //   } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+      // } else {
+      //   do {
+      //     std::tie(e, d, N) = _setExponents();
+      //   } while (good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+      // }
+      //
+      // return {PublicKey(e, N), PrivateKey(d, N)};
+      this->needHackedByWienner = needHackedByWienner;
+      found.store(false, std::memory_order_relaxed);
+      {
+        std::lock_guard lock(keyMutex);
+        found_key.reset();
       }
 
-      return {PublicKey(e, N), PrivateKey(d, N)};
+      const auto cnt = std::thread::hardware_concurrency();
+      std::vector<std::thread> threads;
+
+      for (int i = 0; i < cnt; ++i) {
+        threads.push_back(std::thread(&KeyGen::worker, this));
+      }
+
+      for (auto &t : threads) {
+        if (t.joinable()) {
+          t.join();
+        }
+      }
+
+      std::lock_guard lock(keyMutex);
+      if (found_key.has_value()) {
+        return found_key.value();
+      }
+
+      throw std::runtime_error("Ключик не получилось создать");
     }
 
    public:
@@ -105,15 +139,46 @@ class RSAService {
       MillerRabinTest
     };
 
+    void worker() {
+      // memory_order_relaxed - просто атомик; порядок любой
+      // memory_order_acquire -обычно для чтения; порядок сохранён + следит за
+      // другими потоками memory_order_release - обычно для записи; а так как
+      // выше и вместе они дают бонус - если найдется, все потоки сразу
+      // стопнутся
+      size_t cnt = 0;
+      while (!found.load(std::memory_order_acquire)) {
+        auto [e, d, N] = _setExponents();
+        cnt++;
+        const bool condition =
+            needHackedByWienner ? good4WiennerAttack(d, N) && e > 0 && d > 0
+                                : !good4WiennerAttack(d, N) && e > 0 && d > 0;
+
+        std::cout << "Thread " << std::this_thread::get_id() << " cnt= " << cnt
+                  << ", d=" << d << ", N=" << N
+                  << ", good4Wienner=" << good4WiennerAttack(d, N) << std::endl;
+
+        if (condition) {
+          std::lock_guard lock(keyMutex);
+          if (!found.load(std::memory_order_relaxed)) {
+            found_key = {PublicKey(e, N), PrivateKey(d, N)};
+            found.store(true, std::memory_order_release);
+          }
+          break;
+        }
+      }
+    }
+
     KeyGen(const PrimaryTests test, const double probability,
            const size_t bitLength)
-        : _probability{probability}, _bitLength{bitLength} {
+        : _probability{probability},
+          _bitLength{bitLength},
+          needHackedByWienner(false) {
       if (math::primary::doubleLess(probability, 0.5) ||
           math::primary::doubleGreaterEq(probability, 1.0)) {
         throw std::invalid_argument(
             "Вероятность должна быть в пределах [0.5;1)");
       }
-      if (bitLength < 256 || (bitLength & 1) == 1) {
+      if (bitLength < 64 || (bitLength & 1) == 1) {
         throw std::invalid_argument("Слишком малый размер");
       }
       switch (test) {
