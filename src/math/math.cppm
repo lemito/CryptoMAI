@@ -37,12 +37,14 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
   BI res = 1;
   while (pow > 0) {
     if (pow & 1) {
-      res = res * a % mod;
+      res *= a;
+			if (res > mod) res %= mod;
     }
-    a = a * a % mod;
+    a *= a;
+		if (a > mod) a %= mod;
     pow >>= 1;
   }
-  return res;
+  return res % mod;
 }
 
 BI GCD(BI a, BI b) {
