@@ -44,7 +44,7 @@ class RSAService {
     std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
     constexpr BI genRandNumber() {
-микро      // thread_local boost::random::mt19937 _gen;
+      // thread_local boost::random::mt19937 _gen;
       // const BI min_val = BI(1) << (_bitLength - 1);
       // const BI max_val = (BI(1) << _bitLength) - 1;
       //
@@ -63,10 +63,8 @@ class RSAService {
       const BI min_val = BI(1) << (_bitLength - 1);
       const BI max_val = (BI(1) << _bitLength) - 1;
 
-      thread_local boost::random::uniform_int_distribution<BI> dist;
-
-      dist.param(boost::random::uniform_int_distribution<BI>::param_type(
-          min_val, max_val));
+      thread_local boost::random::uniform_int_distribution<BI> dist(min_val,
+                                                                    max_val);
 
       BI result = dist(_gen);
 
@@ -138,7 +136,7 @@ class RSAService {
       // return {PublicKey(e, N), PrivateKey(d, N)};
 
       this->needHackedByWienner = needHackedByWienner;
-      found.store(false, std::memory_order_relaxed);
+      found.store(false);
       {
         std::lock_guard lock(keyMutex);
         found_key.reset();
@@ -178,7 +176,7 @@ class RSAService {
       // другими потоками memory_order_release - обычно для записи; а так как
       // выше и вместе они дают бонус - если найдется, все потоки сразу
       // стопнутся
-      while (!found.load(std::memory_order_acquire)) {
+      while (!found.load()) {
         auto [e, d, N] = _setExponents();
         const bool wienner = good4WiennerAttack(d, N);
         const bool cond = needHackedByWienner ? wienner && e > 0 && d > 0
@@ -186,9 +184,9 @@ class RSAService {
 
         if (cond) {
           std::lock_guard lock(keyMutex);
-          if (!found.load(std::memory_order_relaxed)) {
+          if (!found.load()) {
             found_key = {PublicKey(e, N), PrivateKey(d, N)};
-            found.store(true, std::memory_order_release);
+            found.store(true);
           }
           break;
         }

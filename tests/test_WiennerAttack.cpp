@@ -78,6 +78,15 @@ TEST(Convergents, Basic1) {
   ASSERT_TRUE(conv == expect);
 }
 
+TEST(FindD, Simple) {
+  const BI e = 17993;
+  const BI N = 90581;
+  const BI expected_d = 5;
+
+  const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+  ASSERT_TRUE(res.decrypt_exp == expected_d);
+}
+
 TEST(FindD, Simple0) {
   const BI e = 1073780833;
   const BI N = 1220275921;
