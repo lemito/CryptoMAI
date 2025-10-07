@@ -34,6 +34,8 @@ class RSAService {
  public:
   PublicKey public_key_;
   class KeyGen final {
+    static constexpr bool _isMultithreading = true;  // флажок
+
     std::shared_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
     double _probability;
     size_t _bitLength;
@@ -43,7 +45,7 @@ class RSAService {
     mutable std::mutex keyMutex;
     std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
-    constexpr BI genRandNumber() {
+    constexpr BI genRandNumber() const {
       // thread_local boost::random::mt19937 _gen;
       // const BI min_val = BI(1) << (_bitLength - 1);
       // const BI max_val = (BI(1) << _bitLength) - 1;
@@ -78,7 +80,7 @@ class RSAService {
       return result;
     }
 
-    constexpr BI genPrimeNumber() {
+    constexpr BI genPrimeNumber() const {
       BI number;
       do {
         number = genRandNumber();
@@ -86,7 +88,7 @@ class RSAService {
       return number;
     }
 
-    constexpr std::tuple<BI, BI, BI> _setExponents() {
+    constexpr std::tuple<BI, BI, BI> _setExponents() const {
       BI e;
       BI q;
       thread_local boost::random::mt19937 _gen;
@@ -119,48 +121,50 @@ class RSAService {
    protected:
     constexpr std::pair<PublicKey, PrivateKey> _genKeys(
         const bool needHackedByWienner) {
-      // BI e;
-      // BI d;
-      // BI N;
-      //
-      // if (needHackedByWienner) {
-      //   do {
-      //     std::tie(e, d, N) = _setExponents();
-      //   } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
-      // } else {
-      //   do {
-      //     std::tie(e, d, N) = _setExponents();
-      //   } while (good4WiennerAttack(d, N) || e <= 0 || d <= 0);
-      // }
-      //
-      // return {PublicKey(e, N), PrivateKey(d, N)};
+      if constexpr (!_isMultithreading) {
+        BI e;
+        BI d;
+        BI N;
 
-      this->needHackedByWienner = needHackedByWienner;
-      found.store(false);
-      {
+        if (needHackedByWienner) {
+          do {
+            std::tie(e, d, N) = _setExponents();
+          } while (!good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+        } else {
+          do {
+            std::tie(e, d, N) = _setExponents();
+          } while (good4WiennerAttack(d, N) || e <= 0 || d <= 0);
+        }
+
+        return {PublicKey(e, N), PrivateKey(d, N)};
+      } else {
+        this->needHackedByWienner = needHackedByWienner;
+        found.store(false);
+        {
+          std::lock_guard lock(keyMutex);
+          found_key.reset();
+        }
+
+        const auto cnt = std::thread::hardware_concurrency();
+        std::vector<std::thread> threads;
+        threads.reserve(cnt);
+
+        for (int i = 0; i < cnt; ++i) {
+          threads.push_back(std::thread(&KeyGen::worker, this));
+        }
+
+        for (auto &t : threads) {
+          if (t.joinable()) {
+            t.join();
+          }
+        }
+
         std::lock_guard lock(keyMutex);
-        found_key.reset();
-      }
-
-      const auto cnt = std::thread::hardware_concurrency();
-      std::vector<std::thread> threads;
-
-      for (int i = 0; i < cnt; ++i) {
-        threads.push_back(std::thread(&KeyGen::worker, this));
-      }
-
-      for (auto &t : threads) {
-        if (t.joinable()) {
-          t.join();
+        if (found_key.has_value()) {
+          return found_key.value();
         }
       }
-
-      std::lock_guard lock(keyMutex);
-      if (found_key.has_value()) {
-        return found_key.value();
-      }
-
-      throw std::runtime_error("Ключик не получилось создать");
+      throw std::runtime_error("не удалось создать ключи");
     }
 
    public:
@@ -266,9 +270,9 @@ class RSAService {
   constexpr void _init(const bool get_wienner_flag) {
     !get_wienner_flag ? std::println("Безопасный сервис")
                       : std::println("НеБезопасный сервис");
-    auto [x, y] = _keyGen->genKeys(get_wienner_flag);
-    public_key_ = std::move(x);
-    private_key_ = std::move(y);
+    auto [x, y] = this->_keyGen->genKeys(get_wienner_flag);
+    this->public_key_ = std::move(x);
+    this->private_key_ = std::move(y);
   }
 
  public:
