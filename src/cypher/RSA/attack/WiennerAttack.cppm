@@ -81,13 +81,13 @@ class WiennerAttackService {
         return {0, 0};
       }
 
-      const BI sqrt_discr = boost::multiprecision::sqrt(discr);
-      if (sqrt_discr * sqrt_discr != discr) {
+      const BI sqrt = boost::multiprecision::sqrt(discr);
+      if (sqrt * sqrt != discr) {
         return {0, 0};
       }
 
-      const BI p = (sum_pq - sqrt_discr) / 2;
-      const BI q = (sum_pq + sqrt_discr) / 2;
+      const BI p = (sum_pq + sqrt) / 2;
+      const BI q = (sum_pq - sqrt) / 2;
 
       return {p, q};
     };
@@ -115,9 +115,9 @@ class WiennerAttackService {
         std::cout << "Ха-ха, я взломал твоё сообщение" << std::endl;
         return {Di, phi, convs};
       } else {
-        std::cout << "  Не подходит: P*Q=" << (P * Q) << " (ожидалось " << N
-                  << ")" << "Ki " << Ki << " Di " << Di << " b " << b
-                  << std::endl;
+        std::cout << "Не подходит: P*Q=" << (P * Q) << " (ожидалось " << N
+                  << ")" << "P= " << P << " Q=" << Q << "Ki= " << Ki
+                  << " Di= " << Di << " b= " << b << std::endl;
       }
     }
 

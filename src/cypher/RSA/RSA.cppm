@@ -44,12 +44,40 @@ class RSAService {
     std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
     constexpr BI genRandNumber() {
-      static thread_local boost::random::mt19937 _gen;
+микро      // thread_local boost::random::mt19937 _gen;
+      // const BI min_val = BI(1) << (_bitLength - 1);
+      // const BI max_val = (BI(1) << _bitLength) - 1;
+      //
+      // const boost::random::uniform_int_distribution<BI> dist(min_val,
+      // max_val); return dist(_gen);
+      thread_local boost::random::mt19937 _gen;
+
+      if (thread_local bool initialized = false; !initialized) {
+        const auto seed = std::chrono::high_resolution_clock::now()
+                              .time_since_epoch()
+                              .count();
+        _gen.seed(static_cast<unsigned int>(seed));
+        initialized = true;
+      }
+
       const BI min_val = BI(1) << (_bitLength - 1);
       const BI max_val = (BI(1) << _bitLength) - 1;
 
-      const boost::random::uniform_int_distribution<BI> dist(min_val, max_val);
-      return dist(_gen);
+      thread_local boost::random::uniform_int_distribution<BI> dist;
+
+      dist.param(boost::random::uniform_int_distribution<BI>::param_type(
+          min_val, max_val));
+
+      BI result = dist(_gen);
+
+      if (result < 0) {
+        result = -result;
+        if (result < min_val) {
+          result = min_val;
+        }
+      }
+
+      return result;
     }
 
     constexpr BI genPrimeNumber() {
@@ -63,7 +91,7 @@ class RSAService {
     constexpr std::tuple<BI, BI, BI> _setExponents() {
       BI e;
       BI q;
-      static thread_local boost::random::mt19937 _gen;
+      thread_local boost::random::mt19937 _gen;
 
       const BI p = genPrimeNumber();
       do {
@@ -81,7 +109,11 @@ class RSAService {
 
       // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
       const auto [gcd, x, y] = math::eGCD(e, phi);
-      BI d = x;
+      BI d = (x % phi + phi) % phi;
+
+      std::cout << "Thread " << std::this_thread::get_id() << ", d=" << d
+                << ", N=" << N << ", good4Wienner=" << std::boolalpha
+                << std::endl;
 
       return {e, d, N};
     }
@@ -104,6 +136,7 @@ class RSAService {
       // }
       //
       // return {PublicKey(e, N), PrivateKey(d, N)};
+
       this->needHackedByWienner = needHackedByWienner;
       found.store(false, std::memory_order_relaxed);
       {
@@ -145,19 +178,13 @@ class RSAService {
       // другими потоками memory_order_release - обычно для записи; а так как
       // выше и вместе они дают бонус - если найдется, все потоки сразу
       // стопнутся
-      size_t cnt = 0;
       while (!found.load(std::memory_order_acquire)) {
         auto [e, d, N] = _setExponents();
-        cnt++;
-        const bool condition =
-            needHackedByWienner ? good4WiennerAttack(d, N) && e > 0 && d > 0
-                                : !good4WiennerAttack(d, N) && e > 0 && d > 0;
+        const bool wienner = good4WiennerAttack(d, N);
+        const bool cond = needHackedByWienner ? wienner && e > 0 && d > 0
+                                              : !wienner && e > 0 && d > 0;
 
-        std::cout << "Thread " << std::this_thread::get_id() << " cnt= " << cnt
-                  << ", d=" << d << ", N=" << N
-                  << ", good4Wienner=" << good4WiennerAttack(d, N) << std::endl;
-
-        if (condition) {
+        if (cond) {
           std::lock_guard lock(keyMutex);
           if (!found.load(std::memory_order_relaxed)) {
             found_key = {PublicKey(e, N), PrivateKey(d, N)};

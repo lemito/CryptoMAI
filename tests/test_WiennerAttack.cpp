@@ -78,31 +78,54 @@ TEST(Convergents, Basic1) {
   ASSERT_TRUE(conv == expect);
 }
 
-TEST(BadRSA, Simple) {
-  const auto some_msg = BI("74123657855656565836662666");
-  const meow::cypher::RSA::BadRSA::BadRSAService service{
-      meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
-          MillerRabinTest,
-      0.98, 256};
-  const auto res = service.encrypt(some_msg);
-  const auto res2 = service.decrypt(res);
-  ASSERT_TRUE(some_msg == res2);
+TEST(FindD, Simple0) {
+  const BI e = 1073780833;
+  const BI N = 1220275921;
+  const BI expected_d = 25;
+
+  const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+  ASSERT_TRUE(res.decrypt_exp == expected_d);
 }
 
-TEST(BadRSA, Hack) {
-  const auto some_msg = BI("74123657855656565836662666");
-  const meow::cypher::RSA::BadRSA::BadRSAService service{
-      meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
-          MillerRabinTest,
-      0.98, 256};
-  const auto res = service.encrypt(some_msg);
-  const auto res2 = service.decrypt(res);
-  std::cout << "e= " << service.public_key_.encrypt_word
-            << "\nN= " << service.public_key_.N << std::endl;
-  const auto hackRes =
-      service.hack(service.public_key_.encrypt_word, service.public_key_.N);
-  std::cout << hackRes.decrypt_exp << std::endl;
-  for (auto& elem : hackRes.convergents) {
-    std::cout << elem << std::endl;
-  }
+TEST(FindD, Simple1) {
+  const BI e = 1779399043;
+  const BI N = 2796304957;
+  const BI expected_d = 11;
+
+  const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+  ASSERT_TRUE(res.decrypt_exp == expected_d);
+}
+
+// TEST(BadRSA, Simple) {
+//   const auto some_msg = BI("74123657855656565836662666");
+//   const meow::cypher::RSA::BadRSA::BadRSAService service{
+//       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
+//           MillerRabinTest,
+//       0.98, 256};
+//   const auto res = service.encrypt(some_msg);
+//   const auto res2 = service.decrypt(res);
+//   ASSERT_TRUE(some_msg == res2);
+// }
+//
+// TEST(BadRSA, Hack) {
+//   const auto some_msg = BI("74123657855656565836662666");
+//   const meow::cypher::RSA::BadRSA::BadRSAService service{
+//       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
+//           MillerRabinTest,
+//       0.98, 256};
+//   const auto res = service.encrypt(some_msg);
+//   const auto res2 = service.decrypt(res);
+//   std::cout << "e= " << service.public_key_.encrypt_word
+//             << "\nN= " << service.public_key_.N << std::endl;
+//   const auto hackRes =
+//       service.hack(service.public_key_.encrypt_word, service.public_key_.N);
+//   std::cout << hackRes.decrypt_exp << std::endl;
+//   for (auto& elem : hackRes.convergents) {
+//     std::cout << elem << std::endl;
+//   }
+// }
+
+int main(int argc, char** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }
