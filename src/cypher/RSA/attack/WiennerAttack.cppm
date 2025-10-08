@@ -1,6 +1,7 @@
 module;
 
 #include <ranges>
+#include <utility>
 #include <vector>
 
 #include "utils_math.h"
@@ -9,6 +10,32 @@ export module cypher.RSA.WiennerAttack;
 
 export namespace meow::cypher::RSA::attack {
 class WiennerAttackService {
+  class bad_solve_err final : public std::exception {
+    std::string message;
+
+   public:
+    explicit bad_solve_err(std::string  message) : message{std::move(message)} {}
+    [[nodiscard]] const char* what() const noexcept override { return message.c_str(); }
+  };
+
+  static constexpr auto solveQuadratic(const BI& sum_pq, const BI& N)
+      -> std::pair<BI, BI> {
+    const BI discr = sum_pq * sum_pq - 4 * N;
+    if (discr < 0) {
+      throw bad_solve_err("отрицательный дискриминант не даст целого решения");
+    }
+
+    const BI sqrt = boost::multiprecision::sqrt(discr);
+    if (sqrt * sqrt != discr) {
+      throw bad_solve_err("квадрат корня числа не даст число))");
+    }
+
+    const BI p = (sum_pq + sqrt) / 2;
+    const BI q = (sum_pq - sqrt) / 2;
+
+    return {p, q};
+  }
+
  public:
   struct Fraction {
     BI numerator;
@@ -74,23 +101,6 @@ class WiennerAttackService {
   };
 
   static constexpr HackRes hack(const BI& e, const BI& N) {
-    auto solve_quadratic = [](const BI& sum_pq,
-                              const BI& N) -> std::pair<BI, BI> {
-      const BI discr = sum_pq * sum_pq - 4 * N;
-      if (discr < 0) {
-        return {0, 0};
-      }
-
-      const BI sqrt = boost::multiprecision::sqrt(discr);
-      if (sqrt * sqrt != discr) {
-        return {0, 0};
-      }
-
-      const BI p = (sum_pq + sqrt) / 2;
-      const BI q = (sum_pq - sqrt) / 2;
-
-      return {p, q};
-    };
     // d == e^-1 mod N => ed = 1 + k*phi; e/phi - k/d = 1/d*phi -> e/N - k/d <
     // 1/dphi < 1/2d^2
     // ==> цепная дробь и приближенная к ней содержит
@@ -98,7 +108,7 @@ class WiennerAttackService {
     const auto coefs = ContinuedFraction::calcCoeffs(fr);
 
     for (const auto convs = ContinuedFraction::convergentsCF(coefs);
-         const auto& [numerator, denominator] : convs | std::views::drop(0)) {
+         const auto& [numerator, denominator] : convs) {
       const BI Ki = numerator;
       const BI Di = denominator;  // потенциальный дешифратор
       if (Ki == 0) continue;
@@ -110,14 +120,17 @@ class WiennerAttackService {
       // 1x^2 + bx + c = 0
       const BI b = N + 1 - phi;
 
-      if (const auto [P, Q] = solve_quadratic(b, N);
-          P * Q == N && P > 0 && Q > 0) {
-        std::cout << "Ха-ха, я взломал твоё сообщение" << std::endl;
-        return {Di, phi, convs};
-      } else {
+      try {
+        const auto [P, Q] = solveQuadratic(b, N);
+        if (P * Q == N && P > 0 && Q > 0) {
+          std::cout << "Ха-ха, я взломал твоё сообщение" << std::endl;
+          return {Di, phi, convs};
+        }
         std::cout << "Не подходит: P*Q=" << (P * Q) << " (ожидалось " << N
-                  << ")" << "P= " << P << " Q=" << Q << "Ki= " << Ki
-                  << " Di= " << Di << " b= " << b << std::endl;
+                  << ")"
+                  << "P= " << P << " Q=" << Q << "Ki= " << Ki << " Di= " << Di
+                  << " b= " << b << std::endl;
+      } catch ([[maybe_unused]] const bad_solve_err& err) {
       }
     }
 

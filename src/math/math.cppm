@@ -8,6 +8,22 @@ export module math;
 
 export namespace meow::math {
 
+/**
+ * @brief метод для нормализации числа (то есть приведения его к кольцу)
+ * @param number число
+ * @param mod модуль
+ * @return
+ */
+constexpr BI normalizeMod(BI number, const BI& mod) {
+  if (number >= 0 && number < mod) {
+    return number;
+  }
+
+  auto rem = number % mod;
+
+  return rem < 0 ? BI(rem + mod) : rem;
+}
+
 constexpr BI pow(BI a, BI pow) {
   if (pow == 0) return 1;
   if (pow < 0) {
@@ -33,24 +49,27 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
   if (pow < 0) {
     throw std::invalid_argument("modPow: степень должна быть положительной");
   }
-  a = (a % mod + mod) % mod;
+  // a = (a % mod + mod) % mod;
+  a = normalizeMod(a, mod);
   BI res = 1;
   while (pow > 0) {
     if (pow & 1) {
       res *= a;
-			if (res > mod) res %= mod;
+      if (res > mod) res %= mod;
     }
     a *= a;
-		if (a > mod) a %= mod;
+    if (a > mod) a %= mod;
     pow >>= 1;
   }
-  return res % mod;
+  if (res > mod) return res % mod;
+  return res;
 }
 
-BI GCD(BI a, BI b) {
-  const auto ZERO = BI(0);
+constexpr BI GCD(BI a, BI b) {
+  const auto ZERO = BI(
+0);
   while (b > ZERO) {
-    std::tie(a, b) = std::make_tuple<BI, BI>(std::move(b), a % b);
+    std::tie(a, b) = std::make_tuple<BI, BI>(BI(b), a % b);
   }
   return a;
 }
@@ -85,7 +104,8 @@ constexpr BI LejandreSymbol(const BI& a, const BI& p) {
     throw std::invalid_argument("P должно быть нечетным");
   }
 
-  const BI modA = (a % p + p) % p;
+  // const BI modA = (a % p + p) % p;
+  const BI modA = normalizeMod(a, p);
 
   if (modA == 0) {
     return 0;
@@ -117,10 +137,11 @@ constexpr BI JacobiSymbol(const BI& a, BI n) {
     throw std::invalid_argument("n должно быть нечетным");
   }
 
-  BI modA = a % n;
-  if (modA < 0) {
-    modA += n;
-  }
+  // BI modA = a % n;
+  // if (modA < 0) {
+  //   modA += n;
+  // }
+  BI modA = normalizeMod(a, n);
   if (n == 1 || modA == 1) {
     return 1;
   }

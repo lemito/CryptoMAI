@@ -9,11 +9,16 @@ TEST(LejandreSymbolTest, Base) {
 }
 
 TEST(LejandreSymbolTest, EdgeCases) {
-  EXPECT_EQ(meow::math::LejandreSymbol(BI(7), BI(7)), 0);
-  EXPECT_EQ(meow::math::LejandreSymbol(BI(14), BI(7)), 0);
+  std::cout << ("1") << std::endl;
+  EXPECT_EQ(meow::math::LejandreSymbol(BI(7), BI(7)), 0) << "7|7";
+  std::cout << ("2") << std::endl;
+  EXPECT_EQ(meow::math::LejandreSymbol(BI(14), BI(7)), 0) << "7|7";
+  std::cout << ("3") << std::endl;
   ASSERT_THROW(meow::math::LejandreSymbol(BI(21), BI(99)),
-               std::invalid_argument);
-  EXPECT_EQ(meow::math::LejandreSymbol(BI(21), BI(7)), 0);
+               std::invalid_argument)
+      << "7|7";
+  std::cout << ("4") << std::endl;
+  EXPECT_EQ(meow::math::LejandreSymbol(BI(21), BI(7)), 0) << "7|7";
 }
 
 TEST(JacobiSymbolTest, Base) {

@@ -62,8 +62,8 @@ class RSAService {
         initialized = true;
       }
 
-      const BI min_val = BI(1) << (_bitLength - 1);
-      const BI max_val = (BI(1) << _bitLength) - 1;
+      const BI min_val = BI(1) << (this->_bitLength - 1);
+      const BI max_val = (BI(1) << this->_bitLength) - 1;
 
       thread_local boost::random::uniform_int_distribution<BI> dist(min_val,
                                                                     max_val);
@@ -84,7 +84,7 @@ class RSAService {
       BI number;
       do {
         number = genRandNumber();
-      } while (!_primaryTest->isPrimary(number, _probability));
+      } while (!this->_primaryTest->isPrimary(number, this->_probability));
       return number;
     }
 
@@ -109,7 +109,7 @@ class RSAService {
 
       // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
       const auto [gcd, x, y] = math::eGCD(e, phi);
-      BI d = (x % phi + phi) % phi;
+      BI d = math::normalizeMod(x, phi);
 
       std::cout << "Thread " << std::this_thread::get_id() << ", d=" << d
                 << ", N=" << N << ", good4Wienner=" << std::boolalpha
@@ -141,8 +141,8 @@ class RSAService {
         this->needHackedByWienner = needHackedByWienner;
         found.store(false);
         {
-          std::lock_guard lock(keyMutex);
-          found_key.reset();
+          std::lock_guard lock(this->keyMutex);
+          this->found_key.reset();
         }
 
         const auto cnt = std::thread::hardware_concurrency();
@@ -159,20 +159,39 @@ class RSAService {
           }
         }
 
-        std::lock_guard lock(keyMutex);
-        if (found_key.has_value()) {
-          return found_key.value();
+        if (found.load(std::memory_order_acquire) &&
+            this->found_key.has_value()) {
+          return this->found_key.value();
         }
       }
       throw std::runtime_error("не удалось создать ключи");
     }
 
-   public:
+  public:
     enum class PrimaryTests : int8_t {
       FermatTest,
       SoloveyStrassenTest,
       MillerRabinTest
     };
+
+   private:
+    static constexpr std::shared_ptr<math::primary::AbstractPrimaryTest>
+    _setPrimaryTest(const PrimaryTests &primaryTest) {
+      switch (primaryTest) {
+        case PrimaryTests::FermatTest: {
+          return std::make_shared<math::primary::FermatTest>();
+        }
+        case PrimaryTests::SoloveyStrassenTest: {
+          return std::make_shared<math::primary::SoloveyStrassenTest>();
+        }
+        case PrimaryTests::MillerRabinTest: {
+          return std::make_shared<math::primary::MillerRabinTest>();
+        }
+        default: {
+          throw std::invalid_argument("Такого теста нет");
+        }
+      }
+    }
 
     void worker() {
       // memory_order_relaxed - просто атомик; порядок любой
@@ -186,17 +205,26 @@ class RSAService {
         const bool cond = needHackedByWienner ? wienner && e > 0 && d > 0
                                               : !wienner && e > 0 && d > 0;
 
-        if (cond) {
-          std::lock_guard lock(keyMutex);
-          if (!found.load()) {
-            found_key = {PublicKey(e, N), PrivateKey(d, N)};
-            found.store(true);
-          }
+        if (!cond) {
+          continue;
+        }
+
+        if (found.load(std::memory_order_acquire)) {
           break;
+        }
+
+        {
+          std::lock_guard lock(this->keyMutex);
+
+          if (!this->found.load(std::memory_order_relaxed)) {
+            this->found_key = {PublicKey(e, N), PrivateKey(d, N)};
+            this->found.store(true, std::memory_order_release);
+          }
         }
       }
     }
 
+   public:
     KeyGen(const PrimaryTests test, const double probability,
            const size_t bitLength)
         : _probability{probability},
@@ -210,24 +238,8 @@ class RSAService {
       if (bitLength < 64 || (bitLength & 1) == 1) {
         throw std::invalid_argument("Слишком малый размер");
       }
-      switch (test) {
-        case PrimaryTests::FermatTest: {
-          _primaryTest = std::make_shared<math::primary::FermatTest>();
-          break;
-        }
-        case PrimaryTests::SoloveyStrassenTest: {
-          _primaryTest = std::make_shared<math::primary::SoloveyStrassenTest>();
-          break;
-        }
-        case PrimaryTests::MillerRabinTest: {
-          _primaryTest = std::make_shared<math::primary::MillerRabinTest>();
-          break;
-        }
-        default: {
-          throw std::invalid_argument("Такого теста нет");
-          break;
-        }
-      }
+
+      this->_primaryTest = _setPrimaryTest(test);
     }
 
     KeyGen(const KeyGen &) = delete;
@@ -247,7 +259,7 @@ class RSAService {
       }
 
       constexpr size_t window = 16;
-      const size_t coeff = _bitLength / 2 - window;
+      const size_t coeff = this->_bitLength / 2 - window;
       const BI good_diff = BI(1) << coeff;
 
       return diff >= good_diff;
@@ -283,7 +295,7 @@ class RSAService {
         math::primary::doubleGreaterEq(probability, 1.0)) {
       throw std::invalid_argument("Вероятность должна быть в пределах [0.5;1)");
     }
-    _keyGen = std::make_shared<KeyGen>(test, probability, bitLength);
+    this->_keyGen = std::make_shared<KeyGen>(test, probability, bitLength);
     _init(needForWiennerAttack);
   }
   RSAService(const RSAService &) = delete;

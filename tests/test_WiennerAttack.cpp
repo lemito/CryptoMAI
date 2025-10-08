@@ -84,7 +84,10 @@ TEST(FindD, Simple) {
   const BI expected_d = 5;
 
   const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
-  ASSERT_TRUE(res.decrypt_exp == expected_d);
+  ASSERT_TRUE(res.decrypt_exp == expected_d);std::cout << res.phi << std::endl;
+  for (auto& elem : res.convergents) {
+    std::cout << elem << std::endl;
+  }
 }
 
 TEST(FindD, Simple0) {
@@ -93,7 +96,10 @@ TEST(FindD, Simple0) {
   const BI expected_d = 25;
 
   const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
-  ASSERT_TRUE(res.decrypt_exp == expected_d);
+  ASSERT_TRUE(res.decrypt_exp == expected_d);std::cout << res.phi << std::endl;
+  for (auto& elem : res.convergents) {
+    std::cout << elem << std::endl;
+  }
 }
 
 TEST(FindD, Simple1) {
@@ -103,6 +109,11 @@ TEST(FindD, Simple1) {
 
   const auto res = meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
   ASSERT_TRUE(res.decrypt_exp == expected_d);
+
+  std::cout << res.phi << std::endl;
+  for (auto& elem : res.convergents) {
+    std::cout << elem << std::endl;
+  }
 }
 
 // TEST(BadRSA, Simple) {

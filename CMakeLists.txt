@@ -32,6 +32,7 @@ FetchContent_MakeAvailable(googletest)
 add_library(Crypto STATIC
         src/perestanovki.cpp
 )
+target_compile_features(Crypto PRIVATE cxx_std_23)
 
 target_link_libraries(Crypto PRIVATE ${GMP_LIBRARY})
 target_include_directories(Crypto PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -46,7 +47,6 @@ target_sources(Crypto PUBLIC
         src/cypher/RSA/attack/WiennerAttack.cppm
 )
 
-target_compile_features(Crypto PRIVATE cxx_std_23)
 target_compile_options(Crypto PRIVATE
         -fmodules -fbuiltin-module-map -fimplicit-modules
         -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
