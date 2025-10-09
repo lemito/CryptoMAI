@@ -37,7 +37,7 @@ class RSAService {
   class KeyGen final {
     static constexpr bool _isMultithreading = true;  // флажок
 
-    std::shared_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
+    std::unique_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
     double _probability;
     size_t _bitLength;
 
@@ -168,17 +168,17 @@ class RSAService {
     };
 
    private:
-    static constexpr std::shared_ptr<math::primary::AbstractPrimaryTest>
+    static constexpr std::unique_ptr<math::primary::AbstractPrimaryTest>
     _setPrimaryTest(const PrimaryTests &primaryTest) {
       switch (primaryTest) {
         case PrimaryTests::FermatTest: {
-          return std::make_shared<math::primary::FermatTest>();
+          return std::make_unique<math::primary::FermatTest>();
         }
         case PrimaryTests::SoloveyStrassenTest: {
-          return std::make_shared<math::primary::SoloveyStrassenTest>();
+          return std::make_unique<math::primary::SoloveyStrassenTest>();
         }
         case PrimaryTests::MillerRabinTest: {
-          return std::make_shared<math::primary::MillerRabinTest>();
+          return std::make_unique<math::primary::MillerRabinTest>();
         }
         default: {
           throw std::invalid_argument("Такого теста нет");
@@ -271,7 +271,7 @@ class RSAService {
   };
 
  private:
-  std::shared_ptr<KeyGen> _keyGen;
+  std::unique_ptr<KeyGen> _keyGen;
   constexpr void _init(const bool get_wienner_flag) {
     !get_wienner_flag ? std::println("Безопасный сервис")
                       : std::println("НеБезопасный сервис");
@@ -288,7 +288,7 @@ class RSAService {
         math::primary::doubleGreaterEq(probability, 1.0)) {
       throw std::invalid_argument("Вероятность должна быть в пределах [0.5;1)");
     }
-    this->_keyGen = std::make_shared<KeyGen>(test, probability, bitLength);
+    this->_keyGen = std::make_unique<KeyGen>(test, probability, bitLength);
     _init(needForWiennerAttack);
   }
   RSAService(const RSAService &) = delete;
