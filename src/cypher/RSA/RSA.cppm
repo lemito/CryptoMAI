@@ -1,5 +1,6 @@
 module;
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -45,30 +46,20 @@ class RSAService {
     mutable std::mutex keyMutex;
     std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
+    template <typename Distr, typename... Args>
+    constexpr auto _genRandNumber(Args &&...args) const {
+      thread_local boost::random::mt19937 generator(std::random_device{}());
+      Distr dist(std::forward<Args>(args)...);
+      return dist(generator);
+    }
+
     constexpr BI genRandNumber() const {
-      // thread_local boost::random::mt19937 _gen;
-      // const BI min_val = BI(1) << (_bitLength - 1);
-      // const BI max_val = (BI(1) << _bitLength) - 1;
-      //
-      // const boost::random::uniform_int_distribution<BI> dist(min_val,
-      // max_val); return dist(_gen);
-      thread_local boost::random::mt19937 _gen;
-
-      if (thread_local bool initialized = false; !initialized) {
-        const auto seed = std::chrono::high_resolution_clock::now()
-                              .time_since_epoch()
-                              .count();
-        _gen.seed(static_cast<unsigned int>(seed));
-        initialized = true;
-      }
-
       const BI min_val = BI(1) << (this->_bitLength - 1);
       const BI max_val = (BI(1) << this->_bitLength) - 1;
 
-      thread_local boost::random::uniform_int_distribution<BI> dist(min_val,
-                                                                    max_val);
-
-      BI result = dist(_gen);
+      BI result =
+          this->_genRandNumber<boost::random::uniform_int_distribution<BI>>(
+              min_val, max_val);
 
       if (result < 0) {
         result = -result;
@@ -91,7 +82,7 @@ class RSAService {
     constexpr std::tuple<BI, BI, BI> _setExponents() const {
       BI e;
       BI q;
-      thread_local boost::random::mt19937 _gen;
+      // thread_local boost::random::mt19937 _gen;
 
       const BI p = genPrimeNumber();
       do {
@@ -101,10 +92,12 @@ class RSAService {
       const auto phi = EulerFuncN(p, q);
 
       // 49081 -- просто рандомное простое число из https://oeis.org/A004023
-      const boost::random::uniform_int_distribution<BI> dist(49081, phi);
+      // const boost::random::uniform_int_distribution<BI> dist(49081, phi);
 
       do {
-        e = dist(_gen);
+        // e = dist(_gen);
+        e = _genRandNumber<boost::random::uniform_int_distribution<BI>>(49081,
+                                                                        phi);
       } while (math::GCD(e, phi) != 1);
 
       // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
@@ -216,7 +209,7 @@ class RSAService {
         {
           std::lock_guard lock(this->keyMutex);
 
-          if (!this->found.load(std::memory_order_relaxed)) {
+          if (!this->found.load(std::memory_order_acquire)) {
             this->found_key = {PublicKey(e, N), PrivateKey(d, N)};
             this->found.store(true, std::memory_order_release);
           }
