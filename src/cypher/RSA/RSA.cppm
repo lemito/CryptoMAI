@@ -111,9 +111,9 @@ class RSAService {
       const auto [gcd, x, y] = math::eGCD(e, phi);
       BI d = math::normalizeMod(x, phi);
 
-      std::cout << "Thread " << std::this_thread::get_id() << ", d=" << d
-                << ", N=" << N << ", good4Wienner=" << std::boolalpha
-                << std::endl;
+      std::cout << "Thread " << std::this_thread::get_id() << ", e=" << e
+                << ", d=" << d << ", N=" << N
+                << ", good4Wienner=" << std::boolalpha << std::endl;
 
       return {e, d, N};
     }
@@ -167,7 +167,7 @@ class RSAService {
       throw std::runtime_error("не удалось создать ключи");
     }
 
-  public:
+   public:
     enum class PrimaryTests : int8_t {
       FermatTest,
       SoloveyStrassenTest,

@@ -1,6 +1,7 @@
 module;
 
 #include <ranges>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -9,15 +10,29 @@ module;
 export module cypher.RSA.WiennerAttack;
 
 export namespace meow::cypher::RSA::attack {
+
+class bad_solve_err final : public std::exception {
+  std::string_view message;
+
+ public:
+  explicit bad_solve_err(const std::string& message)
+      : message{std::move(message)} {}
+  [[nodiscard]] const char* what() const noexcept override {
+    return message.data();
+  }
+};
+
+class hack_err final : public std::exception {
+  std::string_view message;
+
+ public:
+  explicit hack_err(const std::string& message) : message{std::move(message)} {}
+  [[nodiscard]] const char* what() const noexcept override {
+    return message.data();
+  }
+};
+
 class WiennerAttackService {
-  class bad_solve_err final : public std::exception {
-    std::string message;
-
-   public:
-    explicit bad_solve_err(std::string  message) : message{std::move(message)} {}
-    [[nodiscard]] const char* what() const noexcept override { return message.c_str(); }
-  };
-
   static constexpr auto solveQuadratic(const BI& sum_pq, const BI& N)
       -> std::pair<BI, BI> {
     const BI discr = sum_pq * sum_pq - 4 * N;
@@ -134,7 +149,7 @@ class WiennerAttackService {
       }
     }
 
-    throw std::runtime_error("Не удалось взломать милое сообщение");
+    throw hack_err("Не удалось взломать милое сообщение");
   }
 };
 }  // namespace meow::cypher::RSA::attack
