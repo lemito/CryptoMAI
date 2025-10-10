@@ -43,7 +43,7 @@ target_sources(Crypto PUBLIC
         src/cypher/RSA/RSA.cppm
         src/cypher/RSA/BadRSA.cppm
         src/cypher/RSA/attack/WiennerAttack.cppm
-        src/cypher/premutate.cppm
+        src/cypher/permutate.cppm
 )
 
 target_compile_options(Crypto PRIVATE

@@ -4,7 +4,7 @@ module;
 #include <vector>
 export module cypher.permutate;
 
-export namespace meow::cypher::premutate {
+export namespace meow::cypher::permutate {
 enum class bitIndexingRule : int8_t {
   LSB2MSB,  // младший->старший
   MSB2LSB   // старший->младший
@@ -13,7 +13,7 @@ enum class bitIndexingRule : int8_t {
 /**
  * @brief
  * @param in
- * @param premutationRule
+ * @param permutationRule
  * @param rule
  * @param startBitNumer
  * @return
@@ -22,7 +22,7 @@ enum class bitIndexingRule : int8_t {
  */
 std::vector<std::byte> permutation(
     const std::vector<std::byte>& in,
-    const std::vector<int64_t>& premutationRule,
+    const std::vector<int64_t>& permutationRule,
     const bitIndexingRule rule = bitIndexingRule::LSB2MSB,
     const int8_t startBitNumer = 0) {
   if (startBitNumer < 0 || startBitNumer > 1) {
@@ -32,11 +32,11 @@ std::vector<std::byte> permutation(
 
   const size_t siz = in.size() * 8;
   const size_t res_siz =
-      premutationRule.size() / 8 + (premutationRule.size() % 8 ? 1 : 0);
+      permutationRule.size() / 8 + (permutationRule.size() % 8 ? 1 : 0);
   res.resize(res_siz, static_cast<std::byte>(0));
 
   size_t i = 0;
-  for (const auto& elem : premutationRule) {
+  for (const auto& elem : permutationRule) {
     const auto ix = elem - static_cast<int64_t>(startBitNumer);
 
     if (ix < 0 || ix >= static_cast<int64_t>(siz)) {
