@@ -29,9 +29,7 @@ FetchContent_MakeAvailable(googletest)
 ##        Crypto.h
 #        src/perestanovki.cpp
 #)
-add_library(Crypto STATIC
-        src/perestanovki.cpp
-)
+add_library(Crypto STATIC)
 target_compile_features(Crypto PRIVATE cxx_std_23)
 
 target_link_libraries(Crypto PRIVATE ${GMP_LIBRARY})
@@ -45,6 +43,7 @@ target_sources(Crypto PUBLIC
         src/cypher/RSA/RSA.cppm
         src/cypher/RSA/BadRSA.cppm
         src/cypher/RSA/attack/WiennerAttack.cppm
+        src/cypher/premutate.cppm
 )
 
 target_compile_options(Crypto PRIVATE

@@ -19,23 +19,12 @@ class RSAService {
     return (p - 1) * (q - 1);
   }
 
- protected:
-  struct PublicKey {
-    BI encrypt_word{};
-    BI N{};
-    PublicKey(BI e, BI n) : encrypt_word(std::move(e)), N(std::move(n)) {}
-  };
-  struct PrivateKey {
-    BI decrypt_word{};
-    BI N{};
-    PrivateKey(BI d, BI n) : decrypt_word(std::move(d)), N(std::move(n)) {}
-  };
   PrivateKey private_key_;
 
  public:
   PublicKey public_key_;
   class KeyGen final {
-    static constexpr bool _isMultithreading = true;  // флажок
+    static constexpr bool _isMultithreading = false;  // флажок
 
     std::unique_ptr<math::primary::AbstractPrimaryTest> _primaryTest{};
     double _probability;
@@ -46,20 +35,12 @@ class RSAService {
     mutable std::mutex keyMutex;
     std::optional<std::pair<PublicKey, PrivateKey>> found_key;
 
-    template <typename Distr, typename... Args>
-    constexpr auto _genRandNumber(Args &&...args) const {
-      thread_local boost::random::mt19937 generator(std::random_device{}());
-      Distr dist(std::forward<Args>(args)...);
-      return dist(generator);
-    }
-
     constexpr BI genRandNumber() const {
       const BI min_val = BI(1) << (this->_bitLength - 1);
       const BI max_val = (BI(1) << this->_bitLength) - 1;
 
-      BI result =
-          this->_genRandNumber<boost::random::uniform_int_distribution<BI>>(
-              min_val, max_val);
+      BI result = meow::math::_genRandNumber<
+          boost::random::uniform_int_distribution<BI>>(min_val, max_val);
 
       if (result < 0) {
         result = -result;
@@ -91,13 +72,8 @@ class RSAService {
       BI N = p * q;
       const auto phi = EulerFuncN(p, q);
 
-      // 49081 -- просто рандомное простое число из https://oeis.org/A004023
-      // const boost::random::uniform_int_distribution<BI> dist(49081, phi);
-
       do {
-        // e = dist(_gen);
-        e = _genRandNumber<boost::random::uniform_int_distribution<BI>>(49081,
-                                                                        phi);
+        e =  meow::math::_genRandNumber<boost::random::uniform_int_distribution<BI>>(3, phi);
       } while (math::GCD(e, phi) != 1);
 
       // d*e === 1 mod phi==> найти надо d eGCD ax+by==gcd => x*(x^-1)+0*b==1
@@ -231,6 +207,9 @@ class RSAService {
       if (bitLength < 64 || (bitLength & 1) == 1) {
         throw std::invalid_argument("Слишком малый размер");
       }
+      if ((bitLength & (bitLength - 1)) != 0) {
+        throw std::invalid_argument("bitLength не степень 2");
+      }
 
       this->_primaryTest = _setPrimaryTest(test);
     }
@@ -271,7 +250,7 @@ class RSAService {
   };
 
  private:
-  std::unique_ptr<KeyGen> _keyGen;
+  std::unique_ptr<KeyGen> _keyGen{};
   constexpr void _init(const bool get_wienner_flag) {
     !get_wienner_flag ? std::println("Безопасный сервис")
                       : std::println("НеБезопасный сервис");

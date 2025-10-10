@@ -9,6 +9,20 @@ export module math;
 export namespace meow::math {
 
 /**
+ * @brief рандомные чиселкт
+ * @tparam Distr
+ * @tparam Args
+ * @param args
+ * @return
+ */
+template <typename Distr, typename... Args>
+constexpr auto _genRandNumber(Args &&...args) {
+  thread_local boost::random::mt19937 generator(std::random_device{}());
+  Distr dist(std::forward<Args>(args)...);
+  return dist(generator);
+}
+
+/**
  * @brief метод для нормализации числа (то есть приведения его к кольцу)
  * @param number число
  * @param mod модуль
@@ -24,6 +38,12 @@ constexpr BI normalizeMod(BI number, const BI& mod) {
   return rem < 0 ? BI(rem + mod) : rem;
 }
 
+/**
+ * @brief
+ * @param a
+ * @param pow
+ * @return
+ */
 constexpr BI pow(BI a, BI pow) {
   if (pow == 0) return 1;
   if (pow < 0) {
@@ -32,14 +52,21 @@ constexpr BI pow(BI a, BI pow) {
   BI res = 1;
   while (pow > 0) {
     if (pow & 1) {
-      res = (res * a);
+      res *= a;
     }
-    a = (a * a);
+    a *= a;
     pow >>= 1;
   }
   return res;
 }
 
+/**
+ * @brief
+ * @param a
+ * @param pow
+ * @param mod
+ * @return
+ */
 constexpr BI modPow(BI a, BI pow, const BI& mod) {
   if (mod == 0) {
     throw std::invalid_argument(
@@ -111,7 +138,7 @@ constexpr BI LejandreSymbol(const BI& a, const BI& p) {
     return 0;
   }
 
-  // тупо волшебная формула
+  // тупо волшебная формула (критерий Эйлера)
   const BI pow = (p - 1) / 2;
   if (const BI res = modPow(modA, pow, p); res == 1) {
     return 1;

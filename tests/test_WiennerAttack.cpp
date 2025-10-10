@@ -84,7 +84,7 @@ TEST(FindD, Simple) {
   const BI expected_d = 5;
 
   const auto [decrypt_exp, phi, convergents] =
-      meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+      meow::cypher::RSA::BadRSA::BadRSAService::hack(PublicKey(e, N));
   ASSERT_TRUE(decrypt_exp == expected_d);
   std::cout << phi << std::endl;
   for (auto& elem : convergents) {
@@ -98,7 +98,7 @@ TEST(FindD, Simple0) {
   const BI expected_d = 25;
 
   const auto [decrypt_exp, phi, convergents] =
-      meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+      meow::cypher::RSA::BadRSA::BadRSAService::hack(PublicKey(e, N));
   ASSERT_TRUE(decrypt_exp == expected_d);
   std::cout << phi << std::endl;
   for (auto& elem : convergents) {
@@ -112,7 +112,7 @@ TEST(FindD, Simple1) {
   const BI expected_d = 11;
 
   const auto [decrypt_exp, phi, convergents] =
-      meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N);
+      meow::cypher::RSA::BadRSA::BadRSAService::hack(PublicKey(e, N));
   ASSERT_TRUE(decrypt_exp == expected_d);
 
   std::cout << phi << std::endl;
@@ -160,7 +160,7 @@ TEST(GoodKeys, Simple0) {
          "827045484635741733526771648402602792245590797152485016311428192536027"
          "933642200249903491401647794010694246092401473368768650339436571285217"
          "009231289163066249688504373012319831807579082467434547721371");
-  ASSERT_THROW(meow::cypher::RSA::BadRSA::BadRSAService::hack(e, N),
+  ASSERT_THROW(meow::cypher::RSA::BadRSA::BadRSAService::hack(PublicKey(e, N)),
                meow::cypher::RSA::attack::hack_err);
 }
 // TEST(BadRSA, Simple) {
@@ -179,7 +179,7 @@ TEST(GoodKeys, Simple0) {
 //   const meow::cypher::RSA::BadRSA::BadRSAService service{
 //       meow::cypher::RSA::BadRSA::BadRSAService::KeyGen::PrimaryTests::
 //           MillerRabinTest,
-//       0.98, 2048};
+//       0.98, 1024};
 //   const auto res = service.encrypt(some_msg);
 //   const auto res2 = service.decrypt(res);
 //   std::cout << "e= " << service.public_key_.encrypt_word

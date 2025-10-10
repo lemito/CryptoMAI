@@ -56,6 +56,13 @@ class WiennerAttackService {
     BI numerator;
     BI denominator;
 
+    Fraction(const BI& num, const BI& denom)
+        : numerator{num}, denominator{denom} {
+      if (denom == 0) {
+        throw std::invalid_argument("знаменатель не м.б. == 0");
+      }
+    }
+
     bool operator==(const Fraction& other) const {
       return numerator == other.numerator && denominator == other.denominator;
     }
@@ -92,11 +99,9 @@ class WiennerAttackService {
       BI d = 1;
 
       // convergents.push_back({a, b});
-      convergents.push_back({c, d});
+      convergents.emplace_back(c, d);
 
       for (const auto& coeff : coefficients | std::views::drop(1)) {
-        // c = c*coeff + a;
-        // d = d*coeff + b;
         /// приближенная дробь p/q: (1/0), (a0/1), далее pi = p_(i-1)*ai+p_(i2)
         /// 1i = 1_(i-1)*ai+1_(i-2)
         std::tie(a, b, c, d) = std::make_tuple<BI, BI, BI, BI>(
@@ -115,7 +120,8 @@ class WiennerAttackService {
     std::vector<Fraction> convergents;
   };
 
-  static constexpr HackRes hack(const BI& e, const BI& N) {
+  static constexpr HackRes hack(const PublicKey& key) {
+    const auto [e, N] = key;
     // d == e^-1 mod N => ed = 1 + k*phi; e/phi - k/d = 1/d*phi -> e/N - k/d <
     // 1/dphi < 1/2d^2
     // ==> цепная дробь и приближенная к ней содержит
