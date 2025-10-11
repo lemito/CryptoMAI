@@ -44,7 +44,7 @@ class AbstractPrimaryTest : public IPrimaryTest {
   [[nodiscard]] virtual bool _isPrimary(const BI& number,
                                         const BI& a) const = 0;
   [[nodiscard]] virtual BI genRandom(const BI& a, const BI& b) const {
-    return _genRandNumber<boost::random::uniform_int_distribution<BI>>(a,b);
+    return _genRandNumber<boost::random::uniform_int_distribution<BI>>(a, b);
   }
 
  public:
@@ -134,9 +134,13 @@ class SoloveyStrassenTest final : public AbstractPrimaryTest {
     if (GCD(a, number) != 1) {
       return false;
     }
-    const auto j_symbol = (JacobiSymbol(a, number) % number + number) % number;
+    // const auto j_symbol = (JacobiSymbol(a, number) % number + number) %
+    // number;
+    const auto j_symbol = normalizeMod(JacobiSymbol(a, number), number);
+    // const auto exp =
+    //         (modPow(a, (number - 1) / 2, number) % number + number) % number;
     if (const auto exp =
-            (modPow(a, (number - 1) / 2, number) % number + number) % number;
+            normalizeMod(modPow(a, (number - 1) / 2, number), number);
         j_symbol != exp || j_symbol == 0) {
       return false;
     }
@@ -208,7 +212,8 @@ class MillerRabinTest final : public AbstractPrimaryTest {
     // если изи не удалось, пробуем поискать благодаря s; 0 скипаем так как
     // a^1*d была выше в виде n-1
     for (BI i = 1; i < s; ++i) {
-      tmp = tmp * tmp % number;
+      // tmp = tmp * tmp % number;
+      tmp = normalizeMod(tmp * tmp, number);
       if (tmp == number - 1) {
         // -1 mod n == n-1 mod n
         return true;
