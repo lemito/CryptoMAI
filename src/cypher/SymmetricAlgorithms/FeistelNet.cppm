@@ -39,7 +39,7 @@ export namespace meow::cypher::symm::FeistelNet {
 class FeistelNet : public ISymmetricCypher {
   [[nodiscard]] std::vector<std::byte> _network(
       const std::vector<std::byte>& in,
-      const std::vector<std::vector<std::byte>>& _roundKeys) {
+      const std::vector<std::vector<std::byte>>& _roundKeys) const {
     const auto [L, R] = splitBlock(std::span(in));
     for (std::size_t i = 0; i < in.size(); i++) {
       // TODO: тут будет код
