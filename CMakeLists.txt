@@ -2,7 +2,6 @@
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fimplicit-modules -fimplicit-module-maps -stdlib=libc++")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -stdlib=libc++")
 
 project(CryptoMAI LANGUAGES CXX)
@@ -10,11 +9,9 @@ project(CryptoMAI LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-#set(CMAKE_CXX_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/cmodulecache)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
-#find_package(GMP REQUIRED)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -24,39 +21,53 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-#add_executable(Crypto
-##        Crypto.cpp
-##        Crypto.h
-#        src/perestanovki.cpp
-#)
-add_library(Crypto STATIC)
-target_compile_features(Crypto PRIVATE cxx_std_23)
+add_library(CryptoMath STATIC)
+add_library(CryptoRSA STATIC)
+add_library(CryptoSymmetric STATIC)
+add_library(Crypto INTERFACE)
 
-target_link_libraries(Crypto PRIVATE ${GMP_LIBRARY})
-target_include_directories(Crypto PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
-
-target_sources(Crypto PUBLIC
+target_compile_features(CryptoMath PRIVATE cxx_std_23)
+target_sources(CryptoMath PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-        src/cypher/cypher.cppm
         src/math/primary/PrimaryTests.cppm
         src/math/math.cppm
+)
+target_link_libraries(CryptoMath PRIVATE ${GMP_LIBRARY})
+target_include_directories(CryptoMath PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+
+target_compile_features(CryptoRSA PRIVATE cxx_std_23)
+target_sources(CryptoRSA PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
         src/cypher/RSA/RSA.cppm
         src/cypher/RSA/BadRSA.cppm
         src/cypher/RSA/attack/WiennerAttack.cppm
-        src/cypher/permutate.cppm
+)
+target_link_libraries(CryptoRSA PUBLIC CryptoMath)
+
+target_compile_features(CryptoSymmetric PRIVATE cxx_std_23)
+target_sources(CryptoSymmetric PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/permutate.cppm
+        src/cypher/SymmetricAlgorithms/cypher.cppm
+        src/cypher/SymmetricAlgorithms/FeistelNet.cppm
+)
+target_link_libraries(CryptoSymmetric PUBLIC CryptoMath)
+
+target_link_libraries(Crypto INTERFACE
+        CryptoMath
+        CryptoRSA
+        CryptoSymmetric
 )
 
-target_compile_options(Crypto PRIVATE
-        -fmodules -fbuiltin-module-map -fimplicit-modules
-        -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
-)
-
-target_compile_options(Crypto PRIVATE -fno-modules)
-if (MSVC)
-    target_compile_options(Crypto PRIVATE /std:c++latest)
-else ()
-    target_compile_options(Crypto PRIVATE -std=c++23)
-endif ()
+foreach (target CryptoMath CryptoRSA CryptoSymmetric)
+    target_compile_options(${target} PRIVATE
+            -fmodules
+            -fbuiltin-module-map
+            -fimplicit-modules
+            -stdlib=libc++
+            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
+    )
+endforeach ()
 
 enable_testing()
 add_subdirectory(tests)

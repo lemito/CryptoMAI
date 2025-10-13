@@ -16,7 +16,7 @@ export namespace meow::math {
  * @return
  */
 template <typename Distr, typename... Args>
-constexpr auto _genRandNumber(Args &&...args) {
+constexpr auto _genRandNumber(Args&&... args) {
   thread_local boost::random::mt19937 generator(std::random_device{}());
   Distr dist(std::forward<Args>(args)...);
   return dist(generator);
@@ -93,8 +93,7 @@ constexpr BI modPow(BI a, BI pow, const BI& mod) {
 }
 
 constexpr BI GCD(BI a, BI b) {
-  const auto ZERO = BI(
-0);
+  const auto ZERO = BI(0);
   while (b > ZERO) {
     std::tie(a, b) = std::make_tuple<BI, BI>(BI(b), a % b);
   }

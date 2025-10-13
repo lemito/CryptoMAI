@@ -28,12 +28,11 @@ std::vector<std::byte> permutation(
   if (startBitNumer < 0 || startBitNumer > 1) {
     throw std::runtime_error("Неправильный аргумент старта");
   }
-  std::vector<std::byte> res;
 
   const size_t siz = in.size() * 8;
   const size_t res_siz =
       permutationRule.size() / 8 + (permutationRule.size() % 8 ? 1 : 0);
-  res.resize(res_siz, static_cast<std::byte>(0));
+  std::vector res(res_siz, std::byte{0});
 
   size_t i = 0;
   for (const auto& elem : permutationRule) {
@@ -43,18 +42,19 @@ std::vector<std::byte> permutation(
       throw std::runtime_error("упс... чет как-то не то вышло");
     }
 
-    const std::byte bit =
-        (in[(ix / 8)] >>
-         (rule == bitIndexingRule::LSB2MSB ? ix % 8 : 7 - (ix % 8))) &
-        static_cast<std::byte>(1);
+    const bool bitVal =
+        (in[ix / 8] >>
+             (rule == bitIndexingRule::LSB2MSB ? ix % 8 : 7 - ix % 8) &
+         static_cast<std::byte>(1)) == static_cast<std::byte>(1);
 
-    res[i / 8] |=
-        (bit << (rule == bitIndexingRule::LSB2MSB ? ix % 8 : 7 - (ix % 8)));
-
+    if (bitVal) {
+      res[i / 8] |= static_cast<std::byte>(
+          1 << (rule == bitIndexingRule::LSB2MSB ? i % 8 : 7 - i % 8));
+    }
     ++i;
   }
 
   return res;
 }
 
-}  // namespace meow::cypher::premutate
+}  // namespace meow::cypher::permutate

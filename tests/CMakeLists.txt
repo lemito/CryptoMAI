@@ -28,10 +28,15 @@ add_executable(test_rsa
 )
 target_link_libraries(test_rsa PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
-#add_executable(test_permutate
-#        test_permutate.cpp
-#)
-#target_link_libraries(test_permutate PRIVATE Crypto GTest::gtest GTest::gtest_main)
+add_executable(test_permutate
+        test_permutate.cpp
+)
+target_link_libraries(test_permutate PRIVATE Crypto GTest::gtest GTest::gtest_main)
+
+add_executable(test_cypher
+        test_cypher.cpp
+)
+target_link_libraries(test_cypher PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
 add_executable(test_WiennerAttack test_WiennerAttack.cpp)
 target_link_libraries(test_WiennerAttack PRIVATE Crypto GTest::gtest GTest::gtest_main)
@@ -44,4 +49,5 @@ gtest_discover_tests(test_miller_rabin)
 gtest_discover_tests(test_solovey_strassen)
 gtest_discover_tests(test_rsa)
 gtest_discover_tests(test_WiennerAttack)
-#gtest_discover_tests(test_permutate)
+gtest_discover_tests(test_permutate)
+gtest_discover_tests(test_cypher)
