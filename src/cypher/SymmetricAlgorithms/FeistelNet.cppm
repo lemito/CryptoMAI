@@ -7,23 +7,23 @@ module;
 export module cypher.FeistelNet;
 import cypher;
 
-std::tuple<std::span<const std::byte>, const std::span<const std::byte>>
-splitBlock(const std::span<const std::byte>& in) {
+std::tuple<std::vector<std::byte>, std::vector<std::byte>> splitBlock(
+    const std::vector<std::byte>& in) {
   const size_t ix = in.size() / 2;
-  return std::make_tuple<const std::span<const std::byte>,
-                         const std::span<const std::byte>>(in.first(ix),
-                                                           in.subspan(ix));
+  auto first = in | std::views::take(ix);
+  auto second = in | std::views::drop(ix);
+  return {{first.begin(), first.end()}, {second.begin(), second.end()}};
 }
 
-std::vector<std::byte> mergeBlock(const std::span<const std::byte>& a,
-                                  const std::span<const std::byte>& b) {
+std::vector<std::byte> mergeBlock(const std::vector<std::byte>& a,
+                                  const std::vector<std::byte>& b) {
   std::vector res(a.begin(), a.end());
   res.insert(res.end(), b.begin(), b.end());
   return res;
 }
 
-std::vector<std::byte> xorSpan(const std::span<const std::byte>& a,
-                               const std::span<const std::byte>& b) {
+std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
+                               const std::vector<std::byte>& b) {
   if (a.size() != b.size()) {
     throw std::runtime_error("блоки должны быть одного размера");
   }
@@ -40,11 +40,14 @@ class FeistelNet : public ISymmetricCypher {
   [[nodiscard]] std::vector<std::byte> _network(
       const std::vector<std::byte>& in,
       const std::vector<std::vector<std::byte>>& _roundKeys) const {
-    const auto [L, R] = splitBlock(std::span(in));
+    auto [L, R] = splitBlock(in);
     for (std::size_t i = 0; i < in.size(); i++) {
       // TODO: тут будет код
-      const auto F_res = _enc_dec->encrypt_decrypt(R, _roundKeys[i]);
-      const auto xorRes = xorSpan(L, R);
+      const auto F_res = this->_enc_dec->encrypt_decrypt(R, _roundKeys[i]);
+      R = xorSpan(L, F_res);
+      L = R;
+      // std::tie(R, L) = std::tuple(
+      //     xorSpan(L, this->_enc_dec->encrypt_decrypt(R, _roundKeys[i])), R);
     }
     return mergeBlock(R, L);
   }
