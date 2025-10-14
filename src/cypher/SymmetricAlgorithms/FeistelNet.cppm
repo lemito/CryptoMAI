@@ -9,9 +9,12 @@ import cypher;
 
 std::tuple<std::vector<std::byte>, std::vector<std::byte>> splitBlock(
     const std::vector<std::byte>& in) {
+  if (in.size() & 1) {
+    throw std::invalid_argument("блок должен делиться на 2");
+  }
   const size_t ix = in.size() / 2;
-  auto first = in | std::views::take(ix);
-  auto second = in | std::views::drop(ix);
+  const auto first = in | std::views::take(ix);
+  const auto second = in | std::views::drop(ix);
   return {{first.begin(), first.end()}, {second.begin(), second.end()}};
 }
 
@@ -27,11 +30,13 @@ std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
   if (a.size() != b.size()) {
     throw std::runtime_error("блоки должны быть одного размера");
   }
-  std::vector res(a.begin(), a.end());
-  for (size_t i = 0; i < a.size(); i++) {
-    res[i] = a[i] ^ b[i];
-  }
-  return res;
+  const auto pre_res = std::ranges::views::zip(a, b) |
+                       std::ranges::views::transform([](auto pair) {
+                         auto [x, y] = pair;
+                         return x ^ y;
+                       });
+
+  return std::vector(pre_res.begin(), pre_res.end());
 }
 
 export namespace meow::cypher::symm::FeistelNet {
@@ -41,13 +46,13 @@ class FeistelNet : public ISymmetricCypher {
       const std::vector<std::byte>& in,
       const std::vector<std::vector<std::byte>>& _roundKeys) const {
     auto [L, R] = splitBlock(in);
-    for (std::size_t i = 0; i < in.size(); i++) {
+    for (std::size_t i = 0; i < _roundKeys.size(); i++) {
       // TODO: тут будет код
-      const auto F_res = this->_enc_dec->encrypt_decrypt(R, _roundKeys[i]);
-      R = xorSpan(L, F_res);
-      L = R;
-      // std::tie(R, L) = std::tuple(
-      //     xorSpan(L, this->_enc_dec->encrypt_decrypt(R, _roundKeys[i])), R);
+      // const auto F_res = this->_enc_dec->encrypt_decrypt(R, _roundKeys[i]);
+      // R = xorSpan(L, F_res);
+      // L = R;
+      std::tie(R, L) = std::tuple(
+          xorSpan(L, this->_enc_dec->encrypt_decrypt(R, _roundKeys[i])), R);
     }
     return mergeBlock(R, L);
   }

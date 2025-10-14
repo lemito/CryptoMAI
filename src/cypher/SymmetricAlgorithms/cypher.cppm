@@ -1,5 +1,6 @@
 module;
 
+#include <any>
 #include <cstddef>
 #include <cstdint>
 #include <future>
@@ -44,7 +45,7 @@ class IEncryptionDecryption {
   virtual ~IEncryptionDecryption() = default;
 };
 
-// 3.(де)шифрование симметричным алгосом
+// 3.(де)шифрование симметричным алгосом БЛОКА
 class ISymmetricCypher {
  protected:
   std::vector<std::vector<std::byte>> _roundKeys;
@@ -53,7 +54,9 @@ class ISymmetricCypher {
   virtual constexpr void setRoundKeys(
       const std::vector<std::byte>& encryptionKey) = 0;
 
-  constexpr decltype(_roundKeys) getRoundKeys() const { return _roundKeys; }
+  [[nodiscard]] constexpr decltype(_roundKeys) getRoundKeys() const {
+    return _roundKeys;
+  }
 
   [[nodiscard]] virtual constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const = 0;
@@ -64,7 +67,7 @@ class ISymmetricCypher {
   virtual ~ISymmetricCypher() = default;
 };
 
-export enum class encryptionMode : std::int8_t {
+enum class encryptionMode : std::int8_t {
   ECB,
   CBC,
   PCBC,
@@ -72,24 +75,37 @@ export enum class encryptionMode : std::int8_t {
   CTR,
   RandomDelta
 };
-export enum class paddingMode : std::int8_t {
-  Zeros,
-  AnsiX923,
-  PKCS7,
-  ISO10126
-};
+enum class paddingMode : std::int8_t { Zeros, AnsiX923, PKCS7, ISO10126 };
 
 // 4
-export class SymmetricCypherContext : public IGenRoundKey,
-                                      public IEncryptionDecryption,
-                                      public ISymmetricCypher {
+class SymmetricCypherContext : public IGenRoundKey,
+                               public IEncryptionDecryption,
+                               public ISymmetricCypher {
  protected:
   std::vector<std::byte> _encryptionKey;
   encryptionMode _encMode;
   paddingMode _padMode;
   std::optional<std::vector<std::byte>> _init_vec;
-  std::tuple<> _params;
+  std::vector<std::any> _params;
   std::vector<std::vector<std::byte>> _roundKeys;
+
+  [[nodiscard]] std::future<std::vector<std::byte>> _encryptAsync(
+      const std::vector<std::byte>& in) const {
+    return std::async(std::launch::async,
+                      [this, &in] { return std::vector<std::byte>{}; });
+  }
+
+  std::future<void> _encryptAsync(const std::string& inFilePath,
+                                  const std::string& resFilePath) const {}
+
+  [[nodiscard]] std::future<std::vector<std::byte>> _decryptAsync(
+      const std::vector<std::byte>& in) const {
+    return std::async(std::launch::async,
+                      [this, &in] { return std::vector<std::byte>{}; });
+  }
+
+  std::future<void> _decryptAsync(const std::string& inFilePath,
+                                  const std::string& resFilePath) const {}
 
  public:
   constexpr void setRoundKeys(
@@ -108,5 +124,15 @@ export class SymmetricCypherContext : public IGenRoundKey,
         _padMode(padMode),
         _init_vec(init_vec),
         _params(std::forward<Args>(params)...) {}
+
+  [[nodiscard]] constexpr std::vector<std::byte> encrypt(
+      const std::vector<std::byte>& in) const override {
+    return _encryptAsync(in).get();
+  }
+
+  [[nodiscard]] constexpr std::vector<std::byte> decrypt(
+      const std::vector<std::byte>& in) const override {
+    return _decryptAsync(in).get();
+  }
 };
 }  // namespace meow::cypher::symm
