@@ -2,6 +2,12 @@
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
+
+    file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/module_cache)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/module_cache)
+endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -stdlib=libc++")
 
 project(CryptoMAI LANGUAGES CXX)
@@ -24,6 +30,9 @@ FetchContent_MakeAvailable(googletest)
 add_library(CryptoMath STATIC)
 add_library(CryptoRSA STATIC)
 add_library(CryptoSymmetric STATIC)
+add_library(CryptoDES STATIC)
+add_library(CryptoDEAL STATIC
+        src/cypher/SymmetricAlgorithms/DEAL/DEAL.cppm)
 add_library(Crypto INTERFACE)
 
 target_compile_features(CryptoMath PRIVATE cxx_std_23)
@@ -53,21 +62,37 @@ target_sources(CryptoSymmetric PUBLIC
 )
 target_link_libraries(CryptoSymmetric PUBLIC CryptoMath)
 
+target_compile_features(CryptoDES PRIVATE cxx_std_23)
+target_sources(CryptoDES PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/DES/DES.cppm
+)
+target_link_libraries(CryptoDES PUBLIC CryptoSymmetric)
+
+target_compile_features(CryptoDEAL PRIVATE cxx_std_23)
+target_sources(CryptoDEAL PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/DEAL/DEAL.cppm
+)
+target_link_libraries(CryptoDEAL PUBLIC CryptoSymmetric)
+
 target_link_libraries(Crypto INTERFACE
         CryptoMath
         CryptoRSA
         CryptoSymmetric
+        CryptoDES
+        CryptoDEAL
 )
 
-foreach (target CryptoMath CryptoRSA CryptoSymmetric)
-    target_compile_options(${target} PRIVATE
-            -fmodules
-            -fbuiltin-module-map
-            -fimplicit-modules
-            -stdlib=libc++
-            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
-    )
-endforeach ()
+#foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
+#    target_compile_options(${target} PRIVATE
+#            -fmodules
+#            -fbuiltin-module-map
+#            -fimplicit-modules
+#            -stdlib=libc++
+#            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
+#    )
+#endforeach ()
 
 enable_testing()
 add_subdirectory(tests)

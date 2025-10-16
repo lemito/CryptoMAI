@@ -1,9 +1,14 @@
+/**
+ * TODO: ТУТ ШИФРОВАНИЯ ДОДЕЛАТЬ И ВСЯКОЕ РАСПАРАЛЕЛИВАНИЕ/АСИНХРОНЩИНА
+ */
+
 module;
 
+#include <algorithm>
 #include <any>
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/random_device.hpp>
-#include <boost/random/uniform_int_distribution.hpp>
+// #include <boost/random/mersenne_twister.hpp>
+// #include <boost/random/random_device.hpp>
+// #include <boost/random/uniform_int_distribution.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <future>
@@ -12,9 +17,7 @@ module;
 #include <random>
 #include <ranges>
 #include <string>
-#include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
 
 export module cypher;
@@ -54,7 +57,7 @@ class IEncryptionDecryption {
 class ISymmetricCypher {
  protected:
   std::vector<std::vector<std::byte>> _roundKeys;
-  std::size_t _blockSize = 64;  // размер блока указан в битах (для DES = 64)
+  std::size_t _blockSize = 8;  // размер блока указан в байт (для DES = 8)
 
  public:
   virtual constexpr void setRoundKeys(
@@ -89,10 +92,9 @@ class SymmetricCypherContext : public IGenRoundKey,
                                public ISymmetricCypher {
   [[nodiscard]] constexpr std::vector<std::byte> _doPadding(
       const std::vector<std::byte>& in) const {
-    boost::random::random_device rd;
-    boost::random::mt19937 gen(rd());
-    const boost::random::uniform_int_distribution dist(
-        static_cast<std::byte>(0), static_cast<std::byte>(255));
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint8_t> dist((0), (255));
 
     size_t forAdd = _blockSize - in.size() % _blockSize;
     if (forAdd == 0) {
@@ -119,7 +121,7 @@ class SymmetricCypherContext : public IGenRoundKey,
       case paddingMode::ISO10126: {
         // ВСЕ СЛУЧАЙНЫЕ БАЙТЫ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
         for (size_t i = in.size(); i < res.size() - 1; ++i) {
-          res[i] = dist(gen);
+          res[i] = static_cast<std::byte>(dist(gen));
         }
         res.back() = static_cast<std::byte>(forAdd);
       } break;
@@ -190,23 +192,23 @@ class SymmetricCypherContext : public IGenRoundKey,
   std::vector<std::any> _params;
   std::vector<std::vector<std::byte>> _roundKeys;
 
-  [[nodiscard]] std::future<std::vector<std::byte>> _encryptAsync(
-      const std::vector<std::byte>& in) const {
-    return std::async(std::launch::async,
-                      [this, &in] { return std::vector<std::byte>{}; });
-  }
+  // [[nodiscard]] std::future<std::vector<std::byte>> _encryptAsync(
+  //     const std::vector<std::byte>& in) const {
+  //   return std::async(std::launch::async,
+  //                     [this, &in] { return std::vector<std::byte>{}; });
+  // }
+  //
+  // std::future<void> _encryptAsync(const std::string& inFilePath,
+  //                                 const std::string& resFilePath) const {}
+  //
+  // [[nodiscard]] std::future<std::vector<std::byte>> _decryptAsync(
+  //     const std::vector<std::byte>& in) const {
+  //   return std::async(std::launch::async,
+  //                     [this, &in] { return std::vector<std::byte>{}; });
+  // }
 
-  std::future<void> _encryptAsync(const std::string& inFilePath,
-                                  const std::string& resFilePath) const {}
-
-  [[nodiscard]] std::future<std::vector<std::byte>> _decryptAsync(
-      const std::vector<std::byte>& in) const {
-    return std::async(std::launch::async,
-                      [this, &in] { return std::vector<std::byte>{}; });
-  }
-
-  std::future<void> _decryptAsync(const std::string& inFilePath,
-                                  const std::string& resFilePath) const {}
+  // std::future<void> _decryptAsync(const std::string& inFilePath,
+  //                                 const std::string& resFilePath) const {}
 
  public:
   constexpr void setRoundKeys(
@@ -228,12 +230,18 @@ class SymmetricCypherContext : public IGenRoundKey,
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
-    return _encryptAsync(in).get();
+    return {};
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
       const std::vector<std::byte>& in) const override {
-    return _decryptAsync(in).get();
+    return {};
   }
+
+  constexpr void encrypt(std::vector<std::byte>& dest,
+                         const std::vector<std::byte>& in) const {}
+
+  constexpr void decrypt(std::vector<std::byte>& dest,
+                         const std::vector<std::byte>& in) const {}
 };
 }  // namespace meow::cypher::symm

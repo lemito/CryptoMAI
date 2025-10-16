@@ -1,5 +1,6 @@
 module;
 
+#include <algorithm>
 #include <memory>
 #include <ranges>
 #include <vector>
@@ -52,7 +53,7 @@ class FeistelNet : public ISymmetricCypher {
       // R = xorSpan(L, F_res);
       // L = R;
       std::tie(R, L) = std::tuple(
-          xorSpan(L, this->_enc_dec->encrypt_decrypt(R, _roundKeys[i])), R);
+          xorSpan(L, this->_enc_dec->encryptDecryptBlock(R, _roundKeys[i])), R);
     }
     return mergeBlock(R, L);
   }
@@ -66,11 +67,11 @@ class FeistelNet : public ISymmetricCypher {
  public:
   explicit FeistelNet(const std::vector<std::byte>& key, const size_t rounds,
                       const std::shared_ptr<IGenRoundKey>& keyGenerator,
-                      const std::shared_ptr<IEncryptionDecryption>& dec_dec)
+                      const std::shared_ptr<IEncryptionDecryption>& enc_dec)
       : _key(key),
         _rounds(rounds),
-        _keyGenerator(std::move(keyGenerator)),
-        _enc_dec(std::move(dec_dec)) {
+        _keyGenerator(keyGenerator),
+        _enc_dec(enc_dec) {
     FeistelNet::setRoundKeys(key);
   }
 
@@ -88,6 +89,7 @@ class FeistelNet : public ISymmetricCypher {
     if (const auto siz = in.size(); siz & 1) {
       throw std::runtime_error("размер сообщения должен быть кратен 2");
     }
+    // текстик тупо отправляется в сеть и работает
     return _network(in, roundKeys);
   }
 
@@ -100,7 +102,10 @@ class FeistelNet : public ISymmetricCypher {
     if (const auto siz = in.size(); siz & 1) {
       throw std::runtime_error("размер сообщения должен быть кратен 2");
     }
-    return _network(in, roundKeys);
+    // текстик реверсится и затем отправляется в сеть
+    auto reversedIn = in;
+    std::ranges::reverse(reversedIn);
+    return _network(reversedIn, roundKeys);
   }
 };
 }  // namespace meow::cypher::symm::FeistelNet
