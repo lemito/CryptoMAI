@@ -71,3 +71,10 @@ endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
+
+add_executable(experiments tests/experiments/experiments.cpp)
+
+if (Boost_FOUND)
+    include_directories (SYSTEM ${Boost_INCLUDE_DIR})
+    target_link_libraries (experiments ${Boost_LIBRARIES})
+endif ()

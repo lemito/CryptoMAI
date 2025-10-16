@@ -1,11 +1,16 @@
 module;
 
 #include <any>
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/random_device.hpp>
+#include <boost/random/uniform_int_distribution.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <future>
 #include <optional>
 #include <print>
+#include <random>
+#include <ranges>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -38,7 +43,7 @@ class IEncryptionDecryption {
    * @param roundKey
    * @return
    */
-  [[nodiscard]] virtual constexpr std::vector<std::byte> encrypt_decrypt(
+  [[nodiscard]] virtual constexpr std::vector<std::byte> encryptDecryptBlock(
       const std::vector<std::byte>& inputBlock,
       const std::vector<std::byte>& roundKey) const = 0;
 
@@ -49,6 +54,7 @@ class IEncryptionDecryption {
 class ISymmetricCypher {
  protected:
   std::vector<std::vector<std::byte>> _roundKeys;
+  std::size_t _blockSize = 64;  // размер блока указан в битах (для DES = 64)
 
  public:
   virtual constexpr void setRoundKeys(
@@ -81,6 +87,101 @@ enum class paddingMode : std::int8_t { Zeros, AnsiX923, PKCS7, ISO10126 };
 class SymmetricCypherContext : public IGenRoundKey,
                                public IEncryptionDecryption,
                                public ISymmetricCypher {
+  [[nodiscard]] constexpr std::vector<std::byte> _doPadding(
+      const std::vector<std::byte>& in) const {
+    boost::random::random_device rd;
+    boost::random::mt19937 gen(rd());
+    const boost::random::uniform_int_distribution dist(
+        static_cast<std::byte>(0), static_cast<std::byte>(255));
+
+    size_t forAdd = _blockSize - in.size() % _blockSize;
+    if (forAdd == 0) {
+      forAdd = _blockSize;
+    }
+
+    std::vector res(_blockSize, static_cast<std::byte>(0));
+    std::ranges::copy(in, res.begin());
+
+    switch (_padMode) {
+      case paddingMode::Zeros: {
+        // ВСЁ ЗАПОЛНЯЕТСЯ НУЛЯМИ
+      } break;
+      case paddingMode::AnsiX923: {
+        // ВСЕ НУЛИ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
+        res.back() = static_cast<std::byte>(forAdd);
+      } break;
+      case paddingMode::PKCS7: {
+        // ВСЕ ЗАПОЛНЯЕТСЯ КОЛИЧЕСТВОМ ДОБАВЛЕННЫХ БАЙТ
+        for (size_t i = in.size(); i < res.size(); ++i) {
+          res[i] = static_cast<std::byte>(forAdd);
+        }
+      } break;
+      case paddingMode::ISO10126: {
+        // ВСЕ СЛУЧАЙНЫЕ БАЙТЫ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
+        for (size_t i = in.size(); i < res.size() - 1; ++i) {
+          res[i] = dist(gen);
+        }
+        res.back() = static_cast<std::byte>(forAdd);
+      } break;
+      default:
+        throw std::logic_error("нет такого режима набивки");
+    }
+
+    return res;
+  }
+
+  [[nodiscard]] constexpr std::vector<std::byte> _doUnpadding(
+      const std::vector<std::byte>& in) const {
+    std::vector<std::byte> res;
+    const auto wasAdded = static_cast<size_t>(in.back());
+
+    switch (_padMode) {
+      case paddingMode::Zeros:
+        // ВСЁ ЗАПОЛНЯЕТСЯ НУЛЯМИ
+        {
+          size_t i = in.size();
+          for (; i > 0 && in[i] == static_cast<std::byte>(0); --i) {
+          }
+          res = std::move(std::vector(in.begin(), in.begin() + i));
+        }
+        break;
+      case paddingMode::AnsiX923:  // ВСЕ НУЛИ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО
+                                   // ДОБАВЛЕННЫХ БАЙТ
+      {
+        for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
+          if (in[i] != static_cast<std::byte>(0)) {
+            throw std::runtime_error("в AnsiX923 должны быть нули байты");
+          }
+        }
+        auto pre_res = in | std::views::take(in.size() - wasAdded);
+        res = std::move(std::vector(pre_res.begin(), pre_res.end()));
+      } break;
+      case paddingMode::PKCS7:
+        // ВСЕ ЗАПОЛНЯЕТСЯ КОЛИЧЕСТВОМ ДОБАВЛЕННЫХ БАЙТ
+        {
+          for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
+            if (in[i] != static_cast<std::byte>(wasAdded)) {
+              throw std::runtime_error("в PKCS7 должны быть одинаковые байты");
+            }
+          }
+          auto pre_res = in | std::views::take(in.size() - wasAdded);
+          res = std::move(std::vector(pre_res.begin(), pre_res.end()));
+        }
+        break;
+      case paddingMode::ISO10126:
+        // ВСЕ СЛУЧАЙНЫЕ БАЙТЫ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
+        {
+          auto pre_res = in | std::views::take(in.size() - wasAdded);
+          res = std::move(std::vector(pre_res.begin(), pre_res.end()));
+        }
+        break;
+      default:
+        throw std::logic_error("нет такого режима набивки");
+    }
+
+    return res;
+  }
+
  protected:
   std::vector<std::byte> _encryptionKey;
   encryptionMode _encMode;
