@@ -72,6 +72,14 @@ class FeistelNet : public ISymmetricCypher {
         _rounds(rounds),
         _keyGenerator(keyGenerator),
         _enc_dec(enc_dec) {
+    if (keyGenerator == nullptr) {
+      throw std::runtime_error(
+          "класс, генерирующий раундовые ключи некорректен");
+    }
+    if (enc_dec == nullptr) {
+      throw std::runtime_error(
+          "класс, отвечающий за шифрование/дешифрование некорректен");
+    }
     FeistelNet::setRoundKeys(key);
   }
 
