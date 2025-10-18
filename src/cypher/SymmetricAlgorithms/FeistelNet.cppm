@@ -26,7 +26,7 @@ std::vector<std::byte> mergeBlock(const std::vector<std::byte>& a,
   return res;
 }
 
-std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
+export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
                                const std::vector<std::byte>& b) {
   if (a.size() != b.size()) {
     throw std::runtime_error("блоки должны быть одного размера");
