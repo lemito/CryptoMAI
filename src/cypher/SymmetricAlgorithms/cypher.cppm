@@ -27,6 +27,9 @@ export namespace meow::cypher::symm {
 // 1.генерация раундовых ключей
 class IGenRoundKey {
  public:
+  size_t roundCnt = 0;
+  explicit IGenRoundKey(const size_t cnt) : roundCnt(cnt) {}
+
   /**
    * @brief генерируем раундовые ключики из ключика
    * @param inputKey
@@ -390,6 +393,13 @@ class SymmetricCypherContext {
     dest = _processBlock(ACTION_MODE::encrypt, in).get();
   }
 
+  constexpr void encrypt(std::vector<std::byte>& dest,
+                         std::span<std::byte> in) const {
+    std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
+    vec.assign(in.begin(), in.end());
+    this->encrypt(dest, vec);
+  }
+
   constexpr void decrypt(std::vector<std::byte>& dest,
                          const std::vector<std::byte>& in) const {
     if (_algo == nullptr) {
@@ -405,6 +415,13 @@ class SymmetricCypherContext {
     }
     // TODO: ляляля тут дешифрование
     dest = _processBlock(ACTION_MODE::decrypt, in).get();
+  }
+
+  constexpr void decrypt(std::vector<std::byte>& dest,
+                         std::span<std::byte> in) const {
+    std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
+    vec.assign(in.begin(), in.end());
+    this->decrypt(dest, vec);
   }
 
   constexpr void encrypt(const std::string& destPath,

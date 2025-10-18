@@ -31,8 +31,7 @@ add_library(CryptoMath STATIC)
 add_library(CryptoRSA STATIC)
 add_library(CryptoSymmetric STATIC)
 add_library(CryptoDES STATIC)
-add_library(CryptoDEAL STATIC
-        src/cypher/SymmetricAlgorithms/DEAL/DEAL.cppm)
+add_library(CryptoDEAL STATIC)
 add_library(Crypto INTERFACE)
 
 target_compile_features(CryptoMath PRIVATE cxx_std_23)
@@ -56,7 +55,7 @@ target_link_libraries(CryptoRSA PUBLIC CryptoMath)
 target_compile_features(CryptoSymmetric PRIVATE cxx_std_23)
 target_sources(CryptoSymmetric PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-        src/cypher/SymmetricAlgorithms/permutate.cppm
+        src/cypher/SymmetricAlgorithms/utils.cppm
         src/cypher/SymmetricAlgorithms/cypher.cppm
         src/cypher/SymmetricAlgorithms/FeistelNet.cppm
 )
@@ -65,6 +64,7 @@ target_link_libraries(CryptoSymmetric PUBLIC CryptoMath)
 target_compile_features(CryptoDES PRIVATE cxx_std_23)
 target_sources(CryptoDES PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/DES/des_tables.cppm
         src/cypher/SymmetricAlgorithms/DES/DES.cppm
 )
 target_link_libraries(CryptoDES PUBLIC CryptoSymmetric)

@@ -2,7 +2,7 @@ module;
 export module DEAL;
 
 import cypher.FeistelNet;
-import cypher.permutate;
+import cypher.utils;
 import cypher;
 
 namespace meow::cypher::symm::DEAL {

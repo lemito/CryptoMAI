@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "utils_math.h"
-import cypher.permutate;
+import cypher.utils;
 
 TEST(Permutate, SimpleMSB2LSB) {
   const std::vector input = {static_cast<std::byte>(0b10110011)};

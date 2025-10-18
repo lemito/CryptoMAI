@@ -1,10 +1,20 @@
 module;
 #include <cstddef>
 #include <iostream>
+#include <span>
 #include <vector>
-export module cypher.permutate;
+export module cypher.utils;
 
-export namespace meow::cypher::permutate {
+export namespace meow::cypher {
+namespace utils {
+constexpr auto ShiftBytesLeft(const std::byte val, const size_t shift,
+                              const size_t length) {
+  return static_cast<int>((val << shift) | (val >> (length - shift))) &
+         ((1 << length) - 1);
+}
+}  // namespace utils
+
+namespace permutate {
 enum class bitIndexingRule : int8_t {
   LSB2MSB,  // младший->старший
   MSB2LSB   // старший->младший
@@ -20,9 +30,8 @@ enum class bitIndexingRule : int8_t {
  * пример P:[0,1,2,3] in:[a,b,c,d] => [a,b,c,d]
  * P:[2,3,0,1] in:[a,b,c,d] => [c,d,a,b]
  */
-std::vector<std::byte> permutation(
-    const std::vector<std::byte>& in,
-    const std::vector<int64_t>& permutationRule,
+constexpr std::vector<std::byte> permutation(
+    const std::vector<std::byte>& in, const std::span<uint16_t> permutationRule,
     const bitIndexingRule rule = bitIndexingRule::LSB2MSB,
     const int8_t startBitNumer = 0) {
   if (startBitNumer < 0 || startBitNumer > 1) {
@@ -56,5 +65,5 @@ std::vector<std::byte> permutation(
 
   return res;
 }
-
-}  // namespace meow::cypher::permutate
+}  // namespace permutate
+}  // namespace meow::cypher
