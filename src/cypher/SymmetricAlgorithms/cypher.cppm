@@ -120,7 +120,7 @@ class SymmetricCypherContext {
  private:
   enum class ACTION_MODE : int8_t { encrypt, decrypt };
   void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-                  const std::string& destPath) const {
+                    const std::string& destPath) const {
     std::ifstream i_file(inPath, std::ios::binary);
     if (!i_file) {
       throw std::runtime_error("не удалось открыть входной файл");
@@ -148,7 +148,8 @@ class SymmetricCypherContext {
         decrypt(write_buf, std::vector(buffer.begin(), buffer.begin() + read));
       }
 
-      o_file.write(reinterpret_cast<const char*>(write_buf.data()), write_buf.size());
+      o_file.write(reinterpret_cast<const char*>(write_buf.data()),
+                   write_buf.size());
     }
   }
 
@@ -249,14 +250,14 @@ class SymmetricCypherContext {
             const std::vector block(in.begin() + off,
                                     in.begin() + off + this->_algo->_blockSize);
 
-            std::vector<std::byte> processed_block;
+            std::vector<std::byte> proc_block;
             if (mode == ACTION_MODE::encrypt) {
-              processed_block = this->_algo->encrypt(block);
+              proc_block = this->_algo->encrypt(block);
             } else {
-              processed_block = this->_algo->decrypt(block);
+              proc_block = this->_algo->decrypt(block);
             }
 
-            std::ranges::copy(processed_block, res.begin() + off);
+            std::ranges::copy(proc_block, res.begin() + off);
           }));
     }
 
@@ -269,6 +270,10 @@ class SymmetricCypherContext {
   [[nodiscard]] std::vector<std::byte> _processCBC(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       std::size_t blockCnt) const {
+    if (in.size() != blockCnt * this->_algo->_blockSize) {
+      throw std::invalid_argument("размер блока не подходит для алгоритма");
+    }
+
     std::vector<std::byte> res(in.size());
     return res;
   }
@@ -285,9 +290,27 @@ class SymmetricCypherContext {
     return res;
   }
   [[nodiscard]] std::vector<std::byte> _processOFB(
-      ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const {
+      const ACTION_MODE mode, const std::vector<std::byte>& in,
+      const std::size_t blockCnt) const {
+    (void)mode;
+    if (in.size() != blockCnt * this->_algo->_blockSize) {
+      throw std::invalid_argument("размер блока не подходит для алгоритма");
+    }
     std::vector<std::byte> res(in.size());
+    std::vector<std::byte> curIV = _init_vec.value();
+
+    for (std::size_t i = 0; i < blockCnt; i++) {
+      std::vector<std::byte> keystream_block = this->_algo->encrypt(curIV);
+
+      const std::size_t off = i * this->_algo->_blockSize;
+      for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+        res[off + j] = in[off + j] ^ keystream_block[j];
+      }
+
+      curIV = keystream_block;
+    }
+
+    _init_vec.transform(curIV);
     return res;
   }
   [[nodiscard]] std::vector<std::byte> _processCTR(
