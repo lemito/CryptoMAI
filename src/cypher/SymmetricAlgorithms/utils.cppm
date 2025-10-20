@@ -7,17 +7,19 @@ export module cypher.utils;
 
 export namespace meow::cypher {
 namespace utils {
-constexpr auto ShiftBytesLeft(const std::byte val, const size_t shift,
+constexpr auto ShiftBytesLeft(const std::uint64_t val, const size_t shift,
                               const size_t length) {
-  return static_cast<int>((val << shift) | (val >> (length - shift))) &
-         ((1 << length) - 1);
+  // return static_cast<uint64_t>((val << shift) | (val >> (length - shift))) &
+  //        ((1 << length) - 1);
+  return (val << shift | val >> 28 - shift) &
+         0x0FFFFFFF;
 }
 }  // namespace utils
 
 namespace permutate {
 enum class bitIndexingRule : int8_t {
-  LSB2MSB,  // младший->старший
-  MSB2LSB   // старший->младший
+  LSB2MSB,  // младший->старший == little endian
+  MSB2LSB   // старший->младший == big-endian
 };
 
 /**
@@ -31,7 +33,8 @@ enum class bitIndexingRule : int8_t {
  * P:[2,3,0,1] in:[a,b,c,d] => [c,d,a,b]
  */
 constexpr std::vector<std::byte> permutation(
-    const std::vector<std::byte>& in, const std::span<uint16_t> permutationRule,
+    const std::vector<std::byte>& in,
+    const std::span<uint16_t>& permutationRule,
     const bitIndexingRule rule = bitIndexingRule::LSB2MSB,
     const int8_t startBitNumer = 0) {
   if (startBitNumer < 0 || startBitNumer > 1) {
@@ -43,24 +46,25 @@ constexpr std::vector<std::byte> permutation(
       permutationRule.size() / 8 + (permutationRule.size() % 8 ? 1 : 0);
   std::vector res(res_siz, std::byte{0});
 
-  size_t i = 0;
-  for (const auto& elem : permutationRule) {
-    const auto ix = elem - static_cast<int64_t>(startBitNumer);
+  for (size_t i = 0; i < permutationRule.size(); i++) {
+    const auto ix = permutationRule[i] - static_cast<int64_t>(startBitNumer);
 
     if (ix < 0 || ix >= static_cast<int64_t>(siz)) {
-      throw std::runtime_error("упс... чет как-то не то вышло");
+      throw std::runtime_error("упс... чет как-то не то вышло в перестановках");
     }
 
-    const bool bitVal =
-        (in[ix / 8] >>
-             (rule == bitIndexingRule::LSB2MSB ? ix % 8 : 7 - ix % 8) &
-         static_cast<std::byte>(1)) == static_cast<std::byte>(1);
+    const auto byteIx = ix / 8;
+    const auto bitIx = rule == bitIndexingRule::MSB2LSB ? ix % 8 : 7 - (ix % 8);
+    const auto newByteIx = i / 8;
+    const auto newBitIx =
+        rule == bitIndexingRule::MSB2LSB ? 7 - (i % 8) : i % 8;
 
-    if (bitVal) {
-      res[i / 8] |= static_cast<std::byte>(
-          1 << (rule == bitIndexingRule::LSB2MSB ? i % 8 : 7 - i % 8));
+    const bool bit =
+        (std::to_integer<int16_t>(in[byteIx] >> (7 - bitIx)) & 1) == 1;
+
+    if (bit) {
+      res[newByteIx] |= static_cast<std::byte>(1 << newBitIx);
     }
-    ++i;
   }
 
   return res;

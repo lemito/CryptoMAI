@@ -27,7 +27,7 @@ std::vector<std::byte> mergeBlock(const std::vector<std::byte>& a,
 }
 
 export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
-                               const std::vector<std::byte>& b) {
+                                      const std::vector<std::byte>& b) {
   if (a.size() != b.size()) {
     throw std::runtime_error("блоки должны быть одного размера");
   }
@@ -49,7 +49,8 @@ class FeistelNet : public ISymmetricCypher {
     auto [L, R] = splitBlock(in);
     for (std::size_t i = 0; i < _roundKeys.size(); i++) {
       // TODO: тут будет код
-      // const auto F_res = this->_enc_dec->encrypt_decrypt(R, _roundKeys[i]);
+      // const auto F_res = this->_enc_dec->encrypt_decrypt(R,
+      //_roundKeys[i]);
       // R = xorSpan(L, F_res);
       // L = R;
       std::tie(R, L) = std::tuple(
@@ -65,13 +66,10 @@ class FeistelNet : public ISymmetricCypher {
   std::shared_ptr<IEncryptionDecryption> _enc_dec{};
 
  public:
-  explicit FeistelNet(const std::vector<std::byte>& key, const size_t rounds,
+  explicit FeistelNet(const size_t rounds,
                       const std::shared_ptr<IGenRoundKey>& keyGenerator,
                       const std::shared_ptr<IEncryptionDecryption>& enc_dec)
-      : _key(key),
-        _rounds(rounds),
-        _keyGenerator(keyGenerator),
-        _enc_dec(enc_dec) {
+      : _rounds(rounds), _keyGenerator(keyGenerator), _enc_dec(enc_dec) {
     if (keyGenerator == nullptr) {
       throw std::runtime_error(
           "класс, генерирующий раундовые ключи некорректен");
@@ -80,7 +78,6 @@ class FeistelNet : public ISymmetricCypher {
       throw std::runtime_error(
           "класс, отвечающий за шифрование/дешифрование некорректен");
     }
-    FeistelNet::setRoundKeys(key);
   }
 
   constexpr void setRoundKeys(
@@ -110,10 +107,9 @@ class FeistelNet : public ISymmetricCypher {
     if (const auto siz = in.size(); siz & 1) {
       throw std::runtime_error("размер сообщения должен быть кратен 2");
     }
-    // текстик реверсится и затем отправляется в сеть
-    auto reversedIn = in;
-    std::ranges::reverse(reversedIn);
-    return _network(reversedIn, roundKeys);
+    auto reversedKeys = roundKeys;
+    std::ranges::reverse(reversedKeys);
+    return _network(in, reversedKeys);
   }
 };
 }  // namespace meow::cypher::symm::FeistelNet

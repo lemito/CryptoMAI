@@ -34,10 +34,10 @@ add_executable(test_permutate
 target_link_libraries(test_permutate PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
 
-add_executable(test_feistel
-        test_feistel.cpp
+add_executable(test_DES
+        test_DES.cpp
 )
-target_link_libraries(test_feistel PRIVATE Crypto GTest::gtest GTest::gtest_main)
+target_link_libraries(test_DES PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
 add_executable(test_WiennerAttack test_WiennerAttack.cpp)
 target_link_libraries(test_WiennerAttack PRIVATE Crypto GTest::gtest GTest::gtest_main)
@@ -51,4 +51,4 @@ gtest_discover_tests(test_solovey_strassen)
 gtest_discover_tests(test_rsa)
 gtest_discover_tests(test_WiennerAttack)
 gtest_discover_tests(test_permutate)
-gtest_discover_tests(test_feistel)
+gtest_discover_tests(test_DES)

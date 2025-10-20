@@ -3,28 +3,48 @@
  */
 module;
 
-#include <memory>
-#include <vector>
+#include <unistd.h>
 
-export module DES;
+#include <bit>
+#include <cassert>
+#include <iomanip>
+#include <ios>
+#include <iostream>
+
+export module cypher.DES;
+import <cstdint>;
+import <array>;
+import <cstddef>;
+import <memory>;
+import <span>;
+import <stdexcept>;
+import <tuple>;
+import <vector>;
 
 import cypher.FeistelNet;
 import cypher.utils;
 import cypher;
 import cypher.DES.des_tables;
 
-namespace meow::cypher::symm::DES {
+export class BadDESKey final : public std::exception {
+ public:
+  BadDESKey() {}
+  explicit BadDESKey(const std::string&) {}
+  const char* what() const noexcept override {
+    return "Плохой ключ - нечетность всех 8 байт в каждом бите не выполнена";
+  }
+};
+
+namespace meow::cypher::symm::_detailDES {
 class DESGenRoundKey final : public IGenRoundKey {
   // 1100|1110 => 00|10 => 1|0 => 1 - нечетн
   // 1101|1110 => 00|11 => 1|1 => 0 - четн
   static bool isGoodByte(const std::vector<std::byte>& in) {
     for (const auto& elem : in) {
-      auto pre = elem & static_cast<std::byte>(0xFE);
-      pre ^= pre >> 4;
-      pre ^= pre >> 2;
-      pre ^= pre >> 1;
+      const auto masked = elem & static_cast<std::byte>(0xFF);
 
-      if ((pre & static_cast<std::byte>(1)) == static_cast<std::byte>(0)) {
+      if (const uint8_t value = std::to_integer<uint8_t>(masked);
+          (std::popcount(value) & 1) == 1) {
         return false;
       }
     }
@@ -40,7 +60,7 @@ class DESGenRoundKey final : public IGenRoundKey {
    */
   [[nodiscard]] constexpr std::vector<std::vector<std::byte>> genRoundKeys(
       const std::vector<std::byte>& inputKey) const override {
-    static_assert(roundCnt == 16, "16 раундов должно быть");
+    assert(roundCnt == 16);
     if (inputKey.empty()) {
       throw std::runtime_error(
           "ключ не должен быть пустым - нельзя по нему составить раундовые ");
@@ -50,118 +70,188 @@ class DESGenRoundKey final : public IGenRoundKey {
     }
     // TODO: ТУТ НАДО ДОДЕЛАТЬ ПРОВЕРКУ КЛЮЧА
     if (!isGoodByte(inputKey)) {
-      throw std::runtime_error(
-          "ключ плохой - проверка на нечетность в байтах не пройдена");
+      throw BadDESKey();
     }
 
-    std::vector res(roundCnt, std::vector<std::byte>(48));
+    std::vector res(roundCnt, std::vector<std::byte>());
 
-    auto pre = permutate::permutation(inputKey, PC1,
-                                      permutate::bitIndexingRule::LSB2MSB, 1);
+    const auto pre = permutate::permutation(
+        inputKey, PC1, permutate::bitIndexingRule::MSB2LSB, 1);
 
     // C-старшие 28 бит, D - младшие
-    auto C = static_cast<std::uint32_t>(0), D = static_cast<std::uint32_t>(0);
+    std::uint32_t C = 0, D = 0;
 
     for (size_t i = 0; i < 3; ++i) {
-      C = (C << 8) | (static_cast<std::uint32_t>(pre[i]) & ((1 << 8) - 1));
+      C = C << 8 | std::to_integer<std::uint32_t>(pre[i]);
+    }
+    C = C << 4 | std::to_integer<std::uint32_t>(pre[3]) >> 4 & 0x0F;
+    // C = (C << 4) | ((std::to_integer<std::uint32_t>(pre[3]) & 0xF0) >> 4);
+
+    D = std::to_integer<std::uint32_t>(pre[3]) & 0x0F;
+    for (size_t i = 4; i < 7; ++i) {
+      D = D << 8 | std::to_integer<std::uint32_t>(pre[i]);
     }
 
-    C = (C << 4) |
-        ((static_cast<std::uint32_t>(pre[3]) & ((1 << 4) - 1) << 4) >> 4);
-    D = (static_cast<std::uint32_t>(pre[3]) & (1 << 4) - 1);
-
-    for (size_t i = 0; i < 3; ++i) {
-      D = (D << 8) | (static_cast<std::uint32_t>(pre[i]) & ((1 << 8) - 1));
-    }
+    C &= 0x0FFFFFFF;
+    D &= 0x0FFFFFFF;
 
     for (size_t i = 0; i < roundCnt; i++) {
-      C = utils::ShiftBytesLeft(static_cast<std::byte>(C), SHIFTS[i], 28);
-      D = utils::ShiftBytesLeft(static_cast<std::byte>(D), SHIFTS[i], 28);
+      C = ((C << SHIFTS[i]) | (C >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
+      D = ((D << SHIFTS[i]) | (D >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
 
       std::vector<std::byte> preBlock(
           7);  // обрезаем по 1 биту 8 раз - там они контрольные
-      uint64_t prepre = (C << 28) | (D & 0x0FFFFFFF);
-      for (ssize_t j = 6; j >= 0; --j) {
-        preBlock[j] = static_cast<std::byte>(prepre & ((1 << 8) - 1));
-        prepre >>= 8;
+      const std::uint64_t prepre = (static_cast<std::uint64_t>(C) << 28) | D;
+      for (int j = 0; j < 7; j++) {
+        preBlock[j] = static_cast<std::byte>((prepre >> ((6 - j) * 8)) & 0xFF);
       }
 
-      auto rK = permutate::permutation(preBlock, PC2,
-                                       permutate::bitIndexingRule::LSB2MSB, 1);
-      res[i] = std::move(rK);
+      res[i] = permutate::permutation(preBlock, PC2,
+                                      permutate::bitIndexingRule::MSB2LSB, 1);
+
+      // for (const auto& elem : res[i]) {
+      //   std::cout << std::hex << std::setw(2) << std::setfill('0')
+      //             << std::to_integer<int>(elem);
+      // }
+      // std::cout << std::endl;
     }
 
     return res;
   }
 };
 
-class DESEncryptionDecryption final : public IEncryptionDecryption {
+export class DESEncryptionDecryption final : public IEncryptionDecryption {
+ public:
   /**
    * @brief
    * @param in
    * @return {строка, колонка}
    */
   static std::tuple<uint8_t, uint8_t> _findIxSBlock(const std::byte in) {
-    return {
-        static_cast<uint8_t>(in & static_cast<std::byte>(0b00100001)),
-        static_cast<uint8_t>(in & static_cast<std::byte>(0b00011110)),
-    };
+    const uint8_t row = (std::to_integer<uint8_t>(in) & 0b00100000) >> 4 |
+                        std::to_integer<uint8_t>(in) & 0b00000001;
+
+    const uint8_t column = (std::to_integer<uint8_t>(in) & 0b00011110) >> 1;
+
+    return {row, column};
   }
 
- public:
+  /**
+   * @brief
+   * @param RC
+   * @param round
+   * @return
+   */
+  static std::byte _findNewElem(const std::tuple<uint8_t, uint8_t>& RC,
+                                const size_t round) {
+    auto [row, column] = RC;
+    return static_cast<std::byte>(S[round][row][column]);
+  }
+
+  /**
+   * @brief
+   * @param in
+   * @return
+   */
+  static std::vector<std::byte> _doSBlock(const std::vector<std::byte>& in) {
+    assert(in.size() == 6);
+
+    std::vector res(4, std::byte{0});
+
+    for (size_t i = 0; i < 8; i++) {
+      const size_t byte_index = i * 6 / 8;
+      const size_t bit_offset = i * 6 % 8;
+
+      uint8_t six_bits;
+      if (bit_offset <= 2) {
+        six_bits =
+            (std::to_integer<uint8_t>(in[byte_index]) >> (2 - bit_offset)) &
+            0x3F;
+      } else {
+        six_bits =
+            ((std::to_integer<uint8_t>(in[byte_index]) << (bit_offset - 2)) |
+             (std::to_integer<uint8_t>(in[byte_index + 1]) >>
+              (10 - bit_offset))) &
+            0x3F;
+      }
+
+      auto [row, col] = _findIxSBlock(static_cast<std::byte>(six_bits));
+      const uint8_t s_val = S[i][row][col];
+
+      const size_t res_byte = i / 2;
+      const size_t res_shift = (1 - (i % 2)) * 4;
+      res[res_byte] = static_cast<std::byte>(
+          std::to_integer<uint8_t>(res[res_byte]) | (s_val << res_shift));
+    }
+
+    return res;
+  }
+
   [[nodiscard]] constexpr std::vector<std::byte> encryptDecryptBlock(
       const std::vector<std::byte>& inputBlock,
       const std::vector<std::byte>& roundKey) const override {
     const auto big = permutate::permutation(
-        inputBlock, E, permutate::bitIndexingRule::LSB2MSB, 1);
+        inputBlock, E, permutate::bitIndexingRule::MSB2LSB, 1);
+
     if (big.size() != roundKey.size()) {
       throw std::runtime_error(
-          "размер раундового ключа не совпал с размером расширенного блока (7 "
-          "байт)");
+          "размер раундового ключа не совпал с размером расширенного блока "
+          "(ожидается 6 байт / 48 бит)");
     }
 
     const auto xored = xorSpan(big, roundKey);
-    const auto pre_res = {}; // TODO: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+    const auto pre_res = _doSBlock(xored);
+
     return permutate::permutation(pre_res, P,
-                                  permutate::bitIndexingRule::LSB2MSB, 1);
+                                  permutate::bitIndexingRule::MSB2LSB, 1);
   }
 };
-}  // namespace meow::cypher::symm::DES
+}  // namespace meow::cypher::symm::_detailDES
 
 export namespace meow::cypher::symm::DES {
-class DES final : public FeistelNet::FeistelNet, ISymmetricCypher {
+class DES final : public FeistelNet::FeistelNet {
  public:
-  constexpr void setRoundKeys(
-      const std::vector<std::byte>& encryptionKey) override {
-    if (encryptionKey.empty()) {
-      throw std::runtime_error("ключик пустой - это плохо");
-    }
-    if (encryptionKey.size() != 8) {
-      throw std::runtime_error("ключик должен юыть 64 бит(или 8 байт)");
-    }
-    FeistelNet::setRoundKeys(encryptionKey);
-  }
+  // constexpr void setRoundKeys(
+  //     const std::vector<std::byte>& encryptionKey) override {
+  //   if (encryptionKey.empty()) {
+  //     throw std::runtime_error("ключик пустой - это плохо");
+  //   }
+  //   if (encryptionKey.size() != 8) {
+  //     throw std::runtime_error("ключик должен юыть 64 бит(или 8 байт)");
+  //   }
+  //   this->setRoundKeys(encryptionKey);
+  //   _roundKeys = this->getRoundKeys();
+  // }
 
-  explicit DES(const std::vector<std::byte>& key)
-      : FeistelNet(key, 16, std::make_shared<DESGenRoundKey>(16),
-                   std::make_shared<DESEncryptionDecryption>()) {};
+  DES()
+      : FeistelNet(16, std::make_shared<_detailDES::DESGenRoundKey>(16),
+                   std::make_shared<_detailDES::DESEncryptionDecryption>()) {};
+
+  // explicit DES(const std::span<std::byte> key)
+  //     : FeistelNet(16, std::make_shared<_detailDES::DESGenRoundKey>(16),
+  //                  std::make_shared<_detailDES::DESEncryptionDecryption>()) {
+  //   std::vector<std::byte> k;
+  //   k.assign(key.begin(), key.end());
+  //   this->setRoundKeys(k);
+  // }
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
     const auto pre =
-        permutate::permutation(in, IP, permutate::bitIndexingRule::LSB2MSB, 1);
+        permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
     const auto encr = FeistelNet::encrypt(pre);
     return permutate::permutation(encr, IP_inv,
-                                  permutate::bitIndexingRule::LSB2MSB, 1);
+                                  permutate::bitIndexingRule::MSB2LSB, 1);
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
       const std::vector<std::byte>& in) const override {
     const auto pre =
-        permutate::permutation(in, IP, permutate::bitIndexingRule::LSB2MSB, 1);
+        permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
     const auto decr = FeistelNet::decrypt(pre);
     return permutate::permutation(decr, IP_inv,
-                                  permutate::bitIndexingRule::LSB2MSB, 1);
+                                  permutate::bitIndexingRule::MSB2LSB, 1);
   }
 };
 }  // namespace meow::cypher::symm::DES

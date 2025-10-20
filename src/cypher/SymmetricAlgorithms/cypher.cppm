@@ -61,9 +61,10 @@ class IEncryptionDecryption {
 class ISymmetricCypher {
  protected:
   std::vector<std::vector<std::byte>> _roundKeys;
-  std::size_t _blockSize = 8;  // размер блока указан в байт (для DES = 8)
 
  public:
+  std::size_t _blockSize = 8;  // размер блока указан в байт (для DES = 8)
+
   virtual constexpr void setRoundKeys(
       const std::vector<std::byte>& encryptionKey) = 0;
 
@@ -115,7 +116,7 @@ enum class paddingMode : std::int8_t {
 class SymmetricCypherContext {
  protected:
   static constexpr size_t BATCH_SIZE = 4096;
-  std::size_t _blockSize = 8;  // размер блока указан в байт (для DES = 8)
+
  private:
   enum class ACTION_MODE : int8_t { encrypt, decrypt };
   constexpr void _processFile(const ACTION_MODE& mode,
@@ -123,35 +124,47 @@ class SymmetricCypherContext {
                               const std::string& destPath) const {
     std::ifstream i_file(inPath, std::ios::binary);
     if (!i_file) {
-      throw std::runtime_error("не удалось открыть входной файл");
+      throw std::runtime_error("не удалось открыть входной файл: " + inPath);
     }
-    std::ofstream o_file(destPath, std::ios::binary | std::ios::app);
+    std::ofstream o_file(destPath, std::ios::binary);
     if (!o_file) {
-      throw std::runtime_error("не удалось открыть выходной файл");
+      throw std::runtime_error("не удалось открыть выходной файл: " + destPath);
     }
 
-    std::vector<std::byte> buffer(BATCH_SIZE);
+    constexpr size_t BUFFER_SIZE = 64 * 1024;
+    std::vector<std::byte> read_buffer(BUFFER_SIZE);
+    std::vector<std::byte> write_buffer;
 
     while (i_file) {
-      i_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-      std::streamsize read = i_file.gcount();
+      i_file.read(reinterpret_cast<char*>(read_buffer.data()),
+                  read_buffer.size());
+      std::streamsize bytes_read = i_file.gcount();
 
-      if (read == 0) {
-        break;
+      if (bytes_read == 0) break;
+
+      std::vector input_data(read_buffer.begin(),
+                             read_buffer.begin() + bytes_read);
+
+      if (mode == ACTION_MODE::encrypt) {
+        encrypt(write_buffer, input_data);
+      } else {
+        decrypt(write_buffer, input_data);
       }
 
-      std::vector<std::byte> write_buf(read);
-      mode == ACTION_MODE::encrypt ? encrypt(write_buf, buffer)
-                                   : decrypt(write_buf, buffer);
+      o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
+                   write_buffer.size());
 
-      o_file.write(reinterpret_cast<const char*>(write_buf.data()),
-                   write_buf.size());
+      write_buffer.clear();
     }
   }
 
   [[nodiscard]] std::vector<std::byte> _processECB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       const std::size_t blockCnt) const {
+    if (in.size() != blockCnt * this->_algo->_blockSize) {
+      throw std::invalid_argument("размер блока не подходит для алгоритма");
+    }
+
     std::vector<std::byte> res(in.size());
 
     std::vector<std::future<void>> futures;
@@ -159,15 +172,19 @@ class SymmetricCypherContext {
 
     for (std::size_t i = 0; i < blockCnt; i++) {
       futures.push_back(
-          std::async(std::launch::async, [this, &in, &res, i, &mode]() {
-            const size_t off = i * _blockSize;
-            auto pre_res =
-                mode == ACTION_MODE::encrypt
-                    ? this->_algo->encrypt(
-                          {in.begin() + off, in.begin() + off + _blockSize})
-                    : this->_algo->decrypt(
-                          {in.begin() + off, in.begin() + off + _blockSize});
-            std::ranges::copy(pre_res, res.begin() + off);
+          std::async(std::launch::async, [this, &in, &res, i, mode]() {
+            const size_t off = i * this->_algo->_blockSize;
+            const std::vector block(in.begin() + off,
+                                    in.begin() + off + this->_algo->_blockSize);
+
+            std::vector<std::byte> processed_block;
+            if (mode == ACTION_MODE::encrypt) {
+              processed_block = this->_algo->encrypt(block);
+            } else {
+              processed_block = this->_algo->decrypt(block);
+            }
+
+            std::ranges::copy(processed_block, res.begin() + off);
           }));
     }
 
@@ -179,56 +196,87 @@ class SymmetricCypherContext {
   }
   [[nodiscard]] std::vector<std::byte> _processCBC(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
   [[nodiscard]] std::vector<std::byte> _processPCBC(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
   [[nodiscard]] std::vector<std::byte> _processCFB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
   [[nodiscard]] std::vector<std::byte> _processOFB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
   [[nodiscard]] std::vector<std::byte> _processCTR(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
   [[nodiscard]] std::vector<std::byte> _processRandomDelta(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const;
+      std::size_t blockCnt) const {
+    std::vector<std::byte> res(in.size());
+    return res;
+  }
 
-  [[nodiscard]] constexpr std::future<std::vector<std::byte>> _processBlock(
-      const ACTION_MODE mode, const std::vector<std::byte>& in) const {
-    return std::async(std::launch::async, [&, this] {
-      const auto padded = _doPadding(in);
-      const std::size_t blockCnt = padded.size() / _blockSize;
+  [[nodiscard]] std::future<std::vector<std::byte>> _processBlock(
+      const ACTION_MODE mode, std::vector<std::byte> in) const {
+    return std::async(std::launch::deferred, [mode, in = std::move(in),
+                                              this]() mutable {
+      const bool needsPadding = _encMode == encryptionMode::ECB ||
+                                _encMode == encryptionMode::CBC ||
+                                _encMode == encryptionMode::PCBC;
+
+      std::vector<std::byte> processed;
+      const std::vector<std::byte>& dataToProcess =
+          (mode == ACTION_MODE::encrypt && needsPadding) ? _doPadding(in) : in;
+
+      const std::size_t blockCnt =
+          dataToProcess.size() / this->_algo->_blockSize;
 
       switch (_encMode) {
         case encryptionMode::ECB:
-          return _processECB(mode, padded, blockCnt);
-
-        case encryptionMode::CBC:
-          return _processCBC(mode, padded, blockCnt);
-
-        case encryptionMode::PCBC:
-          return _processPCBC(mode, padded, blockCnt);
-
-        case encryptionMode::CFB:
-          return _processCFB(mode, padded, blockCnt);
-
-        case encryptionMode::OFB:
-          return _processOFB(mode, padded, blockCnt);
-
-        case encryptionMode::CTR:
-          return _processCTR(mode, padded, blockCnt);
-
-        case encryptionMode::RandomDelta:
-          return _processRandomDelta(mode, padded, blockCnt);
-
-        default:
+          processed = _processECB(mode, dataToProcess, blockCnt);
           break;
+        case encryptionMode::CBC:
+          processed = _processCBC(mode, dataToProcess, blockCnt);
+          break;
+        case encryptionMode::PCBC:
+          processed = _processPCBC(mode, dataToProcess, blockCnt);
+          break;
+        case encryptionMode::CFB:
+          processed = _processCFB(mode, dataToProcess, blockCnt);
+          break;
+        case encryptionMode::OFB:
+          processed = _processOFB(mode, dataToProcess, blockCnt);
+          break;
+        case encryptionMode::CTR:
+          processed = _processCTR(mode, dataToProcess, blockCnt);
+          break;
+        case encryptionMode::RandomDelta:
+          processed = _processRandomDelta(mode, dataToProcess, blockCnt);
+          break;
+        default:
+          throw std::runtime_error("ошибочка при обработке блока");
       }
 
-      throw std::runtime_error("ошибочка при обработке блока");
+      if (mode == ACTION_MODE::decrypt && needsPadding) {
+        return _doUnpadding(processed);
+      }
+
+      return processed;
     });
   }
 
@@ -236,14 +284,15 @@ class SymmetricCypherContext {
       const std::vector<std::byte>& in) const {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint8_t> dist((0), (255));
+    std::uniform_int_distribution<uint8_t> dist(0, 255);
 
-    uint8_t forAdd = _blockSize - in.size() % _blockSize;
+    uint8_t forAdd =
+        this->_algo->_blockSize - in.size() % this->_algo->_blockSize;
     if (forAdd == 0) {
-      forAdd = _blockSize;
+      forAdd = this->_algo->_blockSize;
     }
 
-    std::vector res(_blockSize, static_cast<std::byte>(0));
+    std::vector res(in.size() + forAdd, static_cast<std::byte>(0));
     std::ranges::copy(in, res.begin());
 
     switch (_padMode) {
@@ -252,7 +301,8 @@ class SymmetricCypherContext {
       } break;
       case paddingMode::AnsiX923: {
         // ВСЕ НУЛИ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
-        res.back() = static_cast<std::byte>(forAdd);
+        // res.back() = static_cast<std::byte>(forAdd);
+        res[res.size() - 1] = static_cast<std::byte>(forAdd);
       } break;
       case paddingMode::PKCS7: {
         // ВСЕ ЗАПОЛНЯЕТСЯ КОЛИЧЕСТВОМ ДОБАВЛЕННЫХ БАЙТ
@@ -265,7 +315,8 @@ class SymmetricCypherContext {
         for (size_t i = in.size(); i < res.size() - 1; ++i) {
           res[i] = static_cast<std::byte>(dist(gen));
         }
-        res.back() = static_cast<std::byte>(forAdd);
+        // res.back() = static_cast<std::byte>(forAdd);
+        res[res.size() - 1] = static_cast<std::byte>(forAdd);
       } break;
       default:
         throw std::logic_error("нет такого режима набивки");
@@ -276,51 +327,47 @@ class SymmetricCypherContext {
 
   [[nodiscard]] constexpr std::vector<std::byte> _doUnpadding(
       const std::vector<std::byte>& in) const {
-    std::vector<std::byte> res;
+    if (in.empty()) return {};
+
     const auto wasAdded = static_cast<uint8_t>(in.back());
-    const auto findSizAndRemove = [&in, &res, &wasAdded] {
-      auto pre_res = in | std::views::take(in.size() - wasAdded);
-      res = std::move(std::vector(pre_res.begin(), pre_res.end()));
-    };
+
+    // if (wasAdded == 0 || wasAdded > in.size() ||
+    //     wasAdded > this->_algo->_blockSize) {
+    //   throw std::runtime_error("ошибка в анпаддинге");
+    // }
+
+    std::vector<std::byte> res;
 
     switch (_padMode) {
-      case paddingMode::Zeros:
-        // ВСЁ ЗАПОЛНЯЕТСЯ НУЛЯМИ
-        {
-          size_t i = in.size();
-          for (; i > 0 && in[i] == static_cast<std::byte>(0); --i) {
+      case paddingMode::Zeros: {
+        const auto it =
+            std::find_if(in.rbegin(), in.rend(),
+                         [](const std::byte b) { return b != std::byte{0}; });
+        res = std::vector(in.begin(), it.base());
+      } break;
+
+      case paddingMode::AnsiX923: {
+        for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
+          if (in[i] != static_cast<std::byte>(0)) {
+            throw std::runtime_error("в AnsiX923 должны быть нули байты");
           }
-          res = std::move(std::vector(in.begin(), in.begin() + i));
         }
-        break;
-      case paddingMode::AnsiX923:
-        // ВСЕ НУЛИ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
-        {
-          for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
-            if (in[i] != static_cast<std::byte>(0)) {
-              throw std::runtime_error("в AnsiX923 должны быть нули байты");
-            }
-          }
-          findSizAndRemove();
-        }
-        break;
-      case paddingMode::PKCS7:
-        // ВСЕ ЗАПОЛНЯЕТСЯ КОЛИЧЕСТВОМ ДОБАВЛЕННЫХ БАЙТ
-        {
-          for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
-            if (in[i] != static_cast<std::byte>(wasAdded)) {
-              throw std::runtime_error("в PKCS7 должны быть одинаковые байты");
-            }
-          }
-          findSizAndRemove();
-        }
-        break;
-      case paddingMode::ISO10126:
-        // ВСЕ СЛУЧАЙНЫЕ БАЙТЫ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
-        {
-          findSizAndRemove();
-        }
-        break;
+        res = std::vector(in.begin(), in.end() - wasAdded);
+      } break;
+
+      case paddingMode::PKCS7: {
+        // for (size_t i = in.size() - wasAdded; i < in.size() + 1; ++i) {
+        //   if (in[i] != static_cast<std::byte>(wasAdded)) {
+        //     throw std::runtime_error("в PKCS7 должны быть одинаковые байты");
+        //   }
+        // }
+        res = std::vector(in.begin(), in.end() - wasAdded);
+      } break;
+
+      case paddingMode::ISO10126: {
+        res = std::vector(in.begin(), in.end() - wasAdded);
+      } break;
+
       default:
         throw std::logic_error("нет такого режима набивки");
     }
@@ -373,7 +420,11 @@ class SymmetricCypherContext {
       throw std::runtime_error("");
     }
     _algo = algo;
-    _algo->setRoundKeys(_encryptionKey);
+    _roundKeys = _algo->getRoundKeys();
+    if (_roundKeys.empty()) {
+      _algo->setRoundKeys(_encryptionKey);
+      _roundKeys = _algo->getRoundKeys();
+    }
   }
 
   constexpr void encrypt(std::vector<std::byte>& dest,
