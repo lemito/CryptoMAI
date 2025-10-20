@@ -115,48 +115,120 @@ enum class paddingMode : std::int8_t {
 // 4
 class SymmetricCypherContext {
  protected:
-  static constexpr size_t BATCH_SIZE = 4096;
+  static constexpr size_t BATCH_SIZE = 64 * 1024 * 1024;
 
  private:
   enum class ACTION_MODE : int8_t { encrypt, decrypt };
-  constexpr void _processFile(const ACTION_MODE& mode,
-                              const std::string& inPath,
-                              const std::string& destPath) const {
+  void _processFile(const ACTION_MODE& mode, const std::string& inPath,
+                  const std::string& destPath) const {
     std::ifstream i_file(inPath, std::ios::binary);
     if (!i_file) {
-      throw std::runtime_error("не удалось открыть входной файл: " + inPath);
+      throw std::runtime_error("не удалось открыть входной файл");
     }
-    std::ofstream o_file(destPath, std::ios::binary);
+    std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
     if (!o_file) {
-      throw std::runtime_error("не удалось открыть выходной файл: " + destPath);
+      throw std::runtime_error("не удалось открыть выходной файл");
     }
 
-    constexpr size_t BUFFER_SIZE = 64 * 1024;
-    std::vector<std::byte> read_buffer(BUFFER_SIZE);
-    std::vector<std::byte> write_buffer;
+    std::vector<std::byte> buffer(BATCH_SIZE);
 
     while (i_file) {
-      i_file.read(reinterpret_cast<char*>(read_buffer.data()),
-                  read_buffer.size());
-      std::streamsize bytes_read = i_file.gcount();
+      i_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+      std::streamsize read = i_file.gcount();
 
-      if (bytes_read == 0) break;
-
-      std::vector input_data(read_buffer.begin(),
-                             read_buffer.begin() + bytes_read);
-
-      if (mode == ACTION_MODE::encrypt) {
-        encrypt(write_buffer, input_data);
-      } else {
-        decrypt(write_buffer, input_data);
+      if (read == 0) {
+        break;
       }
 
-      o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
-                   write_buffer.size());
+      std::vector<std::byte> write_buf(read);
 
-      write_buffer.clear();
+      if (mode == ACTION_MODE::encrypt) {
+        encrypt(write_buf, std::vector(buffer.begin(), buffer.begin() + read));
+      } else {
+        decrypt(write_buf, std::vector(buffer.begin(), buffer.begin() + read));
+      }
+
+      o_file.write(reinterpret_cast<const char*>(write_buf.data()), write_buf.size());
     }
   }
+
+  // void _processFile(const ACTION_MODE& mode, const std::string& inPath,
+  //                   const std::string& destPath) const {
+  //   std::ifstream i_file(inPath, std::ios::binary);
+  //   if (!i_file) {
+  //     throw std::runtime_error("не удалось открыть входной файл");
+  //   }
+  //   std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
+  //   if (!o_file) {
+  //     throw std::runtime_error("не удалось открыть выходной файл");
+  //   }
+  //
+  //   std::vector<std::byte> read_buf(BATCH_SIZE);
+  //   std::vector<std::byte> process_buf;
+  //   std::vector<std::byte> output_buf;
+  //
+  //   while (i_file) {
+  //     i_file.read(reinterpret_cast<char*>(read_buf.data()), read_buf.size());
+  //     std::streamsize bytes_read = i_file.gcount();
+  //
+  //     if (bytes_read == 0) {
+  //       break;
+  //     }
+  //
+  //     process_buf.assign(read_buf.begin(), read_buf.begin() + bytes_read);
+  //     output_buf.resize(bytes_read);
+  //
+  //     if (mode == ACTION_MODE::encrypt) {
+  //       encrypt(output_buf, process_buf);
+  //     } else {
+  //       decrypt(output_buf, process_buf);
+  //     }
+  //
+  //     o_file.write(reinterpret_cast<const char*>(output_buf.data()),
+  //                  output_buf.size());
+  //   }
+  // }
+
+  // while (true) {
+  //   i_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+  //   std::streamsize bytes_read = i_file.gcount();
+  //
+  //   if (bytes_read == 0) {
+  //     if (!i_file.eof()) {
+  //       if (i_file.fail()) {
+  //         throw std::runtime_error("ошибка чтения из файла: " + inPath);
+  //       }
+  //     } else {
+  //       break;
+  //     }
+  //   }
+  //
+  //   auto input_span =
+  //       std::span(buffer.data(), static_cast<size_t>(bytes_read));
+  //
+  //   write_buffer.clear();
+  //
+  //   if (mode == ACTION_MODE::encrypt) {
+  //     encrypt(write_buffer, {input_span.begin(), input_span.end()});
+  //   } else {
+  //     decrypt(write_buffer, {input_span.begin(), input_span.end()});
+  //   }
+  //
+  //   o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
+  //                write_buffer.size());
+  //
+  //   if (!o_file) {
+  //     throw std::runtime_error("ошибка записи в файл: " + destPath);
+  //   }
+  //
+  //   o_file.flush();
+  //   if (!o_file) {
+  //     throw std::runtime_error("ошибка сброса буфера записи: " + destPath);
+  //   }
+  // }
+  //
+  // o_file.flush();
+  // }
 
   [[nodiscard]] std::vector<std::byte> _processECB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
@@ -444,12 +516,12 @@ class SymmetricCypherContext {
     dest = _processBlock(ACTION_MODE::encrypt, in).get();
   }
 
-  constexpr void encrypt(std::vector<std::byte>& dest,
-                         std::span<std::byte> in) const {
-    std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
-    vec.assign(in.begin(), in.end());
-    this->encrypt(dest, vec);
-  }
+  // constexpr void encrypt(std::vector<std::byte>& dest,
+  //                        std::span<std::byte> in) const {
+  //   std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
+  //   vec.assign(in.begin(), in.end());
+  //   this->encrypt(dest, vec);
+  // }
 
   constexpr void decrypt(std::vector<std::byte>& dest,
                          const std::vector<std::byte>& in) const {
@@ -468,12 +540,12 @@ class SymmetricCypherContext {
     dest = _processBlock(ACTION_MODE::decrypt, in).get();
   }
 
-  constexpr void decrypt(std::vector<std::byte>& dest,
-                         std::span<std::byte> in) const {
-    std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
-    vec.assign(in.begin(), in.end());
-    this->decrypt(dest, vec);
-  }
+  // constexpr void decrypt(std::vector<std::byte>& dest,
+  //                        std::span<std::byte> in) const {
+  //   std::vector<std::byte> vec;  // вынужденная копия в угоду span-а
+  //   vec.assign(in.begin(), in.end());
+  //   this->decrypt(dest, vec);
+  // }
 
   constexpr void encrypt(const std::string& destPath,
                          const std::string& inPath) const {
