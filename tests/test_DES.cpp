@@ -19,10 +19,8 @@ bool isFilesEqual(const std::string& filePath1, const std::string& filePath2) {
   file1.seekg(0, std::ios::end);
   file2.seekg(0, std::ios::end);
 
-  const std::streamsize size1 = file1.tellg();
-  const std::streamsize size2 = file2.tellg();
-
-  if (size1 != size2) {
+  if (file1.tellg() != file2.tellg()) {
+    std::cerr << "Размеры разные " << std::endl;
     return false;
   }
 
@@ -33,26 +31,28 @@ bool isFilesEqual(const std::string& filePath1, const std::string& filePath2) {
   std::vector<char> buffer1(BUFFER_SIZE);
   std::vector<char> buffer2(BUFFER_SIZE);
 
-  std::streamsize bytesRead1, bytesRead2;
-
-  do {
+  while (file1 && file2) {
     file1.read(buffer1.data(), BUFFER_SIZE);
     file2.read(buffer2.data(), BUFFER_SIZE);
 
-    bytesRead1 = file1.gcount();
-    bytesRead2 = file2.gcount();
+    const std::streamsize bytesRead1 = file1.gcount();
+    const std::streamsize bytesRead2 = file2.gcount();
 
     if (bytesRead1 != bytesRead2) {
       return false;
     }
 
-    if (std::memcmp(buffer1.data(), buffer2.data(), bytesRead1) != 0) {
-      return false;
+    if (bytesRead1 == 0) {
+      break;
     }
 
-  } while (bytesRead1 > 0);
+    if (std::memcmp(buffer1.data(), buffer2.data(), bytesRead1) != 0) {
+      std::cerr << "Данные разные " << std::endl;
+      return false;
+    }
+  }
 
-  return true;
+  return !file1.bad() && !file2.bad() && file1.eof() && file2.eof();
 }
 
 TEST(SBox, FindRC) {
@@ -183,10 +183,10 @@ TEST(DES, SimpleFile) {
       meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
   ctx.setAlgo(algo);
 
-  ctx.encrypt("BUFFER", "plain");
+  ctx.encrypt("BUFFER", "2.txt");
   ctx.decrypt("BUFFER_res", "BUFFER");
 
-  ASSERT_TRUE(isFilesEqual("plain", "BUFFER_res"));
+  ASSERT_TRUE(isFilesEqual("2.txt", "BUFFER_res"));
 }
 
 TEST(DES, BigFile) {
@@ -227,10 +227,10 @@ TEST(DES, BiggestFile) {
       meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
   ctx.setAlgo(algo);
 
-  ctx.encrypt("buffy", "4.txt");
+  ctx.encrypt("buffy", "1.txt");
   ctx.decrypt("buffy_res", "buffy");
 
-  ASSERT_TRUE(isFilesEqual("4.txt", "buffy_res"));
+  ASSERT_TRUE(isFilesEqual("1.txt", "buffy_res"));
 }
 
 int main(int argc, char** argv) {

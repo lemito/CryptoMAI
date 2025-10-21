@@ -106,7 +106,7 @@ class DESGenRoundKey final : public IGenRoundKey {
         preBlock[j] = static_cast<std::byte>((prepre >> ((6 - j) * 8)) & 0xFF);
       }
 
-      res[i] = permutate::permutation(preBlock, PC2,
+      res[i] = permutate::permutation(std::move(preBlock), PC2,
                                       permutate::bitIndexingRule::MSB2LSB, 1);
 
       // for (const auto& elem : res[i]) {
@@ -190,8 +190,8 @@ export class DESEncryptionDecryption final : public IEncryptionDecryption {
   [[nodiscard]] constexpr std::vector<std::byte> encryptDecryptBlock(
       const std::vector<std::byte>& inputBlock,
       const std::vector<std::byte>& roundKey) const override {
-    const auto big = permutate::permutation(
-        inputBlock, E, permutate::bitIndexingRule::MSB2LSB, 1);
+    auto big = permutate::permutation(inputBlock, E,
+                                      permutate::bitIndexingRule::MSB2LSB, 1);
 
     if (big.size() != roundKey.size()) {
       throw std::runtime_error(
@@ -199,11 +199,11 @@ export class DESEncryptionDecryption final : public IEncryptionDecryption {
           "(ожидается 6 байт / 48 бит)");
     }
 
-    const auto xored = xorSpan(big, roundKey);
+    auto xored = xorSpan(std::move(big), roundKey);
 
-    const auto pre_res = _doSBlock(xored);
+    auto pre_res = _doSBlock(std::move(xored));
 
-    return permutate::permutation(pre_res, P,
+    return permutate::permutation(std::move(pre_res), P,
                                   permutate::bitIndexingRule::MSB2LSB, 1);
   }
 };
@@ -238,19 +238,19 @@ class DES final : public FeistelNet::FeistelNet {
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
-    const auto pre =
+    auto pre =
         permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
-    const auto encr = FeistelNet::encrypt(pre);
-    return permutate::permutation(encr, IP_inv,
+    auto encr = FeistelNet::encrypt(std::move(pre));
+    return permutate::permutation(std::move(encr), IP_inv,
                                   permutate::bitIndexingRule::MSB2LSB, 1);
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
       const std::vector<std::byte>& in) const override {
-    const auto pre =
+    auto pre =
         permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
-    const auto decr = FeistelNet::decrypt(pre);
-    return permutate::permutation(decr, IP_inv,
+    auto decr = FeistelNet::decrypt(std::move(pre));
+    return permutate::permutation(std::move(decr), IP_inv,
                                   permutate::bitIndexingRule::MSB2LSB, 1);
   }
 };

@@ -1,4 +1,7 @@
 ﻿cmake_minimum_required(VERSION 3.29.3...3.32)
+#
+#set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pg -g")
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
@@ -18,6 +21,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
+#find_program(CLANG_TIDY_EXE NAMES "clang-tidy" REQUIRED)
+#set(CLANG_TIDY_COMMAND "${CLANG_TIDY_EXE}" "-checks=-*,modernize-*,performance-*,cppcoreguidelines-*")
 
 include(FetchContent)
 FetchContent_Declare(
@@ -103,3 +108,4 @@ if (Boost_FOUND)
     include_directories (SYSTEM ${Boost_INCLUDE_DIR})
     target_link_libraries (experiments ${Boost_LIBRARIES})
 endif ()
+#set_target_properties(CryptoSymmetric PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")

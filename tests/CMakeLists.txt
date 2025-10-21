@@ -1,3 +1,5 @@
+#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pg -g")
+
 add_executable(test_gcd
         test_gcd.cpp
 )
@@ -37,7 +39,13 @@ target_link_libraries(test_permutate PRIVATE Crypto GTest::gtest GTest::gtest_ma
 add_executable(test_DES
         test_DES.cpp
 )
-target_link_libraries(test_DES PRIVATE Crypto GTest::gtest GTest::gtest_main)
+target_link_libraries(test_DES PRIVATE Crypto GTest::gtest GTest::gtest_main) #
+
+add_executable(test_DES_clear
+        test_DES_clear.cpp
+)
+target_link_libraries(test_DES_clear PRIVATE Crypto) #
+#set_target_properties(test_DES_clear PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
 
 add_executable(test_WiennerAttack test_WiennerAttack.cpp)
 target_link_libraries(test_WiennerAttack PRIVATE Crypto GTest::gtest GTest::gtest_main)

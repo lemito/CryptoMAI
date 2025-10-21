@@ -82,12 +82,12 @@ class FeistelNet : public ISymmetricCypher {
 
   constexpr void setRoundKeys(
       const std::vector<std::byte>& encryptionKey) override {
-    _roundKeys = _keyGenerator->genRoundKeys(encryptionKey);
+    _roundKeys = std::move(_keyGenerator->genRoundKeys(encryptionKey));
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
-    const auto roundKeys = this->getRoundKeys();
+    auto roundKeys = this->getRoundKeys();
     if (roundKeys.empty()) {
       throw std::runtime_error("ключ не установлен! шифрование невозможно");
     }
@@ -95,7 +95,7 @@ class FeistelNet : public ISymmetricCypher {
       throw std::runtime_error("размер сообщения должен быть кратен 2");
     }
     // текстик тупо отправляется в сеть и работает
-    return _network(in, roundKeys);
+    return _network(in, std::move(roundKeys));
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
