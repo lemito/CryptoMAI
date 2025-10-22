@@ -26,20 +26,6 @@ std::vector<std::byte> mergeBlock(const std::vector<std::byte>& a,
   return res;
 }
 
-export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
-                                      const std::vector<std::byte>& b) {
-  if (a.size() != b.size()) {
-    throw std::runtime_error("блоки должны быть одного размера");
-  }
-  const auto pre_res = std::ranges::views::zip(a, b) |
-                       std::ranges::views::transform([](auto pair) {
-                         auto [x, y] = pair;
-                         return x ^ y;
-                       });
-
-  return std::vector(pre_res.begin(), pre_res.end());
-}
-
 export namespace meow::cypher::symm::FeistelNet {
 
 class FeistelNet : public ISymmetricCypher {

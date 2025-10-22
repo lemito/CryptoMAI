@@ -23,6 +23,20 @@ module;
 
 export module cypher;
 
+export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
+                                      const std::vector<std::byte>& b) {
+  if (a.size() != b.size()) {
+    throw std::runtime_error("блоки должны быть одного размера");
+  }
+  const auto pre_res = std::ranges::views::zip(a, b) |
+                       std::ranges::views::transform([](auto pair) {
+                         auto [x, y] = pair;
+                         return x ^ y;
+                       });
+
+  return {pre_res.begin(), pre_res.end()};
+}
+
 export namespace meow::cypher::symm {
 // 1.генерация раундовых ключей
 class IGenRoundKey {
@@ -115,12 +129,10 @@ enum class paddingMode : std::int8_t {
 // 4
 class SymmetricCypherContext {
  protected:
-  static constexpr size_t BATCH_SIZE = 4 * 1024 * 1024;
-
  private:
-  enum class ACTION_MODE : int8_t { encrypt, decrypt };
+  enum class ACTION_MODE : int8_t { encrypt, decrypt, encrUpad, decrUnpad };
   void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-                    const std::string& destPath) const {
+                    const std::string& destPath) {
     std::ifstream i_file(inPath, std::ios::binary);
     if (!i_file) {
       throw std::runtime_error("не удалось открыть входной файл");
@@ -130,251 +142,32 @@ class SymmetricCypherContext {
       throw std::runtime_error("не удалось открыть выходной файл");
     }
 
-    std::vector<std::byte> read_buffer(BATCH_SIZE);
-    std::vector<std::byte> write_buffer;
+    const size_t block_size = this->_algo->_blockSize;
+    std::vector<std::byte> read_buffer(1024 * block_size);
 
-    while (true) {
-      // Читаем полный блок или остаток
-      i_file.read(reinterpret_cast<char*>(read_buffer.data()),
-                  read_buffer.size());
-      std::streamsize bytes_read = i_file.gcount();
-
-      // Если ничего не прочитали - выходим
-      if (bytes_read == 0) {
-        break;
-      }
-
-      // Обрабатываем именно столько байт, сколько прочитали
-      if (mode == ACTION_MODE::encrypt) {
-        // Создаем вектор только из прочитанных данных
-        std::vector<std::byte> input_data(read_buffer.begin(),
-                                          read_buffer.begin() + bytes_read);
-        encrypt(write_buffer, input_data);
-      } else {
-        std::vector<std::byte> input_data(read_buffer.begin(),
-                                          read_buffer.begin() + bytes_read);
-        decrypt(write_buffer, input_data);
-      }
-
-      // Записываем результат обработки
-      o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
-                   write_buffer.size());
+    while (i_file.read(reinterpret_cast<char*>(read_buffer.data()),
+                       read_buffer.size())) {
+      auto result =
+          mode == ACTION_MODE::encrypt
+              ? _processBlock(ACTION_MODE::encrUpad, read_buffer).get()
+              : _processBlock(ACTION_MODE::decrUnpad, read_buffer).get();
+      o_file.write(reinterpret_cast<const char*>(result.data()), result.size());
 
       if (!o_file) {
         throw std::runtime_error("ошибка записи в выходной файл");
       }
+    }
 
-      // Если прочитали меньше полного блока - это был последний блок
-      if (bytes_read < static_cast<std::streamsize>(read_buffer.size())) {
-        break;
+    if (std::streamsize bytes_read = i_file.gcount(); bytes_read > 0) {
+      read_buffer.resize(bytes_read);
+      auto result = _processBlock(mode, std::move(read_buffer)).get();
+      o_file.write(reinterpret_cast<const char*>(result.data()), result.size());
+
+      if (!o_file) {
+        throw std::runtime_error("ошибка записи в выходной файл");
       }
     }
   }
-  // void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-  //                 const std::string& destPath) const {
-  //   std::ifstream i_file(inPath, std::ios::binary);
-  //   std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
-  //
-  //   if (!i_file || !o_file) {
-  //     throw std::runtime_error("ошибка открытия файлов");
-  //   }
-  //
-  //   const size_t buffer_size = BATCH_SIZE;
-  //   std::vector<std::byte> read_buffer(buffer_size);
-  //   std::vector<std::byte> write_buffer;
-  //
-  //   while (i_file) {
-  //     i_file.read(reinterpret_cast<char*>(read_buffer.data()), buffer_size);
-  //     const std::streamsize bytes_read = i_file.gcount();
-  //
-  //     if (bytes_read > 0) {
-  //       // Создаем копию только прочитанных данных
-  //       std::vector<std::byte> input_chunk;
-  //       input_chunk.reserve(bytes_read);
-  //       input_chunk.insert(input_chunk.end(),
-  //                         read_buffer.begin(),
-  //                         read_buffer.begin() + bytes_read);
-  //
-  //       if (mode == ACTION_MODE::encrypt) {
-  //         encrypt(write_buffer, input_chunk);
-  //       } else {
-  //         decrypt(write_buffer, input_chunk);
-  //       }
-  //
-  //       o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
-  //                   write_buffer.size());
-  //     }
-  //   }
-  // }
-
-  // void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-  //                   const std::string& destPath) const {
-  //   std::ifstream i_file(inPath, std::ios::binary);
-  //   if (!i_file) {
-  //     throw std::runtime_error("не удалось открыть входной файл");
-  //   }
-  //   std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
-  //   if (!o_file) {
-  //     throw std::runtime_error("не удалось открыть выходной файл");
-  //   }
-  //
-  //   std::vector<std::byte> buffer(BATCH_SIZE);
-  //
-  //   while (i_file) {
-  //     i_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-  //     std::streamsize read = i_file.gcount();
-  //
-  //     if (read == 0) {
-  //       break;
-  //     }
-  //
-  //     std::vector<std::byte> write_buf(read);
-  //
-  //     if (mode == ACTION_MODE::encrypt) {
-  //       encrypt(write_buf, std::vector(buffer.begin(), buffer.begin() +
-  //       read));
-  //     } else {
-  //       decrypt(write_buf, std::vector(buffer.begin(), buffer.begin() +
-  //       read));
-  //     }
-  //
-  //     o_file.write(reinterpret_cast<const char*>(write_buf.data()),
-  //                  write_buf.size());
-  //   }
-  // }
-  // void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-  //                   const std::string& destPath) const {
-  //   std::ifstream i_file(inPath, std::ios::binary | std::ios::ate);
-  //   if (!i_file) {
-  //     throw std::runtime_error("не удалось открыть входной файл");
-  //   }
-  //
-  //   // Получаем размер файла для оптимального размера буфера
-  //   const auto file_size = i_file.tellg();
-  //   i_file.seekg(0);
-  //
-  //   // Используем размер, кратный странице памяти (обычно 4KB)
-  //   const size_t optimal_buffer_size = std::min<size_t>(
-  //       BATCH_SIZE,
-  //       (file_size > 0) ? static_cast<size_t>(file_size) : BATCH_SIZE);
-  //
-  //   std::vector<std::byte> read_buffer(optimal_buffer_size);
-  //   std::vector<std::byte> write_buffer(optimal_buffer_size);
-  //
-  //   std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
-  //   if (!o_file) {
-  //     throw std::runtime_error("не удалось открыть выходной файл");
-  //   }
-  //
-  //   // Буферизация вывода
-  //   o_file.rdbuf()->pubsetbuf(nullptr,
-  //                             0);  // Отключаем буферизацию std::ofstream
-  //   char output_buffer[8192];      // Используем свой буфер
-  //   o_file.rdbuf()->pubsetbuf(output_buffer, sizeof(output_buffer));
-  //
-  //   while (i_file.read(reinterpret_cast<char*>(read_buffer.data()),
-  //                      read_buffer.size()) ||
-  //          i_file.gcount() > 0) {
-  //     const std::streamsize bytes_read = i_file.gcount();
-  //
-  //     write_buffer.resize(bytes_read);
-  //
-  //     if (mode == ACTION_MODE::encrypt) {
-  //       encrypt(write_buffer,
-  //               std::vector<std::byte>(read_buffer.begin(),
-  //                                      read_buffer.begin() + bytes_read));
-  //     } else {
-  //       decrypt(write_buffer,
-  //               std::vector<std::byte>(read_buffer.begin(),
-  //                                      read_buffer.begin() + bytes_read));
-  //     }
-  //
-  //     o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
-  //                  write_buffer.size());
-  //
-  //     if (!o_file) {
-  //       throw std::runtime_error("ошибка записи в выходной файл");
-  //     }
-  //   }
-  // }
-
-  // void _processFile(const ACTION_MODE& mode, const std::string& inPath,
-  //                   const std::string& destPath) const {
-  //   std::ifstream i_file(inPath, std::ios::binary);
-  //   if (!i_file) {
-  //     throw std::runtime_error("не удалось открыть входной файл");
-  //   }
-  //   std::ofstream o_file(destPath, std::ios::binary | std::ios::trunc);
-  //   if (!o_file) {
-  //     throw std::runtime_error("не удалось открыть выходной файл");
-  //   }
-  //
-  //   std::vector<std::byte> read_buf(BATCH_SIZE);
-  //   std::vector<std::byte> process_buf;
-  //   std::vector<std::byte> output_buf;
-  //
-  //   while (i_file) {
-  //     i_file.read(reinterpret_cast<char*>(read_buf.data()), read_buf.size());
-  //     std::streamsize bytes_read = i_file.gcount();
-  //
-  //     if (bytes_read == 0) {
-  //       break;
-  //     }
-  //
-  //     process_buf.assign(read_buf.begin(), read_buf.begin() + bytes_read);
-  //     output_buf.resize(bytes_read);
-  //
-  //     if (mode == ACTION_MODE::encrypt) {
-  //       encrypt(output_buf, process_buf);
-  //     } else {
-  //       decrypt(output_buf, process_buf);
-  //     }
-  //
-  //     o_file.write(reinterpret_cast<const char*>(output_buf.data()),
-  //                  output_buf.size());
-  //   }
-  // }
-
-  // while (true) {
-  //   i_file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
-  //   std::streamsize bytes_read = i_file.gcount();
-  //
-  //   if (bytes_read == 0) {
-  //     if (!i_file.eof()) {
-  //       if (i_file.fail()) {
-  //         throw std::runtime_error("ошибка чтения из файла: " + inPath);
-  //       }
-  //     } else {
-  //       break;
-  //     }
-  //   }
-  //
-  //   auto input_span =
-  //       std::span(buffer.data(), static_cast<size_t>(bytes_read));
-  //
-  //   write_buffer.clear();
-  //
-  //   if (mode == ACTION_MODE::encrypt) {
-  //     encrypt(write_buffer, {input_span.begin(), input_span.end()});
-  //   } else {
-  //     decrypt(write_buffer, {input_span.begin(), input_span.end()});
-  //   }
-  //
-  //   o_file.write(reinterpret_cast<const char*>(write_buffer.data()),
-  //                write_buffer.size());
-  //
-  //   if (!o_file) {
-  //     throw std::runtime_error("ошибка записи в файл: " + destPath);
-  //   }
-  //
-  //   o_file.flush();
-  //   if (!o_file) {
-  //     throw std::runtime_error("ошибка сброса буфера записи: " + destPath);
-  //   }
-  // }
-  //
-  // o_file.flush();
-  // }
 
   [[nodiscard]] std::vector<std::byte> _processECB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
@@ -412,14 +205,78 @@ class SymmetricCypherContext {
 
     return res;
   }
+
   [[nodiscard]] std::vector<std::byte> _processCBC(
-      ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const {
+      const ACTION_MODE mode, const std::vector<std::byte>& in,
+      const std::size_t blockCnt) const {
     if (in.size() != blockCnt * this->_algo->_blockSize) {
       throw std::invalid_argument("размер блока не подходит для алгоритма");
     }
+    if (!_init_vec.has_value()) {
+      throw std::runtime_error("IV пуст");
+    }
 
     std::vector<std::byte> res(in.size());
+    auto prev = _init_vec.value();
+    if (prev.size() != this->_algo->_blockSize) {
+      throw std::runtime_error(
+          "Размер вектора инициализации не соответствует размеру блока");
+    }
+    if (mode == ACTION_MODE::encrypt) {
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        std::vector block(in.begin() + i * this->_algo->_blockSize,
+                          in.begin() + (i + 1) * this->_algo->_blockSize);
+
+        if (block.size() != prev.size()) {
+          throw std::runtime_error("блоки должны быть одного размера");
+        }
+
+        auto xored = xorSpan(std::move(block), std::move(prev));
+        auto processedBlock = this->_algo->encrypt(std::move(xored));
+        prev = processedBlock;
+
+        std::ranges::copy(processedBlock,
+                          res.begin() + i * this->_algo->_blockSize);
+      }
+    } else {
+      std::vector<std::future<std::vector<std::byte>>> futures;
+      futures.reserve(blockCnt);
+
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        std::vector block(in.begin() + i * this->_algo->_blockSize,
+                          in.begin() + (i + 1) * this->_algo->_blockSize);
+
+        std::vector<std::byte> prevBlock;
+
+        if (i == 0) {
+          prevBlock = _init_vec.value();
+        } else {
+          auto prevStart = in.begin() + (i - 1) * this->_algo->_blockSize;
+          prevBlock =
+              std::vector(prevStart, this->_algo->_blockSize + prevStart);
+        }
+
+        futures.emplace_back(std::async(
+            std::launch::async, [this, block = std::move(block),
+                                 prevBlock = std::move(prevBlock)]() mutable {
+              auto processedBlock = this->_algo->decrypt(block);
+
+              if (processedBlock.size() != prevBlock.size()) {
+                throw std::runtime_error(
+                    "блоки должны быть одного размера после дешифрования");
+              }
+
+              return xorSpan(std::move(processedBlock), prevBlock);
+            }));
+      }
+
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        auto processedBlock = futures[i].get();
+        std::ranges::copy(processedBlock,
+                          res.begin() + i * this->_algo->_blockSize);
+      }
+    }
+
     return res;
   }
   [[nodiscard]] std::vector<std::byte> _processPCBC(
@@ -434,30 +291,27 @@ class SymmetricCypherContext {
     std::vector<std::byte> res(in.size());
     return res;
   }
+
   [[nodiscard]] std::vector<std::byte> _processOFB(
       const ACTION_MODE mode, const std::vector<std::byte>& in,
-      const std::size_t blockCnt) const {
-    (void)mode;
+      const std::size_t blockCnt) {
+    // (void)mode;
+
     if (in.size() != blockCnt * this->_algo->_blockSize) {
       throw std::invalid_argument("размер блока не подходит для алгоритма");
     }
-    std::vector<std::byte> res(in.size());
-    std::vector<std::byte> curIV = _init_vec.value();
-
-    for (std::size_t i = 0; i < blockCnt; i++) {
-      std::vector<std::byte> keystream_block = this->_algo->encrypt(curIV);
-
-      const std::size_t off = i * this->_algo->_blockSize;
-      for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
-        res[off + j] = in[off + j] ^ keystream_block[j];
-      }
-
-      curIV = keystream_block;
+    if (!_init_vec.has_value()) {
+      throw std::runtime_error("IV пуст");
     }
 
-    _init_vec = curIV;
+    if (in.size() % this->_algo->_blockSize != 0) {
+      throw std::runtime_error("неправильный размер");
+    }
+// TODO: ТУТ ВСЁ СДЕЛАТЬ
+    std::vector<std::byte> res(in.size());
     return res;
   }
+
   [[nodiscard]] std::vector<std::byte> _processCTR(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       std::size_t blockCnt) const {
@@ -472,13 +326,16 @@ class SymmetricCypherContext {
   }
 
   [[nodiscard]] std::future<std::vector<std::byte>> _processBlock(
-      const ACTION_MODE mode, std::vector<std::byte> in) const {
+      ACTION_MODE mode, std::vector<std::byte> in) {
+    if (_algo == nullptr) {
+      throw std::runtime_error("пустой алго");
+    }
     return std::async(
         std::launch::async, [mode, in = std::move(in), this]() mutable {
-          const bool needsPadding = _encMode == encryptionMode::ECB ||
-                                    _encMode == encryptionMode::CBC ||
-                                    _encMode == encryptionMode::PCBC;
-
+          // const bool needsPadding = _encMode == encryptionMode::ECB ||
+          //                           _encMode == encryptionMode::CBC ||
+          //                           _encMode == encryptionMode::PCBC;
+          constexpr bool needsPadding = true;
           std::vector<std::byte> processed;
           const std::vector<std::byte>& dataToProcess =
               (mode == ACTION_MODE::encrypt && needsPadding)
@@ -488,27 +345,36 @@ class SymmetricCypherContext {
           const std::size_t blockCnt =
               dataToProcess.size() / this->_algo->_blockSize;
 
+          ACTION_MODE mod;
+          if (mode == ACTION_MODE::encrUpad) {
+            mod = ACTION_MODE::encrypt;
+          } else if (mode == ACTION_MODE::decrUnpad) {
+            mod = ACTION_MODE::decrypt;
+          } else {
+            mod = mode;
+          }
+
           switch (_encMode) {
             case encryptionMode::ECB:
-              processed = std::move(_processECB(mode, dataToProcess, blockCnt));
+              processed = std::move(_processECB(mod, dataToProcess, blockCnt));
               break;
             case encryptionMode::CBC:
-              processed = _processCBC(mode, dataToProcess, blockCnt);
+              processed = _processCBC(mod, dataToProcess, blockCnt);
               break;
             case encryptionMode::PCBC:
-              processed = _processPCBC(mode, dataToProcess, blockCnt);
+              processed = _processPCBC(mod, dataToProcess, blockCnt);
               break;
             case encryptionMode::CFB:
-              processed = _processCFB(mode, dataToProcess, blockCnt);
+              processed = _processCFB(mod, dataToProcess, blockCnt);
               break;
             case encryptionMode::OFB:
-              processed = std::move(_processOFB(mode, dataToProcess, blockCnt));
+              processed = std::move(_processOFB(mod, dataToProcess, blockCnt));
               break;
             case encryptionMode::CTR:
-              processed = _processCTR(mode, dataToProcess, blockCnt);
+              processed = _processCTR(mod, dataToProcess, blockCnt);
               break;
             case encryptionMode::RandomDelta:
-              processed = _processRandomDelta(mode, dataToProcess, blockCnt);
+              processed = _processRandomDelta(mod, dataToProcess, blockCnt);
               break;
             default:
               throw std::runtime_error("ошибочка при обработке блока");
@@ -670,7 +536,7 @@ class SymmetricCypherContext {
   }
 
   constexpr void encrypt(std::vector<std::byte>& dest,
-                         const std::vector<std::byte>& in) const {
+                         const std::vector<std::byte>& in) {
     if (_algo == nullptr) {
       throw std::runtime_error(
           "алгоритм шифрования/дешифрования не установлен. воспользуйся "
@@ -694,7 +560,7 @@ class SymmetricCypherContext {
   // }
 
   constexpr void decrypt(std::vector<std::byte>& dest,
-                         const std::vector<std::byte>& in) const {
+                         const std::vector<std::byte>& in) {
     if (_algo == nullptr) {
       throw std::runtime_error(
           "алгоритм шифрования/дешифрования не установлен. воспользуйся "
@@ -718,12 +584,12 @@ class SymmetricCypherContext {
   // }
 
   constexpr void encrypt(const std::string& destPath,
-                         const std::string& inPath) const {
+                         const std::string& inPath) {
     _processFile(ACTION_MODE::encrypt, inPath, destPath);
   }
 
   constexpr void decrypt(const std::string& destPath,
-                         const std::string& inPath) const {
+                         const std::string& inPath) {
     _processFile(ACTION_MODE::decrypt, inPath, destPath);
   }
 };

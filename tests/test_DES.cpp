@@ -211,7 +211,54 @@ TEST(DES, BigFile) {
   ASSERT_TRUE(isFilesEqual("3.txt", "buf_res"));
 }
 
-TEST(DES, BiggestFile) {
+TEST(DES, BigFileOFB) {
+  const std::vector key = {
+    static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
+    static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
+    static_cast<std::byte>(0x27), static_cast<std::byte>(0x36),
+    static_cast<std::byte>(0xCC), static_cast<std::byte>(0xDD)};
+
+  const auto algo =
+      std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+          std::make_shared<meow::cypher::symm::DES::DES>());
+  const std::vector IV{static_cast<std::byte>(1), static_cast<std::byte>(1),
+                       static_cast<std::byte>(0), static_cast<std::byte>(1),
+                       static_cast<std::byte>(1), static_cast<std::byte>(1),
+                       static_cast<std::byte>(0), static_cast<std::byte>(1)};
+  auto ctx = meow::cypher::symm::SymmetricCypherContext(
+      key, meow::cypher::symm::encryptionMode::OFB,
+      meow::cypher::symm::paddingMode::PKCS7, IV);
+  ctx.setAlgo(algo);
+
+  ctx.encrypt("buf", "3.txt");
+  ctx.decrypt("buf_res", "buf");
+
+  ASSERT_TRUE(isFilesEqual("3.txt", "buf_res"));
+}
+
+// TEST(DES, BiggestFile) {
+//   const std::vector key = {
+//       static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
+//       static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
+//       static_cast<std::byte>(0x27), static_cast<std::byte>(0x36),
+//       static_cast<std::byte>(0xCC), static_cast<std::byte>(0xDD)};
+//
+//   const auto algo =
+//       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+//           std::make_shared<meow::cypher::symm::DES::DES>());
+//
+//   auto ctx = meow::cypher::symm::SymmetricCypherContext(
+//       key, meow::cypher::symm::encryptionMode::ECB,
+//       meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+//   ctx.setAlgo(algo);
+//
+//   ctx.encrypt("buffy", "1.txt");
+//   ctx.decrypt("buffy_res", "buffy");
+//
+//   ASSERT_TRUE(isFilesEqual("1.txt", "buffy_res"));
+// }
+
+TEST(DES, BiggestFileCBC) {
   const std::vector key = {
       static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
       static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
@@ -221,16 +268,19 @@ TEST(DES, BiggestFile) {
   const auto algo =
       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
           std::make_shared<meow::cypher::symm::DES::DES>());
-
+  const std::vector IV{static_cast<std::byte>(1), static_cast<std::byte>(1),
+                       static_cast<std::byte>(0), static_cast<std::byte>(1),
+                       static_cast<std::byte>(1), static_cast<std::byte>(1),
+                       static_cast<std::byte>(0), static_cast<std::byte>(1)};
   auto ctx = meow::cypher::symm::SymmetricCypherContext(
-      key, meow::cypher::symm::encryptionMode::ECB,
-      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+      key, meow::cypher::symm::encryptionMode::CBC,
+      meow::cypher::symm::paddingMode::PKCS7, IV);
   ctx.setAlgo(algo);
 
-  ctx.encrypt("buffy", "1.txt");
-  ctx.decrypt("buffy_res", "buffy");
+  ctx.encrypt("cbc", "2.txt");
+  ctx.decrypt("cbc_res", "cbc");
 
-  ASSERT_TRUE(isFilesEqual("1.txt", "buffy_res"));
+  ASSERT_TRUE(isFilesEqual("2.txt", "cbc_res"));
 }
 
 int main(int argc, char** argv) {
