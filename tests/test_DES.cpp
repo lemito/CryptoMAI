@@ -226,14 +226,14 @@ TEST(DES, BigFileOFB) {
                        static_cast<std::byte>(1), static_cast<std::byte>(1),
                        static_cast<std::byte>(0), static_cast<std::byte>(1)};
   auto ctx = meow::cypher::symm::SymmetricCypherContext(
-      key, meow::cypher::symm::encryptionMode::OFB,
+      key, meow::cypher::symm::encryptionMode::CTR,
       meow::cypher::symm::paddingMode::PKCS7, IV);
   ctx.setAlgo(algo);
 
-  ctx.encrypt("buf", "3.txt");
-  ctx.decrypt("buf_res", "buf");
+  ctx.encrypt("nebuf", "3.txt");
+  ctx.decrypt("nebuf_res", "nebuf");
 
-  ASSERT_TRUE(isFilesEqual("3.txt", "buf_res"));
+  ASSERT_TRUE(isFilesEqual("3.txt", "nebuf_res"));
 }
 
 // TEST(DES, BiggestFile) {

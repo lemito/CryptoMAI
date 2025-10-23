@@ -6,11 +6,10 @@ module;
 
 #include <algorithm>
 #include <any>
-// #include <boost/random/mersenne_twister.hpp>
-// #include <boost/random/random_device.hpp>
-// #include <boost/random/uniform_int_distribution.hpp>
+#include <boost/multiprecision/gmp.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <execution>
 #include <fstream>
 #include <future>
 #include <memory>
@@ -20,6 +19,8 @@ module;
 #include <ranges>
 #include <utility>
 #include <vector>
+
+using BI = boost::multiprecision::mpz_int;
 
 export module cypher;
 
@@ -169,6 +170,9 @@ class SymmetricCypherContext {
     }
   }
 
+  /**
+   * блоки шифруются асинхронно независимо
+   */
   [[nodiscard]] std::vector<std::byte> _processECB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       const std::size_t blockCnt) const {
@@ -188,7 +192,6 @@ class SymmetricCypherContext {
             std::vector block(in.begin() + off,
                               in.begin() + off + this->_algo->_blockSize);
 
-            // std::vector<std::byte> proc_block;
             if (mode == ACTION_MODE::encrypt) {
               block = std::move(this->_algo->encrypt(block));
             } else {
@@ -206,6 +209,10 @@ class SymmetricCypherContext {
     return res;
   }
 
+  /**
+   * шифрование - блок ^ prev(изначально iv), а затем шифруется
+   * дешифровка - сначала дешифровка, потом ^ с предыдущим блоком (или iv)
+   */
   [[nodiscard]] std::vector<std::byte> _processCBC(
       const ACTION_MODE mode, const std::vector<std::byte>& in,
       const std::size_t blockCnt) const {
@@ -246,57 +253,47 @@ class SymmetricCypherContext {
         std::vector block(in.begin() + i * this->_algo->_blockSize,
                           in.begin() + (i + 1) * this->_algo->_blockSize);
 
-        std::vector<std::byte> prevBlock;
+        std::vector<std::byte> prev;
 
         if (i == 0) {
-          prevBlock = _init_vec.value();
+          prev = _init_vec.value();
         } else {
           auto prevStart = in.begin() + (i - 1) * this->_algo->_blockSize;
-          prevBlock =
+          prev =
               std::vector(prevStart, this->_algo->_blockSize + prevStart);
         }
 
         futures.emplace_back(std::async(
             std::launch::async, [this, block = std::move(block),
-                                 prevBlock = std::move(prevBlock)]() mutable {
-              auto processedBlock = this->_algo->decrypt(block);
+                                 prev = std::move(prev)]() mutable {
+              auto proc = this->_algo->decrypt(block);
 
-              if (processedBlock.size() != prevBlock.size()) {
+              if (proc.size() != prev.size()) {
                 throw std::runtime_error(
                     "блоки должны быть одного размера после дешифрования");
               }
 
-              return xorSpan(std::move(processedBlock), prevBlock);
+              return xorSpan(std::move(proc), prev);
             }));
       }
 
       for (std::size_t i = 0; i < blockCnt; i++) {
-        auto processedBlock = futures[i].get();
-        std::ranges::copy(processedBlock,
+        auto proc = futures[i].get();
+        std::ranges::copy(proc,
                           res.begin() + i * this->_algo->_blockSize);
       }
     }
 
     return res;
   }
+
+  /**
+   * шифрование - блок ^ с прошлым(iv сначала); потом шифрование; предыдущий
+   * также результат xor дешифрование - дешифрование, затем xor
+   */
   [[nodiscard]] std::vector<std::byte> _processPCBC(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       std::size_t blockCnt) const {
-    std::vector<std::byte> res(in.size());
-    return res;
-  }
-  [[nodiscard]] std::vector<std::byte> _processCFB(
-      ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const {
-    std::vector<std::byte> res(in.size());
-    return res;
-  }
-
-  [[nodiscard]] std::vector<std::byte> _processOFB(
-      const ACTION_MODE mode, const std::vector<std::byte>& in,
-      const std::size_t blockCnt) {
-    // (void)mode;
-
     if (in.size() != blockCnt * this->_algo->_blockSize) {
       throw std::invalid_argument("размер блока не подходит для алгоритма");
     }
@@ -304,25 +301,232 @@ class SymmetricCypherContext {
       throw std::runtime_error("IV пуст");
     }
 
-    if (in.size() % this->_algo->_blockSize != 0) {
-      throw std::runtime_error("неправильный размер");
-    }
-    // TODO: ТУТ ВСЁ СДЕЛАТЬ
+    std::vector<std::byte> tmp = _init_vec.value();
     std::vector<std::byte> res(in.size());
+
+    if (mode == ACTION_MODE::encrypt) {
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        const std::size_t off = i * this->_algo->_blockSize;
+        std::vector<std::byte> block(this->_algo->_blockSize);
+        for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+          block[j] = in[off + j] ^ tmp[j];
+        }
+
+        auto encr = this->_algo->encrypt(block);
+        std::ranges::copy(encr, res.begin() + off);
+
+        for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+          tmp[j] = in[off + j] ^ encr[j];
+        }
+      }
+    } else if (mode == ACTION_MODE::decrypt) {
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        const std::size_t off = i * this->_algo->_blockSize;
+
+        std::vector<std::byte> block(
+            in.begin() + off, in.begin() + off + this->_algo->_blockSize);
+        auto decr = this->_algo->decrypt(block);
+
+        for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+          res[off + j] = decr[j] ^ tmp[j];
+          tmp[j] = res[off + j] ^ block[j];
+        }
+      }
+    }
     return res;
   }
 
-  [[nodiscard]] std::vector<std::byte> _processCTR(
+  /**
+   * шифрование - к предыдущему алгос(iv сначала); потом xor
+   * дешифрование - сначала алгос, потом xor
+   */
+  [[nodiscard]] std::vector<std::byte> _processCFB(
       ACTION_MODE mode, const std::vector<std::byte>& in,
       std::size_t blockCnt) const {
+    if (in.size() != blockCnt * this->_algo->_blockSize) {
+      throw std::invalid_argument("размер блока не подходит для алгоритма");
+    }
+
+    if (!_init_vec.has_value()) {
+      throw std::runtime_error("IV пуст");
+    }
+
     std::vector<std::byte> res(in.size());
+
+    if (mode == ACTION_MODE::encrypt) {
+      auto prev = _init_vec.value();
+
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        const std::size_t off = i * this->_algo->_blockSize;
+
+        auto encr = this->_algo->encrypt(prev);
+
+        for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+          res[off + j] = in[off + j] ^ encr[j];
+        }
+
+        prev.assign(res.begin() + off,
+                    res.begin() + off + this->_algo->_blockSize);
+      }
+    } else {
+      std::vector<std::future<void>> futures;
+      futures.reserve(blockCnt);
+
+      for (std::size_t i = 0; i < blockCnt; i++) {
+        const std::size_t off = i * this->_algo->_blockSize;
+
+        auto block_prev =
+            (i == 0) ? _init_vec.value()
+                     : std::vector<std::byte>(
+                           in.begin() + (i - 1) * this->_algo->_blockSize,
+                           in.begin() + i * this->_algo->_blockSize);
+
+        futures.push_back(std::async(
+            std::launch::async,
+            [this, off, &in, &res, prev = std::move(block_prev)]() mutable {
+              auto encr = this->_algo->encrypt(prev);
+
+              for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+                res[off + j] = in[off + j] ^ encr[j];
+              }
+            }));
+      }
+
+      for (auto& future : futures) {
+        future.get();
+      }
+    }
+
     return res;
   }
+
+  /**
+   * шифр/дешифр - сначала шифруем предыдущее (iv); потом ксорим
+   */
+  [[nodiscard]] std::vector<std::byte> _processOFB(
+      const ACTION_MODE mode, const std::vector<std::byte>& in,
+      const std::size_t blockCnt) {
+    (void)mode;
+
+    if (in.size() != blockCnt * this->_algo->_blockSize) {
+      throw std::invalid_argument("размер блока не подходит для алгоритма");
+    }
+
+    if (!_init_vec.has_value()) {
+      throw std::runtime_error("IV пуст");
+    }
+
+    if (in.size() % this->_algo->_blockSize != 0) {
+      throw std::runtime_error("неправильный размер");
+    }
+
+    std::vector<std::byte> res(in.size());
+    std::vector<std::byte> prev = _init_vec.value();
+    for (std::size_t i = 0; i < blockCnt; i++) {
+      const size_t off = i * this->_algo->_blockSize;
+
+      auto encr = this->_algo->encrypt(prev);
+      for (std::size_t j = 0; j < this->_algo->_blockSize; j++) {
+        res[off + j] = in[off + j] ^ encr[j];
+      }
+      prev = std::move(encr);
+    }
+    return res;
+  }
+
+  std::vector<std::byte> BI_to_bytes(const BI& num, size_t byteCount) {
+    std::vector<std::byte> result(byteCount);
+    BI tmp = num;
+
+    for (size_t i = 0; i < byteCount; ++i) {
+      result[i] = static_cast<std::byte>(static_cast<uint8_t>(tmp & 0xFF));
+      tmp >>= 8;
+    }
+
+    return result;
+  }
+
+  BI bytes_to_BI(const std::vector<std::byte>& bytes) {
+    BI res = 0;
+
+    for (size_t i = bytes.size(); i > 0; --i) {
+      res <<= 8;
+      res += static_cast<uint8_t>(bytes[i - 1]);
+    }
+
+    return res;
+  }
+
+  std::vector<std::byte> __cntProcess(const std::vector<std::byte>& in,
+                                      std::size_t blockCnt) {
+    const BI* p = std::any_cast<BI>(&this->_params[0]);
+    if (_encMode == encryptionMode::RandomDelta && p == nullptr) {
+      throw std::runtime_error(
+          "random delta должно быть типом boost::multiprecision::mpz_int");
+    }
+
+    if (_encMode == encryptionMode::RandomDelta && *p < 0) {
+      throw std::runtime_error("random delta не должно быть < 0");
+    }
+
+    BI delta = _encMode == encryptionMode::CTR ? BI(1) : *p;
+    std::vector<std::byte> res(in.size());
+    std::vector<std::future<void>> futures;
+
+    futures.reserve(blockCnt);
+    const std::vector<std::byte>* prev = nullptr;
+    BI iv = _encMode == encryptionMode::RandomDelta
+                ? bytes_to_BI(_init_vec.value())
+                : BI(0);
+
+    for (size_t i = 0; i < blockCnt; ++i) {
+      futures.push_back(std::async(std::launch::async, [&, i, iv, delta]() {
+        const size_t blockStart = i * this->_algo->_blockSize;
+        const size_t blockSize = this->_algo->_blockSize;
+
+        BI cnt = iv + BI(i) * delta;
+
+        std::vector<std::byte> cnt2vec =
+            BI_to_bytes(cnt, this->_algo->_blockSize);
+
+        std::vector<std::byte> encr = this->_algo->encrypt(cnt2vec);
+
+        if (encr.size() > blockSize) {
+          encr.resize(blockSize);
+        }
+
+        for (size_t j = 0; j < blockSize; ++j) {
+          res[blockStart + j] = in[blockStart + j] ^ encr[j];
+        }
+      }));
+    }
+
+    for (auto& fut : futures) {
+      fut.get();
+    }
+
+    return res;
+  }
+
+  /**
+   *
+   */
+  [[nodiscard]] std::vector<std::byte> _processCTR(
+      ACTION_MODE mode, const std::vector<std::byte>& in,
+      std::size_t blockCnt) {
+    return __cntProcess(in, blockCnt);
+  }
+
+  /**
+   *
+   */
   [[nodiscard]] std::vector<std::byte> _processRandomDelta(
       ACTION_MODE mode, const std::vector<std::byte>& in,
-      std::size_t blockCnt) const {
-    std::vector<std::byte> res(in.size());
-    return res;
+      std::size_t blockCnt) {
+    if (!_init_vec.has_value()) {
+      throw std::runtime_error("IV пуст");
+    }
+    return __cntProcess(in, blockCnt);
   }
 
   [[nodiscard]] std::future<std::vector<std::byte>> _processBlock(
@@ -332,9 +536,6 @@ class SymmetricCypherContext {
     }
     return std::async(
         std::launch::async, [mode, in = std::move(in), this]() mutable {
-          // const bool needsPadding = _encMode == encryptionMode::ECB ||
-          //                           _encMode == encryptionMode::CBC ||
-          //                           _encMode == encryptionMode::PCBC;
           constexpr bool needsPadding = true;
           std::vector<std::byte> processed;
           const std::vector<std::byte>& dataToProcess =
@@ -365,23 +566,24 @@ class SymmetricCypherContext {
               processed = _processPCBC(mod, dataToProcess, blockCnt);
               break;
             case encryptionMode::CFB:
-              processed = _processCFB(mod, dataToProcess, blockCnt);
+              processed = std::move(_processCFB(mod, dataToProcess, blockCnt));
               break;
             case encryptionMode::OFB:
               processed = std::move(_processOFB(mod, dataToProcess, blockCnt));
               break;
             case encryptionMode::CTR:
-              processed = _processCTR(mod, dataToProcess, blockCnt);
+              processed = std::move(_processCTR(mod, dataToProcess, blockCnt));
               break;
             case encryptionMode::RandomDelta:
-              processed = _processRandomDelta(mod, dataToProcess, blockCnt);
+              processed =
+                  std::move(_processRandomDelta(mod, dataToProcess, blockCnt));
               break;
             default:
               throw std::runtime_error("ошибочка при обработке блока");
           }
 
           if (mode == ACTION_MODE::decrypt && needsPadding) {
-            return _doUnpadding(processed);
+            return _doUnpadding(std::move(processed));
           }
 
           return processed;
