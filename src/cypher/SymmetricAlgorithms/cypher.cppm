@@ -41,8 +41,8 @@ export namespace meow::cypher::symm {
 // 1.генерация раундовых ключей
 class IGenRoundKey {
  public:
-  size_t roundCnt = 0;
-  explicit IGenRoundKey(const size_t cnt) : roundCnt(cnt) {}
+  std::size_t roundCnt = 0;
+  explicit IGenRoundKey(const std::size_t cnt) : roundCnt(cnt) {}
 
   /**
    * @brief генерируем раундовые ключики из ключика
@@ -142,7 +142,7 @@ class SymmetricCypherContext {
       throw std::runtime_error("не удалось открыть выходной файл");
     }
 
-    const size_t block_size = this->_algo->_blockSize;
+    const std::size_t block_size = this->_algo->_blockSize;
     std::vector<std::byte> read_buffer(1024 * block_size);
 
     while (i_file.read(reinterpret_cast<char*>(read_buffer.data()),
@@ -184,7 +184,7 @@ class SymmetricCypherContext {
     for (std::size_t i = 0; i < blockCnt; i++) {
       futures.push_back(
           std::async(std::launch::async, [this, &in, &res, i, &mode]() {
-            const size_t off = i * this->_algo->_blockSize;
+            const std::size_t off = i * this->_algo->_blockSize;
             std::vector block(in.begin() + off,
                               in.begin() + off + this->_algo->_blockSize);
 
@@ -307,7 +307,7 @@ class SymmetricCypherContext {
     if (in.size() % this->_algo->_blockSize != 0) {
       throw std::runtime_error("неправильный размер");
     }
-// TODO: ТУТ ВСЁ СДЕЛАТЬ
+    // TODO: ТУТ ВСЁ СДЕЛАТЬ
     std::vector<std::byte> res(in.size());
     return res;
   }
@@ -392,9 +392,9 @@ class SymmetricCypherContext {
       const std::vector<std::byte>& in) const {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<uint8_t> dist(0, 255);
+    std::uniform_int_distribution<std::uint8_t> dist(0, 255);
 
-    uint8_t forAdd =
+    std::uint8_t forAdd =
         this->_algo->_blockSize - in.size() % this->_algo->_blockSize;
     if (forAdd == 0) {
       forAdd = this->_algo->_blockSize;
@@ -414,13 +414,13 @@ class SymmetricCypherContext {
       } break;
       case paddingMode::PKCS7: {
         // ВСЕ ЗАПОЛНЯЕТСЯ КОЛИЧЕСТВОМ ДОБАВЛЕННЫХ БАЙТ
-        for (size_t i = in.size(); i < res.size(); ++i) {
+        for (std::size_t i = in.size(); i < res.size(); ++i) {
           res[i] = static_cast<std::byte>(forAdd);
         }
       } break;
       case paddingMode::ISO10126: {
         // ВСЕ СЛУЧАЙНЫЕ БАЙТЫ, КРОМЕ ПОСЛЕДНЕГО - ТАМ ЧИСЛО ДОБАВЛЕННЫХ БАЙТ
-        for (size_t i = in.size(); i < res.size() - 1; ++i) {
+        for (std::size_t i = in.size(); i < res.size() - 1; ++i) {
           res[i] = static_cast<std::byte>(dist(gen));
         }
         // res.back() = static_cast<std::byte>(forAdd);
@@ -437,7 +437,7 @@ class SymmetricCypherContext {
       const std::vector<std::byte>& in) const {
     if (in.empty()) return {};
 
-    const auto wasAdded = static_cast<uint8_t>(in.back());
+    const auto wasAdded = static_cast<std::uint8_t>(in.back());
 
     // if (wasAdded == 0 || wasAdded > in.size() ||
     //     wasAdded > this->_algo->_blockSize) {
@@ -455,7 +455,7 @@ class SymmetricCypherContext {
       } break;
 
       case paddingMode::AnsiX923: {
-        for (size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
+        for (std::size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
           if (in[i] != static_cast<std::byte>(0)) {
             throw std::runtime_error("в AnsiX923 должны быть нули байты");
           }

@@ -59,10 +59,10 @@
         },
         {
             "name": "ubuntu",
-            "displayName": "Clang 21.1.0 x86_64-pc-linux-gnu",
-            "description": "Using compilers: C = /usr/bin/clang-21, CXX = /usr/bin/clang++-21",
-            "generator": "Ninja",
+            "displayName": "Clang 22.0.0 x86_64-pc-linux-gnu",
+            "description": "Using compilers: C = /usr/bin/clang-22, CXX = /usr/bin/clang++-22",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "/usr/bin/clang-22",

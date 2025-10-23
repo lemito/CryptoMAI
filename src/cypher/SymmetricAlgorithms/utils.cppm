@@ -7,11 +7,11 @@ export module cypher.utils;
 
 export namespace meow::cypher {
 namespace utils {
-constexpr auto ShiftBytesLeft(const std::uint64_t val, const size_t shift,
-                              const size_t length) {
+constexpr auto ShiftBytesLeft(const std::uint64_t val, const std::size_t shift,
+                              const std::size_t length) {
   // return static_cast<uint64_t>((val << shift) | (val >> (length - shift))) &
   //        ((1 << length) - 1);
-  return (val << shift | val >> 28 - shift) &
+  return (val << shift | val >> (28 - shift)) &
          0x0FFFFFFF;
 }
 }  // namespace utils
@@ -34,19 +34,19 @@ enum class bitIndexingRule : int8_t {
  */
 constexpr std::vector<std::byte> permutation(
     const std::vector<std::byte>& in,
-    const std::span<uint16_t>& permutationRule,
+    const std::span<std::uint16_t>& permutationRule,
     const bitIndexingRule rule = bitIndexingRule::LSB2MSB,
     const int8_t startBitNumer = 0) {
   if (startBitNumer < 0 || startBitNumer > 1) {
     throw std::runtime_error("Неправильный аргумент старта");
   }
 
-  const size_t siz = in.size() * 8;
-  const size_t res_siz =
+  const std::size_t siz = in.size() * 8;
+  const std::size_t res_siz =
       permutationRule.size() / 8 + (permutationRule.size() % 8 ? 1 : 0);
   std::vector res(res_siz, std::byte{0});
 
-  for (size_t i = 0; i < permutationRule.size(); i++) {
+  for (std::size_t i = 0; i < permutationRule.size(); i++) {
     const auto ix = permutationRule[i] - static_cast<int64_t>(startBitNumer);
 
     if (ix < 0 || ix >= static_cast<int64_t>(siz)) {

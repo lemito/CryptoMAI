@@ -1,12 +1,41 @@
+# CompileFlags:
+#   Add: 
+#     - -std=c++23
+#     - -fmodules
+#     - -Xclang
+#     - -fmodules-codegen
+#     - -Xclang
+#     - -fmodules-debuginfo
+#     - --precompile
+#     - -I${workspaceFolder}/include
+#     - -I${workspaceFolder}/build
+#   CompilationDatabase: build
 CompileFlags:
   Add: 
+    - -I${workspaceFolder}/include
+    - -I${workspaceFolder}/src
+    - -I${workspaceFolder}/lib
+    - -I${workspaceFolder}/out/build/ubuntu
     - -std=c++23
+    - -Wall
+    - -Wextra
     - -fmodules
     - -Xclang
     - -fmodules-codegen
     - -Xclang
     - -fmodules-debuginfo
     - --precompile
-    - -I${workspaceFolder}/include
-    - -I${workspaceFolder}/build
-  CompilationDatabase: build
+  CompilationDatabase: out/build/ubuntu
+
+Diagnostics:
+  ClangTidy:
+    Add: 
+      - modernize-*
+      - performance-*
+      - readability-*
+
+Hover:
+  ShowAKA: Yes
+
+Index:
+  Background: Skip

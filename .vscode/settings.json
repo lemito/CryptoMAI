@@ -1,10 +1,4 @@
 {
-    "clangd.arguments": [
-        "--background-index",
-        "--compile-commands-dir=build",
-        "--completion-style=detailed",
-        "--header-insertion=never",
-    ],
     "C_Cpp.default.cppStandard": "c++23",
     "cmake.generator": "Ninja",
     "files.associations": {
@@ -13,6 +7,24 @@
         "format": "cpp",
         "stdexcept": "cpp"
     },
-    "C_Cpp.default.compilerPath": "/usr/bin/clang++",
-    "C_Cpp.intelliSenseEngine": "disabled"
+    // "C_Cpp.default.compilerPath": "/usr/bin/clang++",
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.path": "clangd",
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=out/build/ubuntu",
+        "--header-insertion=never",
+        "--query-driver=/usr/bin/clang++-22",
+        "--all-scopes-completion",
+        "--completion-style=detailed",
+        "--pch-storage=memory"
+    ],
+    "clangd.fallbackFlags": [
+        "-I${workspaceFolder}/include",
+        "-I${workspaceFolder}/src",
+        "-std=c++20"
+    ],
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.buildDirectory": "${workspaceFolder}/out/build/${buildType}",
+    "cmake.configureOnOpen": true
 }
