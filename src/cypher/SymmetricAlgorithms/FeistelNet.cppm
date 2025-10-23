@@ -52,14 +52,14 @@ class FeistelNet : public ISymmetricCypher {
   std::shared_ptr<IEncryptionDecryption> _enc_dec{};
 
  public:
-  explicit FeistelNet(const size_t rounds,
-                      const std::shared_ptr<IGenRoundKey>& keyGenerator,
+  explicit FeistelNet(const std::shared_ptr<IGenRoundKey>& keyGenerator,
                       const std::shared_ptr<IEncryptionDecryption>& enc_dec)
-      : _rounds(rounds), _keyGenerator(keyGenerator), _enc_dec(enc_dec) {
+      : _keyGenerator(keyGenerator), _enc_dec(enc_dec) {
     if (keyGenerator == nullptr) {
       throw std::runtime_error(
           "класс, генерирующий раундовые ключи некорректен");
     }
+    _rounds = keyGenerator->roundCnt;
     if (enc_dec == nullptr) {
       throw std::runtime_error(
           "класс, отвечающий за шифрование/дешифрование некорректен");
@@ -68,7 +68,7 @@ class FeistelNet : public ISymmetricCypher {
 
   constexpr void setRoundKeys(
       const std::vector<std::byte>& encryptionKey) override {
-    _roundKeys = std::move(_keyGenerator->genRoundKeys(encryptionKey));
+    _roundKeys = _keyGenerator->genRoundKeys(encryptionKey);
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(

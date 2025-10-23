@@ -42,7 +42,7 @@ export namespace meow::cypher::symm {
 // 1.генерация раундовых ключей
 class IGenRoundKey {
  public:
-  std::size_t roundCnt = 0;
+  mutable std::size_t roundCnt = 0;
   explicit IGenRoundKey(const std::size_t cnt) : roundCnt(cnt) {}
 
   /**

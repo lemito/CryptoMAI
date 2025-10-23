@@ -80,7 +80,7 @@ target_sources(CryptoDEAL PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
         src/cypher/SymmetricAlgorithms/DEAL/DEAL.cppm
 )
-target_link_libraries(CryptoDEAL PUBLIC CryptoSymmetric)
+target_link_libraries(CryptoDEAL PUBLIC CryptoSymmetric CryptoDES)
 
 target_link_libraries(Crypto INTERFACE
         CryptoMath

@@ -12,6 +12,7 @@ module;
 #include <iostream>
 
 export module cypher.DES;
+
 import <cstdint>;
 import <array>;
 import <cstddef>;
@@ -225,7 +226,7 @@ class DES final : public FeistelNet::FeistelNet {
   // }
 
   DES()
-      : FeistelNet(16, std::make_shared<_detailDES::DESGenRoundKey>(16),
+      : FeistelNet( std::make_shared<_detailDES::DESGenRoundKey>(16),
                    std::make_shared<_detailDES::DESEncryptionDecryption>()) {};
 
   // explicit DES(const std::span<std::byte> key)

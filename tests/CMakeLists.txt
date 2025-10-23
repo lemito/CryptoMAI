@@ -50,6 +50,9 @@ target_link_libraries(test_DES_clear PRIVATE Crypto) #
 add_executable(test_WiennerAttack test_WiennerAttack.cpp)
 target_link_libraries(test_WiennerAttack PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
+add_executable(test_DEAL test_DEAL.cpp)
+target_link_libraries(test_DEAL PRIVATE Crypto GTest::gtest GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(test_gcd)
 gtest_discover_tests(test_symbols)
@@ -60,3 +63,4 @@ gtest_discover_tests(test_rsa)
 gtest_discover_tests(test_WiennerAttack)
 gtest_discover_tests(test_permutate)
 gtest_discover_tests(test_DES)
+gtest_discover_tests(test_DEAL)
