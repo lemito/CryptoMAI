@@ -6,7 +6,7 @@ module;
 
 #include <algorithm>
 #include <any>
-#include <boost/multiprecision/gmp.hpp>
+// #include <boost/multiprecision/gmp.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <execution>
@@ -20,7 +20,8 @@ module;
 #include <utility>
 #include <vector>
 
-using BI = boost::multiprecision::mpz_int;
+// using BI = boost::multiprecision::mpz_int;
+#include "utils_math.h"
 
 export module cypher;
 
@@ -703,7 +704,7 @@ class SymmetricCypherContext {
         _encMode(encMode),
         _padMode(padMode),
         _init_vec(init_vec),
-        _params(std::forward<Args>(params)...) {}
+        _params({std::any(std::forward<Args>(params))...}) {}
 
   template <typename... Args>
   SymmetricCypherContext(
@@ -716,7 +717,7 @@ class SymmetricCypherContext {
         _encMode(encMode),
         _padMode(padMode),
         _init_vec(init_vec),
-        _params(std::forward<Args>(params)...) {
+        _params({std::any(std::forward<Args>(params))...}) {
     setAlgo(algo);
   }
 

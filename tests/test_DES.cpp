@@ -4,7 +4,9 @@
 #include <span>
 #include <string>
 #include <vector>
+
 #include "debug.h"
+#include "utils_math.h"
 
 import cypher;
 import cypher.DES;
@@ -216,10 +218,10 @@ TEST(DES, BigFile) {
 
 TEST(DES, BigFileOFB) {
   const std::vector key = {
-    static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
-    static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
-    static_cast<std::byte>(0x27), static_cast<std::byte>(0x36),
-    static_cast<std::byte>(0xCC), static_cast<std::byte>(0xDD)};
+      static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
+      static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
+      static_cast<std::byte>(0x27), static_cast<std::byte>(0x36),
+      static_cast<std::byte>(0xCC), static_cast<std::byte>(0xDD)};
 
   const auto algo =
       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
@@ -261,7 +263,32 @@ TEST(DES, BigFileOFB) {
 //   ASSERT_TRUE(isFilesEqual("1.txt", "buffy_res"));
 // }
 
-TEST(DES, BiggestFileCBC) {
+// TEST(DES, BiggestFileCBC) {
+//   const std::vector key = {
+//       static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
+//       static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
+//       static_cast<std::byte>(0x27), static_cast<std::byte>(0x36),
+//       static_cast<std::byte>(0xCC), static_cast<std::byte>(0xDD)};
+//
+//   const auto algo =
+//       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+//           std::make_shared<meow::cypher::symm::DES::DES>());
+//   const std::vector IV{static_cast<std::byte>(1), static_cast<std::byte>(1),
+//                        static_cast<std::byte>(0), static_cast<std::byte>(1),
+//                        static_cast<std::byte>(1), static_cast<std::byte>(1),
+//                        static_cast<std::byte>(0), static_cast<std::byte>(1)};
+//   auto ctx = meow::cypher::symm::SymmetricCypherContext(
+//       key, meow::cypher::symm::encryptionMode::CBC,
+//       meow::cypher::symm::paddingMode::PKCS7, IV);
+//   ctx.setAlgo(algo);
+//
+//   ctx.encrypt("cbc", "2.txt");
+//   ctx.decrypt("cbc_res", "cbc");
+//
+//   ASSERT_TRUE(isFilesEqual("2.txt", "cbc_res"));
+// }
+
+TEST(DES, ALL) {
   const std::vector key = {
       static_cast<std::byte>(0xAA), static_cast<std::byte>(0xBB),
       static_cast<std::byte>(0x09), static_cast<std::byte>(0x18),
@@ -271,19 +298,27 @@ TEST(DES, BiggestFileCBC) {
   const auto algo =
       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
           std::make_shared<meow::cypher::symm::DES::DES>());
+
   const std::vector IV{static_cast<std::byte>(1), static_cast<std::byte>(1),
                        static_cast<std::byte>(0), static_cast<std::byte>(1),
                        static_cast<std::byte>(1), static_cast<std::byte>(1),
                        static_cast<std::byte>(0), static_cast<std::byte>(1)};
-  auto ctx = meow::cypher::symm::SymmetricCypherContext(
-      key, meow::cypher::symm::encryptionMode::CBC,
-      meow::cypher::symm::paddingMode::PKCS7, IV);
-  ctx.setAlgo(algo);
 
-  ctx.encrypt("cbc", "2.txt");
-  ctx.decrypt("cbc_res", "cbc");
+  for (size_t mode = 0; mode < 7; ++mode) {
+    for (size_t pad = 0; pad < 4; ++pad) {
+      auto ctx = meow::cypher::symm::SymmetricCypherContext(
+          key, static_cast<meow::cypher::symm::encryptionMode>(mode),
+          static_cast<meow::cypher::symm::paddingMode>(pad), IV, BI(52));
+      ctx.setAlgo(algo);
 
-  ASSERT_TRUE(isFilesEqual("2.txt", "cbc_res"));
+      std::string pref = std::to_string(mode) + "_" + std::to_string(pad);
+
+      ctx.encrypt(pref + "BUFFER", "2.txt");
+      ctx.decrypt(pref + "BUFFER_res", pref + "BUFFER");
+
+      ASSERT_TRUE(isFilesEqual("2.txt", pref + "BUFFER_res"));
+    }
+  }
 }
 
 int main(int argc, char** argv) {
