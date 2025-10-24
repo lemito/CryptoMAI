@@ -72,7 +72,7 @@ class DESGenRoundKey final : public IGenRoundKey {
       throw std::runtime_error("ключ должен быть 8 байт == 64 бит");
     }
     // TODO: ТУТ НАДО ДОДЕЛАТЬ ПРОВЕРКУ КЛЮЧА
-    if constexpr (I_WANT_CHECK_KEY && !isGoodByte(inputKey)) {
+    if (I_WANT_CHECK_KEY && !isGoodByte(inputKey)) {
       throw BadDESKey();
     }
 
