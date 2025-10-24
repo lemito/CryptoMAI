@@ -3,6 +3,8 @@ module;
 #include <bit>
 #include <iostream>
 
+#include "debug.h"
+
 export module cypher.DEAL;
 import <cstdint>;
 import <array>;
@@ -77,21 +79,20 @@ class DEALGenRoundKey final : public IGenRoundKey {
       keys[i] = std::vector<std::byte>(inputKey.begin() + i * 8,
                                        inputKey.begin() + (i + 1) * 8);
     }
-    _des->setRoundKeys(
-        std::vector<std::byte>(inputKey.begin(), inputKey.begin() + 8));
 
     // TODO: либо вики врет, либо начальный ключ 0x0123456789abcedf; так как
     // будто это плохой ключик; поэтому начальным ключом будет часть ориг ключа
-    // _des->setRoundKeys(std::vector<std::byte>{
-    //     static_cast<std::byte>(0x01),
-    //     static_cast<std::byte>(0x23),
-    //     static_cast<std::byte>(0x45),
-    //     static_cast<std::byte>(0x67),к
-    //     static_cast<std::byte>(0x89),
-    //     static_cast<std::byte>(0xab),
-    //     static_cast<std::byte>(0xcd),
-    //     static_cast<std::byte>(0xef),
-    // });
+#ifndef DEBUG
+    std::vector<std::byte> K0(inputKey.begin(), inputKey.begin() + 8);
+#endif
+    const std::vector<std::byte> K0{
+        static_cast<std::byte>(0x01), static_cast<std::byte>(0x23),
+        static_cast<std::byte>(0x45), static_cast<std::byte>(0x67),
+        static_cast<std::byte>(0x89), static_cast<std::byte>(0xab),
+        static_cast<std::byte>(0xcd), static_cast<std::byte>(0xef),
+    };
+
+    _des->setRoundKeys(K0);
 
     std::vector<std::vector<std::byte>> res(roundCnt);
 

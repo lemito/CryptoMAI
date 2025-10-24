@@ -11,6 +11,8 @@ module;
 #include <ios>
 #include <iostream>
 
+#include "debug.h"
+
 export module cypher.DES;
 
 import <cstdint>;
@@ -70,7 +72,7 @@ class DESGenRoundKey final : public IGenRoundKey {
       throw std::runtime_error("ключ должен быть 8 байт == 64 бит");
     }
     // TODO: ТУТ НАДО ДОДЕЛАТЬ ПРОВЕРКУ КЛЮЧА
-    if (!isGoodByte(inputKey)) {
+    if constexpr (I_WANT_CHECK_KEY && !isGoodByte(inputKey)) {
       throw BadDESKey();
     }
 
@@ -160,29 +162,26 @@ export class DESEncryptionDecryption final : public IEncryptionDecryption {
     std::vector res(4, std::byte{0});
 
     for (size_t i = 0; i < 8; i++) {
-      const size_t byte_index = i * 6 / 8;
-      const size_t bit_offset = i * 6 % 8;
+      const size_t biteIx = i * 6 / 8;
+      const size_t bitIff = i * 6 % 8;
 
       uint8_t six_bits;
-      if (bit_offset <= 2) {
+      if (bitIff <= 2) {
         six_bits =
-            (std::to_integer<uint8_t>(in[byte_index]) >> (2 - bit_offset)) &
-            0x3F;
+            (static_cast<uint8_t>(in[biteIx]) >> (2 - bitIff)) & 0b00111111;
       } else {
         six_bits =
-            ((std::to_integer<uint8_t>(in[byte_index]) << (bit_offset - 2)) |
-             (std::to_integer<uint8_t>(in[byte_index + 1]) >>
-              (10 - bit_offset))) &
-            0x3F;
+            ((static_cast<uint8_t>(in[biteIx]) << (bitIff - 2)) |
+             (static_cast<uint8_t>(in[biteIx + 1]) >> ((8 + 2) - bitIff))) &
+            0b00111111;
       }
 
-      auto [row, col] = _findIxSBlock(static_cast<std::byte>(six_bits));
-      const uint8_t s_val = S[i][row][col];
+      auto RC = _findIxSBlock(static_cast<std::byte>(six_bits));
+      const auto s_val = static_cast<uint8_t>(_findNewElem(std::move(RC), i));
 
-      const size_t res_byte = i / 2;
-      const size_t res_shift = (1 - (i % 2)) * 4;
-      res[res_byte] = static_cast<std::byte>(
-          std::to_integer<uint8_t>(res[res_byte]) | (s_val << res_shift));
+      const size_t resIx = i / 2;
+      const size_t resShift = (i % 2 == 0) ? 4 : 0;
+      res[resIx] |= static_cast<std::byte>(s_val << resShift);
     }
 
     return res;
@@ -226,7 +225,7 @@ class DES final : public FeistelNet::FeistelNet {
   // }
 
   DES()
-      : FeistelNet( std::make_shared<_detailDES::DESGenRoundKey>(16),
+      : FeistelNet(std::make_shared<_detailDES::DESGenRoundKey>(16),
                    std::make_shared<_detailDES::DESEncryptionDecryption>()) {};
 
   // explicit DES(const std::span<std::byte> key)

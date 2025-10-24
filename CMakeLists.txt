@@ -38,7 +38,8 @@ add_library(CryptoRSA STATIC)
 add_library(CryptoSymmetric STATIC)
 add_library(CryptoDES STATIC)
 add_library(CryptoDEAL STATIC)
-add_library(Crypto INTERFACE)
+add_library(Crypto INTERFACE
+        include/debug.h)
 
 target_compile_features(CryptoMath PRIVATE cxx_std_23)
 target_sources(CryptoMath PUBLIC

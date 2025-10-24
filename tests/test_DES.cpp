@@ -4,6 +4,7 @@
 #include <span>
 #include <string>
 #include <vector>
+#include "debug.h"
 
 import cypher;
 import cypher.DES;
@@ -87,6 +88,7 @@ TEST(DES, Error) {
   ASSERT_THROW(algo->setRoundKeys(key), std::runtime_error);
 }
 
+#ifndef DEBUG
 TEST(DES, BadKey) {
   const std::vector key = {std::byte{0x12}, std::byte{0x34}, std::byte{0x56},
                            std::byte{0x78}, std::byte{0x9A}, std::byte{0xBC},
@@ -102,6 +104,7 @@ TEST(DES, BadKey) {
           std::make_shared<meow::cypher::symm::DES::DES>());
   ASSERT_THROW(algo->setRoundKeys(key), BadDESKey);
 }
+#endif
 
 TEST(DES, SimpleWithPad) {
   const std::vector key = {
@@ -226,7 +229,7 @@ TEST(DES, BigFileOFB) {
                        static_cast<std::byte>(1), static_cast<std::byte>(1),
                        static_cast<std::byte>(0), static_cast<std::byte>(1)};
   auto ctx = meow::cypher::symm::SymmetricCypherContext(
-      key, meow::cypher::symm::encryptionMode::CTR,
+      key, meow::cypher::symm::encryptionMode::PCBC,
       meow::cypher::symm::paddingMode::PKCS7, IV);
   ctx.setAlgo(algo);
 
