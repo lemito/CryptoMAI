@@ -75,9 +75,9 @@ class IEncryptionDecryption {
 // 3.(де)шифрование симметричным алгосом БЛОКА
 class ISymmetricCypher {
  protected:
+ public:
   std::vector<std::vector<std::byte>> _roundKeys;
 
- public:
   std::size_t _blockSize = 8;  // размер блока указан в байт (для DES = 8)
 
   virtual constexpr void setRoundKeys(
@@ -259,13 +259,12 @@ class SymmetricCypherContext {
           prev = _init_vec.value();
         } else {
           auto prevStart = in.begin() + (i - 1) * this->_algo->_blockSize;
-          prev =
-              std::vector(prevStart, this->_algo->_blockSize + prevStart);
+          prev = std::vector(prevStart, this->_algo->_blockSize + prevStart);
         }
 
         futures.emplace_back(std::async(
-            std::launch::async, [this, block = std::move(block),
-                                 prev = std::move(prev)]() mutable {
+            std::launch::async,
+            [this, block = std::move(block), prev = std::move(prev)]() mutable {
               auto proc = this->_algo->decrypt(block);
 
               if (proc.size() != prev.size()) {
@@ -279,8 +278,7 @@ class SymmetricCypherContext {
 
       for (std::size_t i = 0; i < blockCnt; i++) {
         auto proc = futures[i].get();
-        std::ranges::copy(proc,
-                          res.begin() + i * this->_algo->_blockSize);
+        std::ranges::copy(proc, res.begin() + i * this->_algo->_blockSize);
       }
     }
 
