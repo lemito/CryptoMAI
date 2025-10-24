@@ -786,12 +786,20 @@ class SymmetricCypherContext {
 
   constexpr void encrypt(const std::string& destPath,
                          const std::string& inPath) {
-    _processFile(ACTION_MODE::encrypt, inPath, destPath);
+    std::future<void> f = std::async(std::launch::async, [&]() {
+      _processFile(ACTION_MODE::encrypt, inPath, destPath);
+    });
+    f.get();
+    // _processFile(ACTION_MODE::encrypt, inPath, destPath);
   }
 
   constexpr void decrypt(const std::string& destPath,
                          const std::string& inPath) {
-    _processFile(ACTION_MODE::decrypt, inPath, destPath);
+    std::future<void> f = std::async(std::launch::async, [&]() {
+      _processFile(ACTION_MODE::decrypt, inPath, destPath);
+    });
+    f.get();
+    // _processFile(ACTION_MODE::decrypt, inPath, destPath);
   }
 };
 }  // namespace meow::cypher::symm
