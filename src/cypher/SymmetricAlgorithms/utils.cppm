@@ -11,8 +11,7 @@ constexpr auto ShiftBytesLeft(const std::uint64_t val, const std::size_t shift,
                               const std::size_t length) {
   // return static_cast<uint64_t>((val << shift) | (val >> (length - shift))) &
   //        ((1 << length) - 1);
-  return (val << shift | val >> (28 - shift)) &
-         0x0FFFFFFF;
+  return (val << shift | val >> (28 - shift)) & 0x0FFFFFFF;
 }
 }  // namespace utils
 

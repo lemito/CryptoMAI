@@ -99,8 +99,10 @@ class DESGenRoundKey final : public IGenRoundKey {
     D &= 0x0FFFFFFF;
 
     for (size_t i = 0; i < roundCnt; i++) {
-      C = ((C << SHIFTS[i]) | (C >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
-      D = ((D << SHIFTS[i]) | (D >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
+      // C = ((C << SHIFTS[i]) | (C >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
+      // D = ((D << SHIFTS[i]) | (D >> (28 - SHIFTS[i]))) & 0x0FFFFFFF;
+      C = utils::ShiftBytesLeft(C, SHIFTS[i], 28);
+      D = utils::ShiftBytesLeft(D, SHIFTS[i], 28);
 
       std::vector<std::byte> preBlock(
           7);  // обрезаем по 1 биту 8 раз - там они контрольные
