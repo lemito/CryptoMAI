@@ -38,6 +38,8 @@ add_library(CryptoRSA STATIC)
 add_library(CryptoSymmetric STATIC)
 add_library(CryptoDES STATIC)
 add_library(CryptoDEAL STATIC)
+add_library(CryptoGaloisFieldPoly STATIC)
+add_library(Rijndael STATIC)
 add_library(Crypto INTERFACE
         include/debug.h)
 
@@ -83,12 +85,28 @@ target_sources(CryptoDEAL PUBLIC
 )
 target_link_libraries(CryptoDEAL PUBLIC CryptoSymmetric CryptoDES)
 
+target_compile_features(CryptoGaloisFieldPoly PRIVATE cxx_std_23)
+target_sources(CryptoGaloisFieldPoly PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/math/GaloisFieldPoly.cppm
+)
+target_link_libraries(CryptoGaloisFieldPoly PUBLIC)
+
+target_compile_features(Rijndael PRIVATE cxx_std_23)
+target_sources(Rijndael PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/Rijndael/Rijndael.cppm
+)
+target_link_libraries(Rijndael PUBLIC CryptoSymmetric)
+
 target_link_libraries(Crypto INTERFACE
         CryptoMath
         CryptoRSA
         CryptoSymmetric
         CryptoDES
         CryptoDEAL
+        CryptoGaloisFieldPoly
+        Rijndael
 )
 
 #foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
