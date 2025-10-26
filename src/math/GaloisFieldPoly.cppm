@@ -294,6 +294,7 @@ class GaloisFieldPoly {
   template <int32_t _degree>
   static constexpr auto allIrreducible() {
     static_assert(_degree >= 0, "degree cannot be negative");
+    static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
 
     constexpr uint32_t start = 1u << _degree;
     constexpr uint32_t end = 1u << (_degree + 1);
