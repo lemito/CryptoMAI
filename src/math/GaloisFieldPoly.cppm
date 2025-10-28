@@ -351,9 +351,34 @@ constexpr auto to_string(const int64_t& poly) -> std::string {
   return meow.str();
 }
 
+constexpr auto to_Bin_string(const int64_t& poly) -> std::string {
+  if (poly > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (poly < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  if (poly == 0) {
+    return "0";
+  }
+  std::stringstream meow;
+
+  const auto deg = _getDegree(poly);
+  for (int16_t i = deg; i >= 0; --i) {
+    if (1 == ((poly >> i) & 1)) {
+      meow << "1";
+    } else {
+      meow << "0";
+    }
+  }
+
+  return meow.str();
+}
+
 auto operator<<(std::ostream& os, const std::byte& o) -> std::ostream& {
   os << std::hex << std::to_integer<uint8_t>(o) << ' ';
-  os << to_string(static_cast<int64_t>(o));
+  os << to_string(static_cast<int64_t>(o)) << ' ';
+  os << to_Bin_string(static_cast<int64_t>(o));
   return os;
 }
 
