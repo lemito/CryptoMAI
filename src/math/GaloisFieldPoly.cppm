@@ -313,7 +313,7 @@ constexpr auto decomposition(int64_t poly) -> std::vector<uint32_t> {
   return res;
 }
 
-constexpr auto to_string(const int64_t poly) -> std::string {
+constexpr auto to_string(const int64_t& poly) -> std::string {
   if (poly > UINT32_MAX) {
     throw std::runtime_error("polynom must be max 31 degree");
   }
@@ -326,12 +326,13 @@ constexpr auto to_string(const int64_t poly) -> std::string {
   std::stringstream meow;
 
   const auto deg = _getDegree(poly);
-  // TODO::
-  for (int16_t i = 1; i < deg; ++i) {
+  bool isFirst = true;
+  for (int16_t i = deg; i >= 0; --i) {
     if (1 == ((poly >> i) & 1)) {
-      if (meow.str().length() > 0) {
+      if (!isFirst) {
         meow << " + ";
       }
+      isFirst = false;
 
       switch (i) {
         case 0:
@@ -350,7 +351,7 @@ constexpr auto to_string(const int64_t poly) -> std::string {
   return meow.str();
 }
 
-auto operator<<(std::ostream& os, const std::byte o) -> std::ostream& {
+auto operator<<(std::ostream& os, const std::byte& o) -> std::ostream& {
   os << std::hex << std::to_integer<uint8_t>(o) << ' ';
   os << to_string(static_cast<int64_t>(o));
   return os;

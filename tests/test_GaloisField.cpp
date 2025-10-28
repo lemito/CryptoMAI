@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <stddef.h>
 
-
 import math.GaloisFieldPoly;
 import <array>;
 
@@ -32,6 +31,8 @@ TEST(GF, inv) {
   const auto res = meow::math::GaloisFieldPoly::invElem(
       static_cast<std::byte>(0xD2), meow::math::GaloisFieldPoly::MOD_byte);
   ASSERT_EQ(res, static_cast<std::byte>(0xAE));
+  std::cout << meow::math::GaloisFieldPoly::to_string(static_cast<int64_t>(res))
+            << std::endl;
 }
 
 TEST(GF, decomposition) {
@@ -47,6 +48,14 @@ TEST(GF, decomposition0) {
   const auto res = meow::math::GaloisFieldPoly::decomposition(0x11B);
   const std::vector<uint32_t> exp{0x11B};  // туточки неприводимый
   ASSERT_EQ(res, exp);
+}
+
+TEST(GF, isIrreducible) {
+  const auto res = meow::math::GaloisFieldPoly::isIrreducible(0x11B);
+  ASSERT_EQ(res, true);
+  std::cout << meow::math::GaloisFieldPoly::to_string(
+                   static_cast<int64_t>(0x11B))
+            << std::endl;
 }
 
 int main(int argc, char** argv) {
