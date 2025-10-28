@@ -6,18 +6,21 @@
  */
 module;
 // #include <array>
-#include <algorithm>
-#include <bitset>
-#include <cstdint>
+// #include <cstdint>
 #include <iostream>
 #include <ostream>
-#include <sstream>
-#include <vector>
+// #include <sstream>
+// #include <vector>
 export module math.GaloisFieldPoly;
 import <array>;
 import <cstddef>;
+import <format>;
 import <tuple>;
 import <iterator>;
+import <cstdint>;
+import <vector>;
+import <sstream>;
+import <cstddef>;
 
 // https://en.wikipedia.org/wiki/M%C3%B6bius_function
 /**
@@ -26,7 +29,7 @@ import <iterator>;
  * @return
  * матан снова всё порешал и количество можно подсчитать формулкой
  */
-template <int64_t _degree>
+template <std::int64_t _degree>
 constexpr auto _cntIrreducible() {
   static_assert(_degree >= 0, "degree cannot be negative");
   static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
@@ -34,8 +37,8 @@ constexpr auto _cntIrreducible() {
   throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
 }
 
-constexpr uint8_t _getDegree(const std::byte& o) {
-  auto tmp = static_cast<int16_t>(o);
+constexpr auto _getDegree(const std::byte& obj) -> uint8_t {
+  auto tmp = static_cast<int16_t>(obj);
   uint8_t res = 0;
   while (tmp > 1) {
     res++;
@@ -44,17 +47,17 @@ constexpr uint8_t _getDegree(const std::byte& o) {
   return res;
 }
 
-constexpr int16_t _getDegree(const int64_t& o) {
-  if (o > UINT32_MAX) {
+constexpr auto _getDegree(const int64_t& obj) -> int16_t {
+  if (obj > UINT32_MAX) {
     throw std::runtime_error("polynom must be max 31 degree");
   }
-  if (o < 0) {
+  if (obj < 0) {
     throw std::runtime_error("polynom cant be negative");
   }
-  if (o == 0) {
+  if (obj == 0) {
     return -1;
   }
-  auto tmp = o;
+  auto tmp = obj;
   int16_t res = 0;
   while (tmp > 1) {
     res++;
@@ -65,8 +68,8 @@ constexpr int16_t _getDegree(const int64_t& o) {
 
 // 1 == k*r(x) + a(x)*q(x);
 // [q, r]
-std::tuple<std::byte, std::byte> div_modGF(const std::byte& num,
-                                           const std::byte& denom) {
+auto div_modGF(const std::byte& num, const std::byte& denom)
+    -> std::tuple<std::byte, std::byte> {
   if (std::to_integer<uint8_t>(denom) == 0) {
     throw std::invalid_argument("bad argument - denom cant be zero (0x00)");
   }
@@ -87,7 +90,7 @@ std::tuple<std::byte, std::byte> div_modGF(const std::byte& num,
   while (rem_deg >= denom_deg) {
     const auto shift = rem_deg - denom_deg;
 
-    quo |= static_cast<std::byte>(1 << shift);
+    quo ^= static_cast<std::byte>(1 << shift);
     rem ^= denom << shift;
     rem_deg = _getDegree(rem);
   }
@@ -95,8 +98,8 @@ std::tuple<std::byte, std::byte> div_modGF(const std::byte& num,
   return std::tuple{quo, rem};
 }
 
-constexpr std::tuple<uint32_t, uint32_t> div_modGF(const int64_t& num,
-                                                   const int64_t& denom) {
+constexpr auto div_modGF(const int64_t& num, const int64_t& denom)
+    -> std::tuple<uint32_t, uint32_t> {
   if (num > UINT32_MAX || denom > UINT32_MAX) {
     throw std::runtime_error("polynom must be max 31 degree");
   }
@@ -180,7 +183,7 @@ constexpr auto mult(std::byte a, std::byte b, const std::byte& mod)
   }
   std::byte res{0};
   for (int i = 0; i < 8; ++i) {
-    if (std::to_integer<uint8_t>(b) & 1) {
+    if ((std::to_integer<uint8_t>(b) & 1) != 0) {
       res ^= a;
     }
     a = multToX(a, mod);
@@ -189,7 +192,7 @@ constexpr auto mult(std::byte a, std::byte b, const std::byte& mod)
   return res;
 }
 
-constexpr auto binPowGF(const std::byte a, int64_t pow, const std::byte& mod)
+constexpr auto binPowGF(const std::byte num, int64_t pow, const std::byte& mod)
     -> std::byte {
   if (mod == static_cast<std::byte>(0)) {
     throw std::invalid_argument(std::format("bad mod=0"));
@@ -204,7 +207,7 @@ constexpr auto binPowGF(const std::byte a, int64_t pow, const std::byte& mod)
   auto res{static_cast<std::byte>(1)};
   while (pow != 0) {
     if ((pow & 1)) {
-      res = mult(res, a, mod);
+      res = mult(res, num, mod);
     }
     res = mult(res, res, mod);
     pow >>= 1;
@@ -212,7 +215,7 @@ constexpr auto binPowGF(const std::byte a, int64_t pow, const std::byte& mod)
   return res;
 }
 
-constexpr bool isIrreducible(const int64_t poly) {
+constexpr auto isIrreducible(const int64_t poly) -> bool {
   if (poly > UINT32_MAX) {
     throw std::runtime_error("polynom must be max 31 degree");
   }
@@ -220,7 +223,7 @@ constexpr bool isIrreducible(const int64_t poly) {
     throw std::runtime_error("polynom cant be negative");
   }
   const auto deg = _getDegree(poly);
-  const auto checkTo = 1 << ((deg / 2) + 1);
+  const uint32_t checkTo = 1 << ((deg / 2) + 1);
 
   for (uint32_t i = 2; i < checkTo; ++i) {
     if (const auto mod = std::get<1>(div_modGF(poly, i)); mod == 0) {
@@ -244,8 +247,8 @@ constexpr auto allIrreducible(const int16_t _degree) {
     throw std::invalid_argument("degree very big (please use [0;32) degree");
   }
 
-  const uint32_t start = 1u << _degree;
-  const uint32_t end = 1u << (_degree + 1);
+  const uint32_t start = 1U << _degree;
+  const uint32_t end = 1U << (_degree + 1);
 
   std::vector<uint32_t> res{};
   for (uint32_t poly = start; poly < end; ++poly) {
@@ -310,7 +313,7 @@ constexpr auto decomposition(int64_t poly) -> std::vector<uint32_t> {
   return res;
 }
 
-constexpr std::string to_string(const int64_t poly) {
+constexpr auto to_string(const int64_t poly) -> std::string {
   if (poly > UINT32_MAX) {
     throw std::runtime_error("polynom must be max 31 degree");
   }
@@ -325,12 +328,29 @@ constexpr std::string to_string(const int64_t poly) {
   const auto deg = _getDegree(poly);
   // TODO::
   for (int16_t i = 1; i < deg; ++i) {
+    if (1 == ((poly >> i) & 1)) {
+      if (meow.str().length() > 0) {
+        meow << " + ";
+      }
+
+      switch (i) {
+        case 0:
+          meow << "1";
+          break;
+        case 1:
+          meow << "x";
+          break;
+        default:
+          meow << std::format("x^{}", i);
+          break;
+      }
+    }
   }
 
   return meow.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const std::byte o) {
+auto operator<<(std::ostream& os, const std::byte o) -> std::ostream& {
   os << std::hex << std::to_integer<uint8_t>(o) << ' ';
   os << to_string(static_cast<int64_t>(o));
   return os;

@@ -1,9 +1,6 @@
 #include <gtest/gtest.h>
+#include <stddef.h>
 
-#include <fstream>
-#include <span>
-#include <string>
-#include <vector>
 
 import math.GaloisFieldPoly;
 import <array>;
@@ -29,6 +26,12 @@ TEST(GF, Multiply) {
 TEST(GF, allIrreducibleFor8) {
   const auto res = meow::math::GaloisFieldPoly::allIrreducibleFor8();
   ASSERT_EQ(res.size(), 30);
+}
+
+TEST(GF, inv) {
+  const auto res = meow::math::GaloisFieldPoly::invElem(
+      static_cast<std::byte>(0xD2), meow::math::GaloisFieldPoly::MOD_byte);
+  ASSERT_EQ(res, static_cast<std::byte>(0xAE));
 }
 
 TEST(GF, decomposition) {
