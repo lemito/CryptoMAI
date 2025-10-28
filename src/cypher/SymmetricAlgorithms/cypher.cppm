@@ -25,6 +25,19 @@ module;
 
 export module cypher;
 
+import <any>;
+import <future>;
+import <vector>;
+import <fstream>;
+import <memory>;
+import <cstddef>;
+import <algorithm>;
+import <type_traits>;
+import <random>;
+import <optional>;
+import <print>;
+import <ranges>;
+
 export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
                                       const std::vector<std::byte>& b) {
   if (a.size() != b.size()) {

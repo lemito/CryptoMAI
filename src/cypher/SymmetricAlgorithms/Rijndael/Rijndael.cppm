@@ -2,11 +2,10 @@
  * https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf
  */
 module;
-
+#include <cstddef>
+#include <vector>
 export module Rijndael;
 import cypher;
-import <cstddef>;
-import <vector>;
 
 export namespace meow::cypher::symm::Rijndael {
 class Rijndael final : public meow::cypher::symm::IGenRoundKey,
@@ -16,32 +15,36 @@ class Rijndael final : public meow::cypher::symm::IGenRoundKey,
   [[nodiscard("")]] constexpr std ::vector<std ::vector<std ::byte>>
   genRoundKeys(const std ::vector<std ::byte>& inputKey) const override {
     // TODO: Implement this pure virtual method.
-    static_assert(false, "Method `genRoundKeys` is not implemented.");
+    // static_assert(false, "Method `genRoundKeys` is not implemented.");
+    return {{}};
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encryptDecryptBlock(
       const std ::vector<std ::byte>& inputBlock,
       const std ::vector<std ::byte>& roundKey) const override {
     // TODO: Implement this pure virtual method.
-    static_assert(false, "Method `encryptDecryptBlock` is not implemented.");
+    // static_assert(false, "Method `encryptDecryptBlock` is not implemented.")
+    return {};
   }
 
   constexpr void setRoundKeys(
       const std ::vector<std ::byte>& encryptionKey) override {
     // TODO: Implement this pure virtual method.
-    static_assert(false, "Method `setRoundKeys` is not implemented.");
+    // static_assert(false, "Method `setRoundKeys` is not implemented.");
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encrypt(
       const std ::vector<std ::byte>& in) const override {
     // TODO: Implement this pure virtual method.
-    static_assert(false, "Method `encrypt` is not implemented.");
+    // static_assert(false, "Method `encrypt` is not implemented.");
+    return {};
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> decrypt(
       const std ::vector<std ::byte>& in) const override {
     // TODO: Implement this pure virtual method.
-    static_assert(false, "Method `decrypt` is not implemented.");
+    // static_assert(false, "Method `decrypt` is not implemented.");
+    return {};
   }
 };
 
