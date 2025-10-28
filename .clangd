@@ -33,6 +33,9 @@ Diagnostics:
       - modernize-*
       - performance-*
       - readability-*
+      - bugprone-*
+      - google-*
+      - cppcoreguidelines-*
 
 Hover:
   ShowAKA: Yes
