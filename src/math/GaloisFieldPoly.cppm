@@ -16,6 +16,7 @@ export module math.GaloisFieldPoly;
 import <array>;
 import <cstddef>;
 import <tuple>;
+import <iterator>;
 
 export namespace meow::math::GaloisFieldPoly {
 class GaloisFieldPoly {
@@ -64,9 +65,12 @@ class GaloisFieldPoly {
     return res;
   }
 
-  static constexpr uint8_t _getDegree(const uint32_t& o) {
+  static constexpr int16_t _getDegree(const uint32_t& o) {
+    if (o == 0) {
+      return -1;
+    }
     auto tmp = o;
-    uint8_t res = 0;
+    int16_t res = 0;
     while (tmp > 1) {
       res++;
       tmp >>= 1;
@@ -84,8 +88,7 @@ class GaloisFieldPoly {
     if (std::to_integer<uint8_t>(num._byte) == 0) {
       return std::tuple{GaloisFieldPoly(static_cast<std::byte>(0x00)), num};
     }
-    if (std::to_integer<uint8_t>(num._byte) ==
-        std::to_integer<uint8_t>(denom._byte)) {
+    if (num == denom) {
       return std::tuple{GaloisFieldPoly(static_cast<std::byte>(0x01)),
                         GaloisFieldPoly(static_cast<std::byte>(0x00))};
     }
@@ -128,12 +131,27 @@ class GaloisFieldPoly {
     while (rem_deg >= denom_deg) {
       const auto shift = rem_deg - denom_deg;
 
-      quo |= (1 << shift);
+      quo ^= (1 << shift);
       rem ^= (denom << shift);
       rem_deg = _getDegree(rem);
     }
 
     return std::tuple{quo, rem};
+  }
+
+  // https://en.wikipedia.org/wiki/M%C3%B6bius_function
+  /**
+   * @brief
+   * @tparam _degree `
+   * @return
+   * матан снова всё порешал и количество можно подсчитать формулкой
+   */
+  template <int64_t _degree>
+  static constexpr auto _cntIrreducible() {
+    static_assert(_degree >= 0, "degree cannot be negative");
+    static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
+
+    throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
   }
 
  public:
@@ -193,6 +211,9 @@ class GaloisFieldPoly {
   // тут по вакту делаем a(x)*b(x) % mod m(x)
   static constexpr auto mult(GaloisFieldPoly a, GaloisFieldPoly b,
                              const GaloisFieldPoly& mod) -> GaloisFieldPoly {
+    if (mod == 0) {
+      throw std::invalid_argument("mod cant be == 0");
+    }
     std::byte res{0};
     for (int i = 0; i < 8; ++i) {
       if (std::to_integer<uint8_t>(b._byte) & 1) {
@@ -291,34 +312,73 @@ class GaloisFieldPoly {
     return binPowGF(obj, N - 2, mod);
   }
 
-  template <int32_t _degree>
-  static constexpr auto allIrreducible() {
-    static_assert(_degree >= 0, "degree cannot be negative");
-    static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
+  // template <int32_t _degree>
+  static constexpr auto allIrreducible(const int16_t _degree) {
+    if (_degree < 0) {
+      throw std::invalid_argument("degree cannot be negative");
+    }
+    if (_degree > 32) {
+      throw std::invalid_argument("degree very big (please use [0;32) degree");
+    }
 
-    constexpr uint32_t start = 1u << _degree;
-    constexpr uint32_t end = 1u << (_degree + 1);
+    const uint32_t start = 1u << _degree;
+    const uint32_t end = 1u << (_degree + 1);
 
-    constexpr size_t _cnt = []() constexpr {
-      size_t cnt = 0;
-      for (uint32_t poly = start; poly < end; ++poly) {
-        if (isIrreducible(poly)) {
-          ++cnt;
-        }
-      }
-      return cnt;
-    }();
-
-    std::array<uint32_t, _cnt> res{};
-    size_t ix = 0;
+    std::vector<uint32_t> res{};
     for (uint32_t poly = start; poly < end; ++poly) {
       if (isIrreducible(poly)) {
-        res[ix++] = poly;
+        res.push_back(poly);
       }
     }
     return res;
   }
 
-  static constexpr auto allIrreducibleFor8() { return allIrreducible<8>(); }
+  static constexpr auto allIrreducibleFor8() { return allIrreducible(8); }
+
+  static constexpr auto decomposition(uint32_t poly) -> std::vector<uint32_t> {
+    if (poly == 0) {
+      return {};
+    }
+
+    const auto deg = _getDegree(poly);
+    if (deg == 0) {
+      return {1};
+    }
+
+    if (isIrreducible(poly)) {
+      return {poly};
+    }
+
+    std::vector<uint32_t> pre_res;
+    for (int16_t i = 1; i <= (deg / 2); ++i) {
+      auto irr = allIrreducible(i);
+      pre_res.insert(pre_res.end(), std::make_move_iterator(irr.begin()),
+                     std::make_move_iterator(irr.end()));
+    }
+
+    std::vector<uint32_t> res;
+
+    for (const auto irredPoly : pre_res) {
+      while (std::get<1>(div_modGF(poly, irredPoly)) == 0) {
+        res.push_back(irredPoly);
+        poly = std::get<0>(div_modGF(poly, irredPoly));
+
+        if (poly == 1) {
+          return res;
+        }
+
+        if (isIrreducible(poly)) {
+          res.push_back(poly);
+          return res;
+        }
+      }
+    }
+
+    if (poly != 1) {
+      res.push_back(poly);
+    }
+
+    return res;
+  }
 };
 }  // namespace meow::math::GaloisFieldPoly

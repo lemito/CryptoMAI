@@ -195,12 +195,12 @@ export class DEAL final : public FeistelNet::FeistelNet {
 
 export class DEALAdapter final : public ISymmetricCypher {
   std::shared_ptr<DES::DES> _des{};
-  std::shared_ptr<DEAL> _deal{};
+  std::unique_ptr<DEAL> _deal{};
 
  public:
   DEALAdapter() {
     _des = std::make_shared<DES::DES>();
-    _deal = std::make_shared<DEAL>(_des);
+    _deal = std::make_unique<DEAL>(_des);
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
