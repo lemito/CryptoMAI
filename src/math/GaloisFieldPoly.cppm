@@ -19,26 +19,19 @@ import <cstddef>;
 import <tuple>;
 import <iterator>;
 
-export namespace meow::math::GaloisFieldPoly {
-constinit size_t N = 1 << 8;
-constinit std::byte MOD_byte{
-    0b00011011};  // стандартный неприводимый полином из
-                  // AES, но приведенный (то есть без x^8)
-constinit uint16_t FULL_MOD_byte{
-    0x11B};  // стандартный неприводимый полином из AES
+// https://en.wikipedia.org/wiki/M%C3%B6bius_function
+/**
+ * @brief
+ * @tparam _degree `
+ * @return
+ * матан снова всё порешал и количество можно подсчитать формулкой
+ */
+template <int64_t _degree>
+constexpr auto _cntIrreducible() {
+  static_assert(_degree >= 0, "degree cannot be negative");
+  static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
 
-constexpr auto plus(const std::byte& a, const std::byte& b) -> std::byte {
-  return a ^ b;
-}
-
-// здесь тупо сдвиг вправо + если выход за границу - возврат
-constexpr auto multToX(std::byte a, const std::byte& mod) -> std::byte {
-  const bool hasEight = (std::to_integer<uint16_t>(a) & 0b10000000) != 0;
-  a <<= 1;
-  if (hasEight) {
-    a ^= mod;
-  }
-  return a;
+  throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
 }
 
 constexpr uint8_t _getDegree(const std::byte& o) {
@@ -137,19 +130,46 @@ constexpr std::tuple<uint32_t, uint32_t> div_modGF(const int64_t& num,
   return std::tuple{quo, rem};
 }
 
-// https://en.wikipedia.org/wiki/M%C3%B6bius_function
-/**
- * @brief
- * @tparam _degree `
- * @return
- * матан снова всё порешал и количество можно подсчитать формулкой
- */
-template <int64_t _degree>
-constexpr auto _cntIrreducible() {
-  static_assert(_degree >= 0, "degree cannot be negative");
-  static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
+export namespace meow::math::GaloisFieldPoly {
+constinit size_t N = 1 << 8;
+constinit std::byte MOD_byte{
+    0b00011011};  // стандартный неприводимый полином из
+                  // AES, но приведенный (то есть без x^8)
+constinit uint16_t FULL_MOD_byte{
+    0x11B};  // стандартный неприводимый полином из AES
 
-  throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
+constexpr auto plus(const std::byte& a, const std::byte& b) -> std::byte {
+  return a ^ b;
+}
+
+// здесь тупо сдвиг вправо + если выход за границу - возврат
+constexpr auto multToX(std::byte a, const std::byte& mod) -> std::byte {
+  const bool hasEight = (std::to_integer<uint16_t>(a) & 0b10000000) != 0;
+  a <<= 1;
+  if (hasEight) {
+    a ^= mod;
+  }
+  return a;
+}
+
+constexpr auto div(const int64_t a, const int64_t b) {
+  if (a > UINT32_MAX || b > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (a < 0 || b < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  return std::get<0>(div_modGF(a, b));
+}
+
+constexpr auto mod(const int64_t a, const int64_t b) {
+  if (a > UINT32_MAX || b > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (a < 0 || b < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  return std::get<1>(div_modGF(a, b));
 }
 
 // тут по вакту делаем a(x)*b(x) % mod m(x)
@@ -301,6 +321,11 @@ constexpr std::string to_string(const int64_t poly) {
     return "0";
   }
   std::stringstream meow;
+
+  const auto deg = _getDegree(poly);
+  // TODO::
+  for (int16_t i = 1; i < deg; ++i) {
+  }
 
   return meow.str();
 }
