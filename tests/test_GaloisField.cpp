@@ -9,33 +9,30 @@ import math.GaloisFieldPoly;
 import <array>;
 
 TEST(GF, Add) {
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly a(static_cast<std::byte>(0x57));
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly b(static_cast<std::byte>(0x83));
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly exp(
-      static_cast<std::byte>(0xd4));
-  ASSERT_EQ(a + b, exp);
-  std::cout << exp << std::endl;
+  const auto a(static_cast<std::byte>(0x57));
+  const auto b(static_cast<std::byte>(0x83));
+  constexpr auto exp(static_cast<std::byte>(0xd4));
+  constexpr auto res = meow::math::GaloisFieldPoly::plus(a, b);
+  ASSERT_EQ(res, exp);
 }
 
 TEST(GF, Multiply) {
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly a(static_cast<std::byte>(0x57));
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly b(static_cast<std::byte>(0x83));
-  const meow::math::GaloisFieldPoly::GaloisFieldPoly exp(
-      static_cast<std::byte>(0xc1));
-  const auto meow = a * b;
+  constexpr auto a(static_cast<std::byte>(0x57));
+  constexpr auto b(static_cast<std::byte>(0x83));
+  constexpr auto exp(static_cast<std::byte>(0xc1));
+  const auto meow = meow::math::GaloisFieldPoly::mult(
+      a, b, meow::math::GaloisFieldPoly::MOD_byte);
   ASSERT_EQ(meow, exp);
-  std::cout << exp << std::endl;
+  // std::cout << exp << std::endl;
 }
 
 TEST(GF, allIrreducibleFor8) {
-  const auto res =
-      meow::math::GaloisFieldPoly::GaloisFieldPoly::allIrreducibleFor8();
+  const auto res = meow::math::GaloisFieldPoly::allIrreducibleFor8();
   ASSERT_EQ(res.size(), 30);
 }
 
 TEST(GF, decomposition) {
-  const auto res =
-      meow::math::GaloisFieldPoly::GaloisFieldPoly::decomposition(0xabc);
+  const auto res = meow::math::GaloisFieldPoly::decomposition(0xabc);
   std::cout << "============\n";
   for (auto& elem : res) {
     std::cout << elem << " ";
@@ -44,8 +41,7 @@ TEST(GF, decomposition) {
 }
 
 TEST(GF, decomposition0) {
-  const auto res =
-      meow::math::GaloisFieldPoly::GaloisFieldPoly::decomposition(0x11B);
+  const auto res = meow::math::GaloisFieldPoly::decomposition(0x11B);
   const std::vector<uint32_t> exp{0x11B};  // туточки неприводимый
   ASSERT_EQ(res, exp);
 }

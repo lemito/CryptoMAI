@@ -11,6 +11,7 @@ module;
 #include <cstdint>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <vector>
 export module math.GaloisFieldPoly;
 import <array>;
@@ -19,366 +20,295 @@ import <tuple>;
 import <iterator>;
 
 export namespace meow::math::GaloisFieldPoly {
-class GaloisFieldPoly {
-  static constexpr size_t N = 1 << 8;
-  static constexpr std::byte MOD_byte{
-      0b00011011};  // стандартный неприводимый полином из
-                    // AES, но приведенный (то есть без x^8)
-  static constexpr uint16_t FULL_MOD_byte{
-      0x11B};  // стандартный неприводимый полином из AES
-  std::bitset<8> _bits;
-  std::byte _byte{0};
-  // std::array<bool, 8> _bitRepresent{};
+constinit size_t N = 1 << 8;
+constinit std::byte MOD_byte{
+    0b00011011};  // стандартный неприводимый полином из
+                  // AES, но приведенный (то есть без x^8)
+constinit uint16_t FULL_MOD_byte{
+    0x11B};  // стандартный неприводимый полином из AES
 
-  // constexpr void _byte2arr() {
-  //   for (int16_t i = 7; i >= 0; --i) {
-  //     _bitRepresent[i] = (std::to_integer<uint8_t>(_byte) & (1 << i)) != 0
-  //                            ? std::byte{1}
-  //                            : std::byte{0};
-  //   }
-  // }
+constexpr auto plus(const std::byte& a, const std::byte& b) -> std::byte {
+  return a ^ b;
+}
 
-  static constexpr auto plus(const std::byte& a, const std::byte& b)
-      -> std::byte {
-    return a ^ b;
+// здесь тупо сдвиг вправо + если выход за границу - возврат
+constexpr auto multToX(std::byte a, const std::byte& mod) -> std::byte {
+  const bool hasEight = (std::to_integer<uint16_t>(a) & 0b10000000) != 0;
+  a <<= 1;
+  if (hasEight) {
+    a ^= mod;
+  }
+  return a;
+}
+
+constexpr uint8_t _getDegree(const std::byte& o) {
+  auto tmp = static_cast<int16_t>(o);
+  uint8_t res = 0;
+  while (tmp > 1) {
+    res++;
+    tmp >>= 1;
+  }
+  return res;
+}
+
+constexpr int16_t _getDegree(const int64_t& o) {
+  if (o > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (o < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  if (o == 0) {
+    return -1;
+  }
+  auto tmp = o;
+  int16_t res = 0;
+  while (tmp > 1) {
+    res++;
+    tmp >>= 1;
+  }
+  return res;
+}
+
+// 1 == k*r(x) + a(x)*q(x);
+// [q, r]
+std::tuple<std::byte, std::byte> div_modGF(const std::byte& num,
+                                           const std::byte& denom) {
+  if (std::to_integer<uint8_t>(denom) == 0) {
+    throw std::invalid_argument("bad argument - denom cant be zero (0x00)");
+  }
+  if (std::to_integer<uint8_t>(num) == 0) {
+    return std::tuple{static_cast<std::byte>(0x00), num};
+  }
+  if (num == denom) {
+    return std::tuple{static_cast<std::byte>(0x01),
+                      static_cast<std::byte>(0x00)};
   }
 
-  // здесь тупо сдвиг вправо + если выход за границу - возврат
-  static constexpr auto multToX(GaloisFieldPoly a, const GaloisFieldPoly& mod)
-      -> GaloisFieldPoly {
-    const bool hasEight =
-        (std::to_integer<uint16_t>(a._byte) & 0b10000000) != 0;
-    a._byte <<= 1;
-    if (hasEight) {
-      a._byte ^= mod._byte;
+  auto quo = std::byte();
+  auto rem = num;
+
+  auto rem_deg = _getDegree(rem);
+  const auto denom_deg = _getDegree(denom);
+
+  while (rem_deg >= denom_deg) {
+    const auto shift = rem_deg - denom_deg;
+
+    quo |= static_cast<std::byte>(1 << shift);
+    rem ^= denom << shift;
+    rem_deg = _getDegree(rem);
+  }
+
+  return std::tuple{quo, rem};
+}
+
+constexpr std::tuple<uint32_t, uint32_t> div_modGF(const int64_t& num,
+                                                   const int64_t& denom) {
+  if (num > UINT32_MAX || denom > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (num < 0 || denom < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  if (denom == 0) {
+    throw std::invalid_argument("bad argument - denom cant be zero (0x00)");
+  }
+  if (num == 0) {
+    return std::tuple{0, num};
+  }
+  if (num == denom) {
+    return std::tuple{1, 0};
+  }
+
+  uint32_t quo = 0;
+  auto rem = num;
+
+  auto rem_deg = _getDegree(rem);
+  const auto denom_deg = _getDegree(denom);
+
+  while (rem_deg >= denom_deg) {
+    const auto shift = rem_deg - denom_deg;
+
+    quo ^= (1 << shift);
+    rem ^= (denom << shift);
+    rem_deg = _getDegree(rem);
+  }
+
+  return std::tuple{quo, rem};
+}
+
+// https://en.wikipedia.org/wiki/M%C3%B6bius_function
+/**
+ * @brief
+ * @tparam _degree `
+ * @return
+ * матан снова всё порешал и количество можно подсчитать формулкой
+ */
+template <int64_t _degree>
+constexpr auto _cntIrreducible() {
+  static_assert(_degree >= 0, "degree cannot be negative");
+  static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
+
+  throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
+}
+
+// тут по вакту делаем a(x)*b(x) % mod m(x)
+constexpr auto mult(std::byte a, std::byte b, const std::byte& mod)
+    -> std::byte {
+  if (std::to_integer<uint8_t>(mod) == 0) {
+    throw std::invalid_argument("mod cant be == 0");
+  }
+  std::byte res{0};
+  for (int i = 0; i < 8; ++i) {
+    if (std::to_integer<uint8_t>(b) & 1) {
+      res ^= a;
     }
-    return {a};
+    a = multToX(a, mod);
+    b >>= 1;
+  }
+  return res;
+}
+
+constexpr auto binPowGF(const std::byte a, int64_t pow, const std::byte& mod)
+    -> std::byte {
+  if (mod == static_cast<std::byte>(0)) {
+    throw std::invalid_argument(std::format("bad mod=0"));
+  }
+  if (pow < 0) {
+    throw std::invalid_argument("bad pow - only pow>=0 allowed");
+  }
+  if (pow == 0) {
+    return static_cast<std::byte>(1);
   }
 
-  static constexpr uint8_t _getDegree(const GaloisFieldPoly& o) {
-    auto tmp = static_cast<int16_t>(o._byte);
-    uint8_t res = 0;
-    while (tmp > 1) {
-      res++;
-      tmp >>= 1;
+  auto res{static_cast<std::byte>(1)};
+  while (pow != 0) {
+    if ((pow & 1)) {
+      res = mult(res, a, mod);
     }
-    return res;
+    res = mult(res, res, mod);
+    pow >>= 1;
   }
+  return res;
+}
 
-  static constexpr int16_t _getDegree(const uint32_t& o) {
-    if (o == 0) {
-      return -1;
+constexpr bool isIrreducible(const int64_t poly) {
+  if (poly > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (poly < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  const auto deg = _getDegree(poly);
+  const auto checkTo = 1 << ((deg / 2) + 1);
+
+  for (uint32_t i = 2; i < checkTo; ++i) {
+    if (const auto mod = std::get<1>(div_modGF(poly, i)); mod == 0) {
+      return false;
     }
-    auto tmp = o;
-    int16_t res = 0;
-    while (tmp > 1) {
-      res++;
-      tmp >>= 1;
-    }
-    return res;
+  }
+  return true;
+}
+
+// следует из теоремки a^(p^n) - a = 0
+constexpr auto invElem(const std::byte& obj, const std::byte& mod)
+    -> std::byte {
+  return binPowGF(obj, N - 2, mod);
+}
+
+constexpr auto allIrreducible(const int16_t _degree) {
+  if (_degree < 0) {
+    throw std::invalid_argument("degree cannot be negative");
+  }
+  if (_degree > 32) {
+    throw std::invalid_argument("degree very big (please use [0;32) degree");
   }
 
-  // 1 == k*r(x) + a(x)*q(x);
-  // [q, r]
-  static std::tuple<GaloisFieldPoly&&, GaloisFieldPoly&&> div_modGF(
-      const GaloisFieldPoly& num, const GaloisFieldPoly& denom) {
-    if (std::to_integer<uint8_t>(denom._byte) == 0) {
-      throw std::invalid_argument("bad argument - denom cant be zero (0x00)");
-    }
-    if (std::to_integer<uint8_t>(num._byte) == 0) {
-      return std::tuple{GaloisFieldPoly(static_cast<std::byte>(0x00)), num};
-    }
-    if (num == denom) {
-      return std::tuple{GaloisFieldPoly(static_cast<std::byte>(0x01)),
-                        GaloisFieldPoly(static_cast<std::byte>(0x00))};
-    }
+  const uint32_t start = 1u << _degree;
+  const uint32_t end = 1u << (_degree + 1);
 
-    auto quo = GaloisFieldPoly();
-    auto rem = num;
-
-    auto rem_deg = _getDegree(rem);
-    const auto denom_deg = _getDegree(denom);
-
-    while (rem_deg >= denom_deg) {
-      const auto shift = rem_deg - denom_deg;
-
-      quo._byte |= static_cast<std::byte>(1 << shift);
-      rem._byte ^= denom._byte << shift;
-      rem_deg = _getDegree(rem);
-    }
-
-    return std::tuple{quo, rem};
-  }
-
-  static constexpr std::tuple<uint32_t, uint32_t> div_modGF(
-      const uint32_t& num, const uint32_t& denom) {
-    if (denom == 0) {
-      throw std::invalid_argument("bad argument - denom cant be zero (0x00)");
-    }
-    if (num == 0) {
-      return std::tuple{0, num};
-    }
-    if (num == denom) {
-      return std::tuple{1, 0};
-    }
-
-    uint32_t quo = 0;
-    auto rem = num;
-
-    auto rem_deg = _getDegree(rem);
-    const auto denom_deg = _getDegree(denom);
-
-    while (rem_deg >= denom_deg) {
-      const auto shift = rem_deg - denom_deg;
-
-      quo ^= (1 << shift);
-      rem ^= (denom << shift);
-      rem_deg = _getDegree(rem);
-    }
-
-    return std::tuple{quo, rem};
-  }
-
-  // https://en.wikipedia.org/wiki/M%C3%B6bius_function
-  /**
-   * @brief
-   * @tparam _degree `
-   * @return
-   * матан снова всё порешал и количество можно подсчитать формулкой
-   */
-  template <int64_t _degree>
-  static constexpr auto _cntIrreducible() {
-    static_assert(_degree >= 0, "degree cannot be negative");
-    static_assert(_degree < 32, "degree very big (please use [0;32) degree)");
-
-    throw std::runtime_error("THIS FUNCTION NOT DONE!!!!!!!!!!!!!!!");
-  }
-
- public:
-  GaloisFieldPoly() = default;
-  GaloisFieldPoly(const GaloisFieldPoly& other) {
-    _byte = other._byte;
-    _bits = std::bitset<8>(std::to_integer<uint8_t>(_byte));
-    // _byte2arr();
-  }
-  GaloisFieldPoly(const std::byte& byte) {
-    _byte = byte;
-    _bits = std::bitset<8>(std::to_integer<uint8_t>(_byte));
-    // _byte2arr();
-  }
-  GaloisFieldPoly(GaloisFieldPoly&& other) noexcept : _byte(other._byte) {
-    // _byte2arr();
-    _bits = std::bitset<8>(std::to_integer<uint8_t>(_byte));
-  }
-  GaloisFieldPoly& operator=(const GaloisFieldPoly& other) {
-    if (this == &other) return *this;
-    _byte = other._byte;
-    _bits = other._bits;
-    // _byte2arr();
-    return *this;
-  }
-  GaloisFieldPoly& operator=(GaloisFieldPoly&& other) noexcept {
-    if (this == &other) return *this;
-    _byte = other._byte;
-    _bits = std::move(other._bits);
-    // _byte2arr();
-    return *this;
-  }
-  ~GaloisFieldPoly() = default;
-
-  friend bool operator==(const GaloisFieldPoly& lhs,
-                         const GaloisFieldPoly& rhs) {
-    return lhs._byte == rhs._byte;
-  }
-  friend bool operator!=(const GaloisFieldPoly& lhs,
-                         const GaloisFieldPoly& rhs) {
-    return !(lhs == rhs);
-  }
-
-  bool operator==(const int i) const {
-    return std::to_integer<int>(_byte) == i;
-  }
-
-  friend std::ostream& operator<<(std::ostream& os,
-                                  const GaloisFieldPoly& obj) {
-    os << "_byte: 0x" << std::hex << std::to_integer<uint16_t>(obj._byte);
-    os << " _bits: " << obj._bits.to_string();
-    return os;
-  }
-
-  explicit operator int() const { return std::to_integer<int>(_byte); }
-
-  // тут по вакту делаем a(x)*b(x) % mod m(x)
-  static constexpr auto mult(GaloisFieldPoly a, GaloisFieldPoly b,
-                             const GaloisFieldPoly& mod) -> GaloisFieldPoly {
-    if (mod == 0) {
-      throw std::invalid_argument("mod cant be == 0");
-    }
-    std::byte res{0};
-    for (int i = 0; i < 8; ++i) {
-      if (std::to_integer<uint8_t>(b._byte) & 1) {
-        res ^= a._byte;
-      }
-      a = multToX(a, mod);
-      b._byte >>= 1;
-    }
-    return {res};
-  }
-
-  constexpr GaloisFieldPoly& operator+=(const GaloisFieldPoly& b) {
-    _byte ^= b._byte;
-    _bits = std::bitset<8>(std::to_integer<uint8_t>(_byte));
-    return *this;
-  }
-
-  constexpr GaloisFieldPoly operator+(const GaloisFieldPoly& b) const {
-    auto tmp = *this;
-    tmp += b;
-    return tmp;
-  }
-
-  constexpr GaloisFieldPoly& operator*=(const GaloisFieldPoly& b) {
-    *this = mult(*this, b, GaloisFieldPoly(MOD_byte));
-    return *this;
-  }
-
-  constexpr GaloisFieldPoly operator*(const GaloisFieldPoly& b) const {
-    auto tmp = *this;
-    tmp *= b;
-    return tmp;
-  }
-
-  constexpr GaloisFieldPoly& operator/=(const GaloisFieldPoly& b) {
-    *this = std::get<0>(div_modGF(*this, b));
-    return *this;
-  }
-
-  constexpr GaloisFieldPoly operator/(const GaloisFieldPoly& b) const {
-    auto tmp = *this;
-    tmp /= b;
-    return tmp;
-  }
-
-  constexpr GaloisFieldPoly& operator%=(const GaloisFieldPoly& b) {
-    *this = std::get<1>(div_modGF(*this, b));
-    return *this;
-  }
-
-  constexpr GaloisFieldPoly operator%(const GaloisFieldPoly& b) const {
-    auto tmp = *this;
-    tmp %= b;
-    return tmp;
-  }
-
-  static constexpr auto binPowGF(const GaloisFieldPoly a, int64_t pow,
-                                 const GaloisFieldPoly& mod)
-      -> GaloisFieldPoly {
-    if (mod == GaloisFieldPoly(static_cast<std::byte>(0))) {
-      throw std::invalid_argument(std::format("bad mod=0"));
-    }
-    if (pow < 0) {
-      throw std::invalid_argument("bad pow - only pow>=0 allowed");
-    }
-    if (pow == 0) {
-      return {(static_cast<std::byte>(1))};
-    }
-
-    GaloisFieldPoly res{static_cast<std::byte>(1)};
-    while (pow != 0) {
-      if ((pow & 1)) {
-        res = mult(res, a, mod);
-      }
-      res = mult(res, res, mod);
-      pow >>= 1;
-    }
-    return res;
-  }
-
-  static constexpr bool isIrreducible(const uint32_t obj) {
-    const auto deg = _getDegree(obj);
-    const auto checkTo = 1 << ((deg / 2) + 1);
-
-    for (uint32_t i = 2; i < checkTo; ++i) {
-      if (const auto mod = std::get<1>(div_modGF(obj, i)); mod == 0) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // следует из теоремки a^(p^n) - a = 0
-  static constexpr auto invElem(const GaloisFieldPoly& obj,
-                                const GaloisFieldPoly& mod) -> GaloisFieldPoly {
-    return binPowGF(obj, N - 2, mod);
-  }
-
-  // template <int32_t _degree>
-  static constexpr auto allIrreducible(const int16_t _degree) {
-    if (_degree < 0) {
-      throw std::invalid_argument("degree cannot be negative");
-    }
-    if (_degree > 32) {
-      throw std::invalid_argument("degree very big (please use [0;32) degree");
-    }
-
-    const uint32_t start = 1u << _degree;
-    const uint32_t end = 1u << (_degree + 1);
-
-    std::vector<uint32_t> res{};
-    for (uint32_t poly = start; poly < end; ++poly) {
-      if (isIrreducible(poly)) {
-        res.push_back(poly);
-      }
-    }
-    return res;
-  }
-
-  static constexpr auto allIrreducibleFor8() { return allIrreducible(8); }
-
-  static constexpr auto decomposition(uint32_t poly) -> std::vector<uint32_t> {
-    if (poly == 0) {
-      return {};
-    }
-
-    const auto deg = _getDegree(poly);
-    if (deg == 0) {
-      return {1};
-    }
-
+  std::vector<uint32_t> res{};
+  for (uint32_t poly = start; poly < end; ++poly) {
     if (isIrreducible(poly)) {
-      return {poly};
-    }
-
-    std::vector<uint32_t> pre_res;
-    for (int16_t i = 1; i <= (deg / 2); ++i) {
-      auto irr = allIrreducible(i);
-      pre_res.insert(pre_res.end(), std::make_move_iterator(irr.begin()),
-                     std::make_move_iterator(irr.end()));
-    }
-
-    std::vector<uint32_t> res;
-
-    for (const auto irredPoly : pre_res) {
-      while (std::get<1>(div_modGF(poly, irredPoly)) == 0) {
-        res.push_back(irredPoly);
-        poly = std::get<0>(div_modGF(poly, irredPoly));
-
-        if (poly == 1) {
-          return res;
-        }
-
-        if (isIrreducible(poly)) {
-          res.push_back(poly);
-          return res;
-        }
-      }
-    }
-
-    if (poly != 1) {
       res.push_back(poly);
     }
-
-    return res;
   }
-};
+  return res;
+}
+
+constexpr auto allIrreducibleFor8() { return allIrreducible(8); }
+
+constexpr auto decomposition(int64_t poly) -> std::vector<uint32_t> {
+  if (poly > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (poly < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  if (poly == 0) {
+    return {};
+  }
+
+  const auto deg = _getDegree(poly);
+  if (deg == 0) {
+    return {1};
+  }
+
+  if (isIrreducible(poly)) {
+    return {static_cast<uint32_t>(poly)};
+  }
+
+  std::vector<uint32_t> pre_res;
+  for (int16_t i = 1; i <= (deg / 2); ++i) {
+    auto irr = allIrreducible(i);
+    pre_res.insert(pre_res.end(), std::make_move_iterator(irr.begin()),
+                   std::make_move_iterator(irr.end()));
+  }
+
+  std::vector<uint32_t> res;
+
+  for (const auto irredPoly : pre_res) {
+    while (std::get<1>(div_modGF(poly, irredPoly)) == 0) {
+      res.push_back(irredPoly);
+      poly = std::get<0>(div_modGF(poly, irredPoly));
+
+      if (poly == 1) {
+        return res;
+      }
+
+      if (isIrreducible(poly)) {
+        res.push_back(poly);
+        return res;
+      }
+    }
+  }
+
+  if (poly != 1) {
+    res.push_back(poly);
+  }
+
+  return res;
+}
+
+constexpr std::string to_string(const int64_t poly) {
+  if (poly > UINT32_MAX) {
+    throw std::runtime_error("polynom must be max 31 degree");
+  }
+  if (poly < 0) {
+    throw std::runtime_error("polynom cant be negative");
+  }
+  if (poly == 0) {
+    return "0";
+  }
+  std::stringstream meow;
+
+  return meow.str();
+}
+
+std::ostream& operator<<(std::ostream& os, const std::byte o) {
+  os << std::hex << std::to_integer<uint8_t>(o) << ' ';
+  os << to_string(static_cast<int64_t>(o));
+  return os;
+}
+
 }  // namespace meow::math::GaloisFieldPoly
