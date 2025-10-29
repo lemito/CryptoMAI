@@ -99,9 +99,10 @@ target_link_libraries(CryptoGaloisFieldPoly PUBLIC)
 target_compile_features(Rijndael PRIVATE cxx_std_23)
 target_sources(Rijndael PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/utils.cppm
         src/cypher/SymmetricAlgorithms/Rijndael/Rijndael.cppm
 )
-target_link_libraries(Rijndael PUBLIC CryptoSymmetric)
+target_link_libraries(Rijndael PUBLIC CryptoSymmetric CryptoGaloisFieldPoly)
 
 target_link_libraries(Crypto INTERFACE
         CryptoMath
@@ -113,15 +114,16 @@ target_link_libraries(Crypto INTERFACE
         Rijndael
 )
 
-#foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
-#    target_compile_options(${target} PRIVATE
-#            -fmodules
-#            -fbuiltin-module-map
-#            -fimplicit-modules
-#            -stdlib=libc++
-#            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
-#    )
-#endforeach ()
+foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
+   target_compile_options(${target} PRIVATE
+           -fmodules
+           -fbuiltin-module-map
+           -fimplicit-modules
+           -stdlib=libc++
+           -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
+   )
+#   set_target_properties(${target} PROPERTIES CXX_STANDART 23 CXX_STANDART_REQUIRED ON CXX_EXTENSIONS OFF CXX_MODULE_STD 1)
+endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
