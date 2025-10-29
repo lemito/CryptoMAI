@@ -1,6 +1,7 @@
 /**
  * все тот же стандарт -
  * https://nvlpubs.nist.gov/nistpubs/fips/nist.fips.197.pdf
+ * https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
  */
 module;
 #include <cstddef>
@@ -13,6 +14,16 @@ export namespace meow::cypher::symm::Rijndael {
 class Rijndael final : public IGenRoundKey,
                        IEncryptionDecryption,
                        ISymmetricCypher {
+/**
+state - это массив массивов байт 4x4
+но байты идут вниз
+0  4  8  12
+1  5  9  13
+2  6 10  14
+3  7 11  15
+*/
+
+
   // Number of columns (32-bit words) comprising the State
   size_t _Nb = 4;
   // Number of 32-bit words comprising the Cipher Key
