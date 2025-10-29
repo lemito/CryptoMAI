@@ -9,20 +9,21 @@ module;
 export module Rijndael;
 import cypher;
 import <array>;
+import <span>;
+import <cstdint>;
 
 export namespace meow::cypher::symm::Rijndael {
 class Rijndael final : public IGenRoundKey,
                        IEncryptionDecryption,
                        ISymmetricCypher {
-/**
-state - это массив массивов байт 4x4
-но байты идут вниз
-0  4  8  12
-1  5  9  13
-2  6 10  14
-3  7 11  15
-*/
-
+  /**
+  state - это массив массивов байт 4x4
+  но байты идут вниз
+  0  4  8  12
+  1  5  9  13
+  2  6 10  14
+  3  7 11  15
+  */
 
   // Number of columns (32-bit words) comprising the State
   size_t _Nb = 4;
@@ -38,13 +39,49 @@ state - это массив массивов байт 4x4
   std::array<std::byte, 256> _inv_S_box;
 
   [[nodiscard]] constexpr auto getElemFromS(const size_t row,
-                                            const size_t column) const
-      -> std::byte {
+                                            const size_t column) -> std::byte& {
+    if (row >= 16) {
+      throw std::runtime_error("row cant be >= 16");
+    }
+    if (column >= 16) {
+      throw std::runtime_error("column cant be >= 16");
+    }
     return _S_box[16 * row + column];
   }
+
+  [[nodiscard]] constexpr auto getElemFromIS(const size_t row,
+                                             const size_t column)
+      -> std::byte& {
+    if (row >= 16) {
+      throw std::runtime_error("row cant be >= 16");
+    }
+    if (column >= 16) {
+      throw std::runtime_error("column cant be >= 16");
+    }
+    return _inv_S_box[16 * row + column];
+  }
+
+  [[nodiscard]] constexpr auto getElemFromS(const size_t row,
+                                            const size_t column) const
+      -> const std::byte& {
+    if (row >= 16) {
+      throw std::runtime_error("row cant be >= 16");
+    }
+    if (column >= 16) {
+      throw std::runtime_error("column cant be >= 16");
+    }
+    return _S_box[16 * row + column];
+  }
+
   [[nodiscard]] constexpr auto getElemFromIS(const size_t row,
                                              const size_t column) const
-      -> std::byte {
+      -> const std::byte& {
+    if (row >= 16) {
+      throw std::runtime_error("row cant be >= 16");
+    }
+    if (column >= 16) {
+      throw std::runtime_error("column cant be >= 16");
+    }
     return _inv_S_box[16 * row + column];
   }
 
