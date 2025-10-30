@@ -6,6 +6,8 @@
 module;
 // #include <cstddef>
 #include <vector>
+
+#include "debug.h"
 export module Rijndael;
 import cypher;
 import math.GaloisFieldPoly;
@@ -103,13 +105,39 @@ class Rijndael final : public ISymmetricCypher,
 
   // TODO" вот это вот всё туду
 
-  constexpr void shiftRows(std::span<std::byte> state) const {}
+  // сдвиг строчки влево
+  constexpr void shiftRows(std::span<std::byte> state) const {
+    const auto copy = state;
+    for (size_t r = 1; r < 4; ++r) {
+      for (size_t c = 0; c < _Nb; ++c) {
+        const size_t pos = (c - r + _Nb) % _Nb;
+        state[r + 4 * pos] = copy[r + 4 * c];
+      }
+    }
+  }
 
-  constexpr void inv_shiftRows(std::span<std::byte> state) const {}
+  // а туточки вправо
+  constexpr void inv_shiftRows(std::span<std::byte> state) const {
+    const auto copy = state;
+    for (size_t r = 1; r < 4; ++r) {
+      for (size_t c = 0; c < _Nb; ++c) {
+        const size_t pos = (c + r) % _Nb;
+        state[r + 4 * pos] = copy[r + 4 * c];
+      }
+    }
+  }
 
-  constexpr void subBytes(std::span<std::byte> state) const {}
+  constexpr void subBytes(std::span<std::byte> state) const {
+    for (size_t i = 0; i < state.size(); ++i) {
+      state[i] = _S_box[static_cast<uint8_t>(state[i])];
+    }
+  }
 
-  constexpr void inv_subBytes(std::span<std::byte> state) {}
+  constexpr void inv_subBytes(std::span<std::byte> state) const {
+    for (size_t i = 0; i < state.size(); ++i) {
+      state[i] = _inv_S_box[static_cast<uint8_t>(state[i])];
+    }
+  }
 
   // [[nodiscard]] constexpr auto subWord(const uint32_t in) const -> uint32_t {
   //   // тут берем 4 байта (это слово) и возвращаем новые 4, после подстановки
@@ -124,6 +152,7 @@ class Rijndael final : public ISymmetricCypher,
   //
   //   return res;
   // }
+
   constexpr auto subWord(std::span<std::byte> in) const -> void {
     if (in.size() != 4) {
       throw std::invalid_argument("word must be 4 bytes len");
@@ -133,9 +162,115 @@ class Rijndael final : public ISymmetricCypher,
     }
   }
 
-  constexpr void mixColumns(std::span<std::byte> state) const {}
+  /*  тут происходит преобразование колонки: s` = s * a(x); s и s` - колонки
+   *  a(x) = 0x03x^2 + 0x01x^2 + 0x01 x + 0x02
+   *  s`0	 	02	03	01	01	s0
+   *  s`1	        01	02	03	01	s1
+   *  s`2	   =    01	01	02	03	s2
+   * s`3	        03	01	01	02	s3
+   *  поэтому тут нужно GF то самое волшебное -- сами эти полиномы являются
+   * полиномами GF
+   *
+   * или матричное умножение
+   */
+  constexpr void mixColumns(std::span<std::byte> state) const {
+    auto copy = state;
+    for (size_t c = 0; c < _Nb; ++c) {
+      const size_t off = 4 * c;
 
-  constexpr void inv_mixColumns(std::span<std::byte> state) const {}
+      copy[off] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x02),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 1],
+                                      static_cast<std::byte>(0x03),
+                                      static_cast<std::byte>(_mod)) ^
+          state[off + 2] ^ state[off + 3];
+      copy[off + 1] = state[off] ^
+                      math::GaloisFieldPoly::mult(
+                          state[off + 1], static_cast<std::byte>(0x02),
+                          static_cast<std::byte>(_mod)) ^
+                      math::GaloisFieldPoly::mult(
+                          state[off + 2], static_cast<std::byte>(0x03),
+                          static_cast<std::byte>(_mod)) ^
+                      state[off + 3];
+      copy[off + 2] = state[off] ^ state[off + 1] ^
+                      math::GaloisFieldPoly::mult(
+                          state[off + 2], static_cast<std::byte>(0x02),
+                          static_cast<std::byte>(_mod)) ^
+                      math::GaloisFieldPoly::mult(state[off + 3],
+                                                  static_cast<std::byte>(0x03),
+                                                  static_cast<std::byte>(_mod));
+      copy[off + 3] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x03),
+                                      static_cast<std::byte>(_mod)) ^
+          state[off + 1] ^ state[off + 2] ^
+          math::GaloisFieldPoly::mult(state[off + 3],
+                                      static_cast<std::byte>(0x02),
+                                      static_cast<std::byte>(_mod));
+    }
+    std::ranges::copy(copy, state.begin());
+  }
+
+  /*
+   *  a^-1(x) = 0x0bx^3 + 0x0dx^2 + 0x09x + 0x0e
+   *  или матрица
+  *
+   */
+  constexpr void inv_mixColumns(std::span<std::byte> state) const {
+    auto copy = state;
+    for (size_t c = 0; c < _Nb; ++c) {
+      const size_t off = 4 * c;
+
+      copy[off] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0e),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 1],
+                                      static_cast<std::byte>(0x0b),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 2],
+                                      static_cast<std::byte>(0x0d),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 3],
+                                      static_cast<std::byte>(0x09),
+                                      static_cast<std::byte>(_mod));
+      copy[off + 1] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x09),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 1],
+                                      static_cast<std::byte>(0x0e),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 2],
+                                      static_cast<std::byte>(0x0b),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0d),
+                                      static_cast<std::byte>(_mod));
+      copy[off + 2] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0d),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 1],
+                                      static_cast<std::byte>(0x09),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 2],
+                                      static_cast<std::byte>(0x0e),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 3],
+                                      static_cast<std::byte>(0x0b),
+                                      static_cast<std::byte>(_mod));
+      copy[off + 3] =
+          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0b),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 1],
+                                      static_cast<std::byte>(0x0d),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 2],
+                                      static_cast<std::byte>(0x09),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(state[off + 3],
+                                      static_cast<std::byte>(0x0e),
+                                      static_cast<std::byte>(_mod));
+    }
+    std::ranges::copy(copy, state.begin());
+  }
 
  public:
   static auto affine(const std::byte inv) -> std::byte {
@@ -184,14 +319,16 @@ class Rijndael final : public ISymmetricCypher,
     }
   }
 
-  constexpr std::vector<std::byte> rotWord(const std::vector<std::byte>& word) {
+  [[nodiscard]] static constexpr std::vector<std::byte> rotWord(
+      const std::vector<std::byte>& word) {
     if (word.size() != 4) {
       throw std::invalid_argument("word must be 4 bytes len");
     }
-    return std::vector<std::byte>{word[1], word[2], word[3], word[0]};
+    return std::vector{word[1], word[2], word[3], word[0]};
   }
 
-  constexpr std::vector<std::byte> subWord(const std::vector<std::byte>& word) {
+  [[nodiscard]] constexpr std::vector<std::byte> subWord(
+      const std::vector<std::byte>& word) const {
     std::vector<std::byte> result(4);
     for (size_t i = 0; i < 4; ++i) {
       result[i] = _S_box[static_cast<uint8_t>(word[i])];
@@ -219,8 +356,8 @@ class Rijndael final : public ISymmetricCypher,
 
       if (i % _Nk == 0) {
         temp = subWord(rotWord(temp));
-        uint32_t rcon_val = _rcon[i / _Nk - 1];
-        std::byte rcon_byte = static_cast<std::byte>((rcon_val >> 24) & 0xFF);
+        const uint32_t rcon_val = _rcon[i / _Nk - 1];
+        const auto rcon_byte = static_cast<std::byte>((rcon_val >> 24) & 0xFF);
         temp[0] = temp[0] ^ rcon_byte;
       } else if (_Nk > 6 && i % _Nk == 4) {
         temp = subWord(temp);
@@ -238,7 +375,7 @@ class Rijndael final : public ISymmetricCypher,
              (static_cast<uint32_t>(static_cast<uint8_t>(word[3])));
     };
 
-    if (_Nk == 4) {
+    if (I_WANT_CHECK_KEY && _Nk == 4) {
       if (getWord(_roundKeys[4]) != 0xa0fafe17) {
         throw std::runtime_error("keygen err at round 4");
       }
@@ -296,12 +433,10 @@ class Rijndael final : public ISymmetricCypher,
       case 6: {
         genRcon<8>();
         switch (_Nb) {
-          case 4: {
+          case 4:
+          case 6:
             _Nr = 12;
-          } break;
-          case 6: {
-            _Nr = 12;
-          } break;
+            break;
           case 8: {
             _Nr = 14;
           } break;
@@ -312,15 +447,11 @@ class Rijndael final : public ISymmetricCypher,
       case 8: {
         genRcon<7>();
         switch (_Nb) {
-          case 4: {
+          case 4:
+          case 6:
+          case 8:
             _Nr = 14;
-          } break;
-          case 6: {
-            _Nr = 14;
-          } break;
-          case 8: {
-            _Nr = 14;
-          } break;
+            break;
           default:
             throw std::runtime_error("_Nb err");
         }
@@ -347,10 +478,10 @@ class Rijndael final : public ISymmetricCypher,
   }
 
   void DecRound(std::span<std::byte> state, std::span<std::byte> rK) const {
-    AddRoundKey(state, rK);
-    inv_mixColumns(state);
     inv_shiftRows(state);
     inv_subBytes(state);
+    AddRoundKey(state, rK);
+    inv_mixColumns(state);
   }
 
   void FinalRound(std::span<std::byte> state, std::span<std::byte> rK) const {
@@ -390,6 +521,9 @@ class Rijndael final : public ISymmetricCypher,
     if (_roundKeys.empty()) {
       throw std::runtime_error("Rijndael - empty _roundKeys");
     }
+    if (in.size() != _Nb) {
+      throw std::runtime_error("in size isnt eq _Nb");
+    }
     std::vector copy = in;
     AddRoundKey(std::span(copy),
                 std::span(const_cast<std::vector<std::byte>&>(_roundKeys[0])));
@@ -399,12 +533,16 @@ class Rijndael final : public ISymmetricCypher,
     }
     FinalRound(std::span(copy),
                std::span(const_cast<std::vector<std::byte>&>(_roundKeys[_Nr])));
+    return copy;
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> decrypt(
       const std ::vector<std ::byte>& in) const override {
     if (_roundKeys.empty()) {
       throw std::runtime_error("Rijndael - empty _roundKeys");
+    }
+    if (in.size() != _Nb) {
+      throw std::runtime_error("in size isnt eq _Nb");
     }
     std::vector copy = in;
     AddRoundKey(
@@ -417,6 +555,7 @@ class Rijndael final : public ISymmetricCypher,
     DecFinalRound(
         std::span(copy),
         std::span(const_cast<std::vector<std::byte>&>(_roundKeys[0])));
+    return copy;
   }
 };
 
