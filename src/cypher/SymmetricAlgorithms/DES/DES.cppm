@@ -62,7 +62,7 @@ class DESGenRoundKey final : public IGenRoundKey {
    * @return
    */
   [[nodiscard]] constexpr std::vector<std::vector<std::byte>> genRoundKeys(
-      const std::vector<std::byte>& inputKey) const override {
+      const std::vector<std::byte>& inputKey) override {
     assert(roundCnt == 16);
     if (inputKey.empty()) {
       throw std::runtime_error(

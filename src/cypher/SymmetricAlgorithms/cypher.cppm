@@ -7,7 +7,7 @@ module;
 #include <algorithm>
 #include <any>
 // #include <boost/multiprecision/gmp.hpp>
-#include <cstddef>
+// #include <cstddef>
 #include <cstdint>
 #include <execution>
 #include <fstream>
@@ -65,7 +65,7 @@ class IGenRoundKey {
    * @return
    */
   [[nodiscard]] virtual constexpr std::vector<std::vector<std::byte>>
-  genRoundKeys(const std::vector<std::byte>& inputKey) const = 0;
+  genRoundKeys(const std::vector<std::byte>& inputKey) = 0;
 
   virtual ~IGenRoundKey() = default;
 };

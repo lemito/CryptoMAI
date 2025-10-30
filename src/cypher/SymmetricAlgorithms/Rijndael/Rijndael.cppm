@@ -4,21 +4,23 @@
  * https://en.wikipedia.org/wiki/Advanced_Encryption_Standard
  */
 module;
-#include <cstddef>
+// #include <cstddef>
 #include <vector>
 export module Rijndael;
 import cypher;
 import math.GaloisFieldPoly;
 import cypher.utils;
 import <array>;
+import <algorithm>;
+import <cstring>;
 import <span>;
 import <cstdint>;
 import <vector>;
 
 export namespace meow::cypher::symm::Rijndael {
-class Rijndael final : public IGenRoundKey,
-                       IEncryptionDecryption,
-                       ISymmetricCypher {
+class Rijndael final : public ISymmetricCypher,
+                       IGenRoundKey,
+                       IEncryptionDecryption {
   /**
   state - это массив массивов байт 4x4
   но байты идут вниз
@@ -37,7 +39,11 @@ class Rijndael final : public IGenRoundKey,
 
   uint32_t _mod;
 
+  std::size_t _blockSize;  // размер блока указан в байт (для DES = 8)
+
  public:
+  // std::vector<uint32_t> _round_keys;
+
 #define RCON_MAX_SIZ (10)
 
   std::vector<uint32_t> _rcon{};
@@ -97,39 +103,39 @@ class Rijndael final : public IGenRoundKey,
 
   // TODO" вот это вот всё туду
 
-  static auto rotWord(std::span<std::byte> state) -> void {
-    if (state.size() != 4) {
-      throw std::invalid_argument("word must be 4 bytes len");
-    }
-    // тут берем 4 байта (это слово) и возвращаем новые 4, после подстановки в
-    const auto pI = reinterpret_cast<uint32_t*>(state.data());
-    *pI = (*pI << 1) | (*pI >> (32 - 1));
-  }
+  constexpr void shiftRows(std::span<std::byte> state) const {}
 
-  constexpr void shiftRows(std::span<std::byte> state) {}
+  constexpr void inv_shiftRows(std::span<std::byte> state) const {}
 
-  constexpr void inv_shiftRows(std::span<std::byte> state) {}
-
-  constexpr void subBytes(std::span<std::byte> state) {}
+  constexpr void subBytes(std::span<std::byte> state) const {}
 
   constexpr void inv_subBytes(std::span<std::byte> state) {}
 
-  [[nodiscard]] constexpr auto subWord(const int32_t in) const -> uint32_t {
-    // тут берем 4 байта (это слово) и возвращаем новые 4, после подстановки в
-    // S_box
-    uint32_t res = 0;
-
-    res |= static_cast<uint32_t>(this->_S_box[in >> 32 - 8 & 0xFF] << 32 - 8);
-    res |= static_cast<uint32_t>(_S_box[in >> 32 - 16 & 0xFF] << 32 - 16);
-    res |= static_cast<uint32_t>(_S_box[in >> (32 - 24) & 0xFF] << (32 - 24));
-    res |= static_cast<uint32_t>(_S_box[in & 0xFF]);
-
-    return res;
+  // [[nodiscard]] constexpr auto subWord(const uint32_t in) const -> uint32_t {
+  //   // тут берем 4 байта (это слово) и возвращаем новые 4, после подстановки
+  //   в
+  //   // S_box
+  //   uint32_t res = 0;
+  //
+  //   res |= static_cast<uint32_t>(_S_box[in >> 24 & 0xFF]) << 24;
+  //   res |= static_cast<uint32_t>(_S_box[in >> 16 & 0xFF]) << 16;
+  //   res |= static_cast<uint32_t>(_S_box[in >> 8 & 0xFF]) << 8;
+  //   res |= static_cast<uint32_t>(_S_box[in & 0xFF]);
+  //
+  //   return res;
+  // }
+  constexpr auto subWord(std::span<std::byte> in) const -> void {
+    if (in.size() != 4) {
+      throw std::invalid_argument("word must be 4 bytes len");
+    }
+    for (size_t i = 0; i < in.size(); ++i) {
+      in[i] = _S_box[std::to_integer<uint16_t>(in[i])];
+    }
   }
 
-  constexpr void mixColumns(std::span<std::byte> state) {}
+  constexpr void mixColumns(std::span<std::byte> state) const {}
 
-  constexpr void inv_mixColumns(std::span<std::byte> state) {}
+  constexpr void inv_mixColumns(std::span<std::byte> state) const {}
 
  public:
   static auto affine(const std::byte inv) -> std::byte {
@@ -138,10 +144,10 @@ class Rijndael final : public IGenRoundKey,
     // равно
     const uint8_t x = std::to_integer<uint8_t>(inv);
 
-    const uint8_t shift1 = (x << 1) | (x >> 7);
-    const uint8_t shift2 = (x << 2) | (x >> 6);
-    const uint8_t shift3 = (x << 3) | (x >> 5);
-    const uint8_t shift4 = (x << 4) | (x >> 4);
+    const uint8_t shift1 = x << 1 | x >> 7;
+    const uint8_t shift2 = x << 2 | x >> 6;
+    const uint8_t shift3 = x << 3 | x >> 5;
+    const uint8_t shift4 = x << 4 | x >> 4;
 
     return static_cast<std::byte>(x ^ shift1 ^ shift2 ^ shift3 ^ shift4);
   }
@@ -178,9 +184,82 @@ class Rijndael final : public IGenRoundKey,
     }
   }
 
+  constexpr std::vector<std::byte> rotWord(const std::vector<std::byte>& word) {
+    if (word.size() != 4) {
+      throw std::invalid_argument("word must be 4 bytes len");
+    }
+    return std::vector<std::byte>{word[1], word[2], word[3], word[0]};
+  }
+
+  constexpr std::vector<std::byte> subWord(const std::vector<std::byte>& word) {
+    std::vector<std::byte> result(4);
+    for (size_t i = 0; i < 4; ++i) {
+      result[i] = _S_box[static_cast<uint8_t>(word[i])];
+    }
+    return result;
+  }
+
+  void keyGen(const std::span<std::byte> key) {
+    if (key.size() != 4 * _Nk) {
+      throw std::runtime_error("bad key size");
+    }
+
+    _roundKeys.resize(_Nb * (_Nr + 1));
+    for (auto& elem : _roundKeys) {
+      elem.resize(4);
+    }
+
+    for (size_t i = 0; i < _Nk; ++i) {
+      _roundKeys[i] = std::vector{key[4 * i], key[4 * i + 1], key[4 * i + 2],
+                                  key[4 * i + 3]};
+    }
+
+    for (size_t i = _Nk; i < _Nb * (_Nr + 1); ++i) {
+      std::vector<std::byte> temp = _roundKeys[i - 1];
+
+      if (i % _Nk == 0) {
+        temp = subWord(rotWord(temp));
+        uint32_t rcon_val = _rcon[i / _Nk - 1];
+        std::byte rcon_byte = static_cast<std::byte>((rcon_val >> 24) & 0xFF);
+        temp[0] = temp[0] ^ rcon_byte;
+      } else if (_Nk > 6 && i % _Nk == 4) {
+        temp = subWord(temp);
+      }
+
+      for (size_t j = 0; j < 4; ++j) {
+        _roundKeys[i][j] = _roundKeys[i - _Nk][j] ^ temp[j];
+      }
+    }
+
+    auto getWord = [](const std::vector<std::byte>& word) -> uint32_t {
+      return (static_cast<uint32_t>(static_cast<uint8_t>(word[0])) << 24) |
+             (static_cast<uint32_t>(static_cast<uint8_t>(word[1])) << 16) |
+             (static_cast<uint32_t>(static_cast<uint8_t>(word[2])) << 8) |
+             (static_cast<uint32_t>(static_cast<uint8_t>(word[3])));
+    };
+
+    if (_Nk == 4) {
+      if (getWord(_roundKeys[4]) != 0xa0fafe17) {
+        throw std::runtime_error("keygen err at round 4");
+      }
+
+      if (getWord(_roundKeys[10]) != 0x5935807a) {
+        throw std::runtime_error("keygen err at round 10");
+      }
+
+      if (getWord(_roundKeys[7]) != 0x2a6c7605) {
+        throw std::runtime_error("keygen err at round 7");
+      }
+    }
+  }
+
  public:
   Rijndael(const size_t block_size, const size_t key_size, const uint32_t mod)
-      : IGenRoundKey(0), _mod(mod), _S_box(), _inv_S_box() {
+      : IGenRoundKey(0),
+        _mod(mod),
+        _blockSize(block_size),
+        _S_box(),
+        _inv_S_box() {
     if (block_size != 128 && block_size != 192 && block_size != 256) {
       throw std::invalid_argument("Block_Size only 128/192/256 bit");
     }
@@ -260,59 +339,84 @@ class Rijndael final : public IGenRoundKey,
     }
   }
 
-  void EncRound(std::span<std::byte> state, std::span<std::byte> rK) {
+  void EncRound(std::span<std::byte> state, std::span<std::byte> rK) const {
     subBytes(state);
     shiftRows(state);
     mixColumns(state);
     AddRoundKey(state, rK);
   }
 
-  void DecRound(std::span<std::byte> state, std::span<std::byte> rK) {
+  void DecRound(std::span<std::byte> state, std::span<std::byte> rK) const {
     AddRoundKey(state, rK);
     inv_mixColumns(state);
     inv_shiftRows(state);
-    subBytes(state);
+    inv_subBytes(state);
   }
 
-  void FinalRound(std::span<std::byte> state, std::span<std::byte> rK) {
+  void FinalRound(std::span<std::byte> state, std::span<std::byte> rK) const {
     subBytes(state);
     shiftRows(state);
     AddRoundKey(state, rK);
   }
 
+  void DecFinalRound(std::span<std::byte> state,
+                     std::span<std::byte> rK) const {
+    inv_shiftRows(state);
+    inv_subBytes(state);
+    AddRoundKey(state, rK);
+  }
+
   [[nodiscard("")]] constexpr std ::vector<std ::vector<std ::byte>>
-  genRoundKeys(const std ::vector<std ::byte>& inputKey) const override {
-    // TODO: Implement this pure virtual method.
-    // static_assert(false, "Method `genRoundKeys` is not implemented.");
-    return {{}};
+  genRoundKeys(const std ::vector<std ::byte>& inputKey) override {
+    keyGen(const_cast<std::vector<std ::byte>&>(inputKey));
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encryptDecryptBlock(
       const std ::vector<std ::byte>& inputBlock,
       const std ::vector<std ::byte>& roundKey) const override {
-    // TODO: Implement this pure virtual method.
-    // static_assert(false, "Method `encryptDecryptBlock` is not implemented.")
+    // ЭТОТ МЕТОД ПРЕДПОЛАГАЛСЯ ТОЛЬКО ДЛЯ ФЕЙСТЕЛЯ КАК ФУНКЦИЯ ФЕЙСТЕЛЯ; ДЛЯ
+    // SP-PERM ЭТО ПРОСТО ЗАГЛУШКА
     return {};
   }
 
   constexpr void setRoundKeys(
       const std ::vector<std ::byte>& encryptionKey) override {
-    // TODO: Implement this pure virtual method.
-    // static_assert(false, "Method `setRoundKeys` is not implemented.");
+    keyGen(const_cast<std::vector<std ::byte>&>(encryptionKey));
+    _roundKeys = genRoundKeys(encryptionKey);
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encrypt(
-      const std ::vector<std ::byte>& in) const override {
-    // TODO: Implement this pure virtual method.
-    // static_assert(false, "Method `encrypt` is not implemented.");
-    return {};
+      const std::vector<std ::byte>& in) const override {
+    if (_roundKeys.empty()) {
+      throw std::runtime_error("Rijndael - empty _roundKeys");
+    }
+    std::vector copy = in;
+    AddRoundKey(std::span(copy),
+                std::span(const_cast<std::vector<std::byte>&>(_roundKeys[0])));
+    for (size_t i = 1; i < _Nr; ++i) {
+      EncRound(std::span(copy),
+               std::span(const_cast<std::vector<std::byte>&>(_roundKeys[i])));
+    }
+    FinalRound(std::span(copy),
+               std::span(const_cast<std::vector<std::byte>&>(_roundKeys[_Nr])));
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> decrypt(
       const std ::vector<std ::byte>& in) const override {
-    // TODO: Implement this pure virtual method.
-    // static_assert(false, "Method `decrypt` is not implemented.");
-    return {};
+    if (_roundKeys.empty()) {
+      throw std::runtime_error("Rijndael - empty _roundKeys");
+    }
+    std::vector copy = in;
+    AddRoundKey(
+        std::span(copy),
+        std::span(const_cast<std::vector<std::byte>&>(_roundKeys[_Nr])));
+    for (int i = _Nr - 1; i > 0; --i) {
+      DecRound(std::span(copy),
+               std::span(const_cast<std::vector<std::byte>&>(_roundKeys[i])));
+    }
+    DecFinalRound(
+        std::span(copy),
+        std::span(const_cast<std::vector<std::byte>&>(_roundKeys[0])));
   }
 };
 
