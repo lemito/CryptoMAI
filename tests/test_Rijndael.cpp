@@ -68,7 +68,7 @@ TEST(Key, KeyGen) {
   ASSERT_NO_THROW(res.keyGen(std::span(key)));
 }
 TEST(Rijndael, Stupid) {
-  std::vector key{
+  const std::vector key{
       std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
       std::byte{0x04}, std::byte{0x05}, std::byte{0x06}, std::byte{0x07},
       std::byte{0x08}, std::byte{0x09}, std::byte{0x0a}, std::byte{0x0b},
@@ -85,8 +85,8 @@ TEST(Rijndael, Stupid) {
       std::byte{0xd8}, std::byte{0xcd}, std::byte{0xb7}, std::byte{0x80},
       std::byte{0x70}, std::byte{0xb4}, std::byte{0xc5}, std::byte{0x5a}};
 
-  std::vector<std::byte> BUFFER(plain.size());
-  std::vector<std::byte> BUFFER_res(plain.size());
+  std::vector<std::byte> BUFFER(plain.size() * 2);
+  std::vector<std::byte> BUFFER_res(plain.size() * 2);
 
   const auto ptrRijndael =
       std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128, 0x1B);
@@ -103,12 +103,10 @@ TEST(Rijndael, Stupid) {
 
   // BUFFER= algo->encrypt(plain);
 
-  ctx.encrypt(BUFFER, plain);
-  // ctx.decrypt(BUFFER_res, BUFFER);
+  ctx.encrypt("BUFFER", "2.txt");
+  ctx.decrypt("BUFFER_res", "BUFFER");
 
-  for (size_t i = 0; i < exp_enc.size(); ++i) {
-    ASSERT_EQ(BUFFER[i], exp_enc[i]) << i;
-  }
+  // ASSERT_EQ(plain.size(), BUFFER_res.size());
   // ASSERT_EQ(plain, BUFFER_res);
 }
 

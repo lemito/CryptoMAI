@@ -497,6 +497,9 @@ class Rijndael final : public ISymmetricCypher,
     if (rK.empty()) {
       throw std::runtime_error("EncRound rK empty");
     }
+    if (rK.size() != 4 * _Nb) {
+      throw std::runtime_error("rK badd size");
+    }
     subBytes(state);
     shiftRows(state);
     mixColumns(state);
@@ -510,10 +513,13 @@ class Rijndael final : public ISymmetricCypher,
     if (rK.empty()) {
       throw std::runtime_error("DecRound rK empty");
     }
-    inv_subBytes(state);
+    if (rK.size() != 4 * _Nb) {
+      throw std::runtime_error("rK badd size");
+    }
     inv_shiftRows(state);
-    inv_mixColumns(state);
+    inv_subBytes(state);
     AddRoundKey(state, rK);
+    inv_mixColumns(state);
   }
 
   void FinalRound(std::span<std::byte> state, std::span<std::byte> rK) const {
@@ -522,6 +528,12 @@ class Rijndael final : public ISymmetricCypher,
     }
     if (rK.empty()) {
       throw std::runtime_error("FinalRound rK empty");
+    }
+    if (rK.size() != 4 * _Nb) {
+      throw std::runtime_error("rK badd size");
+    }
+    if (rK.begin() != _roundKeys[_Nr].begin()) {
+      throw std::runtime_error("bad rK for DecFinalRound");
     }
     subBytes(state);
     shiftRows(state);
@@ -536,8 +548,14 @@ class Rijndael final : public ISymmetricCypher,
     if (rK.empty()) {
       throw std::runtime_error("DecFinalRound rK empty");
     }
-    inv_subBytes(state);
+    if (rK.size() != 4 * _Nb) {
+      throw std::runtime_error("rK badd size");
+    }
+    if (rK.begin() != _roundKeys[0].begin()) {
+      throw std::runtime_error("bad rK for DecFinalRound");
+    }
     inv_shiftRows(state);
+    inv_subBytes(state);
     AddRoundKey(state, rK);
   }
 
