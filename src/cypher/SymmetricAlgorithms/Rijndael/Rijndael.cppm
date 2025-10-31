@@ -18,6 +18,7 @@ import <cstring>;
 import <span>;
 import <cstdint>;
 import <vector>;
+import <iostream>;
 
 export namespace meow::cypher::symm::Rijndael {
 class Rijndael final : public ISymmetricCypher,
@@ -41,7 +42,7 @@ class Rijndael final : public ISymmetricCypher,
 
   uint32_t _mod;
 
-  std::size_t _blockSize;  // размер блока указан в байт (для DES = 8)
+  // std::size_t _blockSize;  // размер блока указан в байт (для DES = 8)
 
  public:
   // std::vector<uint32_t> _round_keys;
@@ -107,6 +108,9 @@ class Rijndael final : public ISymmetricCypher,
 
   // сдвиг строчки влево
   constexpr void shiftRows(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("shiftRows state empty :((");
+    }
     const auto copy = state;
     for (size_t r = 1; r < 4; ++r) {
       for (size_t c = 0; c < _Nb; ++c) {
@@ -118,40 +122,36 @@ class Rijndael final : public ISymmetricCypher,
 
   // а туточки вправо
   constexpr void inv_shiftRows(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("inv_shiftRows state empty :((");
+    }
     const auto copy = state;
     for (size_t r = 1; r < 4; ++r) {
       for (size_t c = 0; c < _Nb; ++c) {
         const size_t pos = (c + r) % _Nb;
-        state[r + 4 * pos] = copy[r + 4 * c];
+        state[r + 4 * c] = copy[r + 4 * ((c + r) % _Nb)];
+        // state[r + 4 * pos] = copy[r + 4 * c];
       }
     }
   }
 
   constexpr void subBytes(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("subBytes state empty :((");
+    }
     for (size_t i = 0; i < state.size(); ++i) {
       state[i] = _S_box[static_cast<uint8_t>(state[i])];
     }
   }
 
   constexpr void inv_subBytes(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("inv_subBytes state empty :((");
+    }
     for (size_t i = 0; i < state.size(); ++i) {
       state[i] = _inv_S_box[static_cast<uint8_t>(state[i])];
     }
   }
-
-  // [[nodiscard]] constexpr auto subWord(const uint32_t in) const -> uint32_t {
-  //   // тут берем 4 байта (это слово) и возвращаем новые 4, после подстановки
-  //   в
-  //   // S_box
-  //   uint32_t res = 0;
-  //
-  //   res |= static_cast<uint32_t>(_S_box[in >> 24 & 0xFF]) << 24;
-  //   res |= static_cast<uint32_t>(_S_box[in >> 16 & 0xFF]) << 16;
-  //   res |= static_cast<uint32_t>(_S_box[in >> 8 & 0xFF]) << 8;
-  //   res |= static_cast<uint32_t>(_S_box[in & 0xFF]);
-  //
-  //   return res;
-  // }
 
   constexpr auto subWord(std::span<std::byte> in) const -> void {
     if (in.size() != 4) {
@@ -174,6 +174,9 @@ class Rijndael final : public ISymmetricCypher,
    * или матричное умножение
    */
   constexpr void mixColumns(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("mixColumns state empty :((");
+    }
     auto copy = state;
     for (size_t c = 0; c < _Nb; ++c) {
       const size_t off = 4 * c;
@@ -214,9 +217,12 @@ class Rijndael final : public ISymmetricCypher,
   /*
    *  a^-1(x) = 0x0bx^3 + 0x0dx^2 + 0x09x + 0x0e
    *  или матрица
-  *
+   *
    */
   constexpr void inv_mixColumns(std::span<std::byte> state) const {
+    if (state.empty()) {
+      throw std::runtime_error("inv_mixColumns state empty :((");
+    }
     auto copy = state;
     for (size_t c = 0; c < _Nb; ++c) {
       const size_t off = 4 * c;
@@ -242,7 +248,8 @@ class Rijndael final : public ISymmetricCypher,
           math::GaloisFieldPoly::mult(state[off + 2],
                                       static_cast<std::byte>(0x0b),
                                       static_cast<std::byte>(_mod)) ^
-          math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0d),
+          math::GaloisFieldPoly::mult(state[off + 3],
+                                      static_cast<std::byte>(0x0d),
                                       static_cast<std::byte>(_mod));
       copy[off + 2] =
           math::GaloisFieldPoly::mult(state[off], static_cast<std::byte>(0x0d),
@@ -336,67 +343,72 @@ class Rijndael final : public ISymmetricCypher,
     return result;
   }
 
-  void keyGen(const std::span<std::byte> key) {
+  constexpr auto keyGen(const std::span<std::byte> key) const
+      -> std::vector<std::vector<std::byte>> {
     if (key.size() != 4 * _Nk) {
-      throw std::runtime_error("bad key size");
+      throw std::runtime_error("keyGen: bad key size " +
+                               std::to_string(key.size()) + ", expected " +
+                               std::to_string(4 * _Nk));
     }
 
-    _roundKeys.resize(_Nb * (_Nr + 1));
-    for (auto& elem : _roundKeys) {
+    if (_rcon.empty()) {
+      throw std::runtime_error("keyGen: _rcon not initialized");
+    }
+
+    std::vector<std::vector<std::byte>> rk;
+    rk.resize(_Nb * (_Nr + 1));
+    for (auto& elem : rk) {
       elem.resize(4);
     }
 
     for (size_t i = 0; i < _Nk; ++i) {
-      _roundKeys[i] = std::vector{key[4 * i], key[4 * i + 1], key[4 * i + 2],
-                                  key[4 * i + 3]};
+      rk[i] = std::vector{key[4 * i], key[4 * i + 1], key[4 * i + 2],
+                          key[4 * i + 3]};
     }
 
     for (size_t i = _Nk; i < _Nb * (_Nr + 1); ++i) {
-      std::vector<std::byte> temp = _roundKeys[i - 1];
+      std::vector<std::byte> temp = rk[i - 1];
 
       if (i % _Nk == 0) {
         temp = subWord(rotWord(temp));
-        const uint32_t rcon_val = _rcon[i / _Nk - 1];
-        const auto rcon_byte = static_cast<std::byte>((rcon_val >> 24) & 0xFF);
+
+        const size_t rcon_idx = i / _Nk - 1;
+        if (rcon_idx >= _rcon.size()) {
+          throw std::runtime_error("keyGen: Rcon index out of bounds " +
+                                   std::to_string(rcon_idx) + " vs " +
+                                   std::to_string(_rcon.size()));
+        }
+
+        const uint32_t rcon_val = _rcon[rcon_idx];
+        const auto rcon_byte =
+            std::byte{static_cast<uint8_t>((rcon_val >> 24) & 0xFF)};
         temp[0] = temp[0] ^ rcon_byte;
       } else if (_Nk > 6 && i % _Nk == 4) {
         temp = subWord(temp);
       }
 
       for (size_t j = 0; j < 4; ++j) {
-        _roundKeys[i][j] = _roundKeys[i - _Nk][j] ^ temp[j];
+        if (i - _Nk >= rk.size()) {
+          throw std::runtime_error("keyGen: rk index out of bounds");
+        }
+        rk[i][j] = rk[i - _Nk][j] ^ temp[j];
       }
     }
 
-    auto getWord = [](const std::vector<std::byte>& word) -> uint32_t {
-      return (static_cast<uint32_t>(static_cast<uint8_t>(word[0])) << 24) |
-             (static_cast<uint32_t>(static_cast<uint8_t>(word[1])) << 16) |
-             (static_cast<uint32_t>(static_cast<uint8_t>(word[2])) << 8) |
-             (static_cast<uint32_t>(static_cast<uint8_t>(word[3])));
-    };
-
-    if (I_WANT_CHECK_KEY && _Nk == 4) {
-      if (getWord(_roundKeys[4]) != 0xa0fafe17) {
-        throw std::runtime_error("keygen err at round 4");
-      }
-
-      if (getWord(_roundKeys[10]) != 0x5935807a) {
-        throw std::runtime_error("keygen err at round 10");
-      }
-
-      if (getWord(_roundKeys[7]) != 0x2a6c7605) {
-        throw std::runtime_error("keygen err at round 7");
+    std::vector res(_Nr + 1, std::vector<std::byte>(_Nb * 4));
+    for (size_t round = 0; round <= _Nr; ++round) {
+      for (size_t column = 0; column < _Nb; ++column) {
+        std::ranges::copy(rk[round * _Nb + column],
+                          res[round].begin() + column * 4);
       }
     }
+
+    return res;
   }
 
  public:
   Rijndael(const size_t block_size, const size_t key_size, const uint32_t mod)
-      : IGenRoundKey(0),
-        _mod(mod),
-        _blockSize(block_size),
-        _S_box(),
-        _inv_S_box() {
+      : IGenRoundKey(0), _mod(mod), _S_box(), _inv_S_box() {
     if (block_size != 128 && block_size != 192 && block_size != 256) {
       throw std::invalid_argument("Block_Size only 128/192/256 bit");
     }
@@ -405,6 +417,7 @@ class Rijndael final : public ISymmetricCypher,
     }
 
     _Nb = block_size / (8 * 4);
+    _blockSize = _Nb * 4;
     _Nk = key_size / (8 * 4);
 
     // тут наверное сэйм хардкод, но тут я перешел в байты и раздача раундов
@@ -464,13 +477,28 @@ class Rijndael final : public ISymmetricCypher,
   }
 
   static void AddRoundKey(std::span<std::byte> state,
-                          const std::span<std::byte> rK) {
+                          std::span<std::byte> rK) {
+    if (state.empty()) {
+      throw std::runtime_error("EncRound state empty");
+    }
+    if (rK.empty()) {
+      throw std::runtime_error("EncRound rK empty");
+    }
+    if (state.size() != rK.size()) {
+      throw std::runtime_error("state len != rK len");
+    }
     for (size_t i = 0; i < state.size(); ++i) {
-      state[i] = state[i] ^ rK[i];
+      state[i] ^= rK[i];
     }
   }
 
   void EncRound(std::span<std::byte> state, std::span<std::byte> rK) const {
+    if (state.empty()) {
+      throw std::runtime_error("EncRound state empty");
+    }
+    if (rK.empty()) {
+      throw std::runtime_error("EncRound rK empty");
+    }
     subBytes(state);
     shiftRows(state);
     mixColumns(state);
@@ -478,13 +506,25 @@ class Rijndael final : public ISymmetricCypher,
   }
 
   void DecRound(std::span<std::byte> state, std::span<std::byte> rK) const {
-    inv_shiftRows(state);
+    if (state.empty()) {
+      throw std::runtime_error("DecRound state empty");
+    }
+    if (rK.empty()) {
+      throw std::runtime_error("DecRound rK empty");
+    }
     inv_subBytes(state);
-    AddRoundKey(state, rK);
+    inv_shiftRows(state);
     inv_mixColumns(state);
+    AddRoundKey(state, rK);
   }
 
   void FinalRound(std::span<std::byte> state, std::span<std::byte> rK) const {
+    if (state.empty()) {
+      throw std::runtime_error("FinalRound state empty");
+    }
+    if (rK.empty()) {
+      throw std::runtime_error("FinalRound rK empty");
+    }
     subBytes(state);
     shiftRows(state);
     AddRoundKey(state, rK);
@@ -492,14 +532,20 @@ class Rijndael final : public ISymmetricCypher,
 
   void DecFinalRound(std::span<std::byte> state,
                      std::span<std::byte> rK) const {
-    inv_shiftRows(state);
+    if (state.empty()) {
+      throw std::runtime_error("DecFinalRound state empty");
+    }
+    if (rK.empty()) {
+      throw std::runtime_error("DecFinalRound rK empty");
+    }
     inv_subBytes(state);
+    inv_shiftRows(state);
     AddRoundKey(state, rK);
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::vector<std ::byte>>
   genRoundKeys(const std ::vector<std ::byte>& inputKey) override {
-    keyGen(const_cast<std::vector<std ::byte>&>(inputKey));
+    return keyGen(const_cast<std::vector<std ::byte>&>(inputKey));
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encryptDecryptBlock(
@@ -512,8 +558,15 @@ class Rijndael final : public ISymmetricCypher,
 
   constexpr void setRoundKeys(
       const std ::vector<std ::byte>& encryptionKey) override {
-    keyGen(const_cast<std::vector<std ::byte>&>(encryptionKey));
-    _roundKeys = genRoundKeys(encryptionKey);
+    this->_roundKeys = genRoundKeys(encryptionKey);
+    if (this->_roundKeys.empty()) {
+      throw std::runtime_error("setRoundKeys: failed to generate round keys");
+    }
+    if (this->_roundKeys.size() != (_Nr + 1)) {
+      throw std::runtime_error("setRoundKeys: wrong number of round keys " +
+                               std::to_string(this->_roundKeys.size()) +
+                               " but need " + std::to_string(_Nr + 1));
+    }
   }
 
   [[nodiscard("")]] constexpr std ::vector<std ::byte> encrypt(
@@ -521,8 +574,9 @@ class Rijndael final : public ISymmetricCypher,
     if (_roundKeys.empty()) {
       throw std::runtime_error("Rijndael - empty _roundKeys");
     }
-    if (in.size() != _Nb) {
-      throw std::runtime_error("in size isnt eq _Nb");
+    if (in.size() != _Nb * 4) {
+      std::cout << _Nb << " " << _Nb * 4 << " " << in.size() << std::endl;
+      throw std::runtime_error("enc: in size isnt eq _Nb");
     }
     std::vector copy = in;
     AddRoundKey(std::span(copy),
@@ -541,14 +595,15 @@ class Rijndael final : public ISymmetricCypher,
     if (_roundKeys.empty()) {
       throw std::runtime_error("Rijndael - empty _roundKeys");
     }
-    if (in.size() != _Nb) {
-      throw std::runtime_error("in size isnt eq _Nb");
+    if (in.size() != _Nb * 4) {
+      std::cout << _Nb << " " << _Nb * 4 << " " << in.size() << std::endl;
+      throw std::runtime_error("dec: in size isnt eq _Nb ");
     }
     std::vector copy = in;
     AddRoundKey(
         std::span(copy),
         std::span(const_cast<std::vector<std::byte>&>(_roundKeys[_Nr])));
-    for (int i = _Nr - 1; i > 0; --i) {
+    for (int i = static_cast<int>(_Nr) - 1; i > 0; --i) {
       DecRound(std::span(copy),
                std::span(const_cast<std::vector<std::byte>&>(_roundKeys[i])));
     }

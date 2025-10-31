@@ -68,46 +68,63 @@ TEST(Key, KeyGen) {
   ASSERT_NO_THROW(res.keyGen(std::span(key)));
 }
 
-// TEST(DES, SimpleWithPad) {
-//   std::vector key{
-//       static_cast<std::byte>(0x2b), static_cast<std::byte>(0x7e),
-//       static_cast<std::byte>(0x15), static_cast<std::byte>(0x16),
-//       static_cast<std::byte>(0x28), static_cast<std::byte>(0xae),
-//       static_cast<std::byte>(0xd2), static_cast<std::byte>(0xa6),
-//       static_cast<std::byte>(0xab), static_cast<std::byte>(0xf7),
-//       static_cast<std::byte>(0x15), static_cast<std::byte>(0x88),
-//       static_cast<std::byte>(0x09), static_cast<std::byte>(0xcf),
-//       static_cast<std::byte>(0x4f), static_cast<std::byte>(0x3c),
-//   };
-//   const std::vector plain = {
-//       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
-//       static_cast<std::byte>('o'), static_cast<std::byte>('w')};
+TEST(Rijndael, Stupid) {
+  std::vector key{
+      static_cast<std::byte>(0x2b), static_cast<std::byte>(0x7e),
+      static_cast<std::byte>(0x15), static_cast<std::byte>(0x16),
+      static_cast<std::byte>(0x28), static_cast<std::byte>(0xae),
+      static_cast<std::byte>(0xd2), static_cast<std::byte>(0xa6),
+      static_cast<std::byte>(0xab), static_cast<std::byte>(0xf7),
+      static_cast<std::byte>(0x15), static_cast<std::byte>(0x88),
+      static_cast<std::byte>(0x09), static_cast<std::byte>(0xcf),
+      static_cast<std::byte>(0x4f), static_cast<std::byte>(0x3c),
+  };
+  const std::vector plain = {
+      static_cast<std::byte>(0x32), static_cast<std::byte>(0x43),
+      static_cast<std::byte>(0xf6), static_cast<std::byte>(0xa8),
+      static_cast<std::byte>(0x88), static_cast<std::byte>(0x5a),
+      static_cast<std::byte>(0x30), static_cast<std::byte>(0x8d),
+      static_cast<std::byte>(0x31), static_cast<std::byte>(0x31),
+      static_cast<std::byte>(0x98), static_cast<std::byte>(0xa2),
+      static_cast<std::byte>(0xe0), static_cast<std::byte>(0x37),
+      static_cast<std::byte>(0x07), static_cast<std::byte>(0x34)};
 
-//   std::vector<std::byte> BUFFER(plain.size());
-//   std::vector<std::byte> BUFFER_res(plain.size());
+  constexpr std::array exp_enc = {
+      static_cast<std::byte>(0x39), static_cast<std::byte>(0x25),
+      static_cast<std::byte>(0x84), static_cast<std::byte>(0x1d),
+      static_cast<std::byte>(0x02), static_cast<std::byte>(0xdc),
+      static_cast<std::byte>(0x09), static_cast<std::byte>(0xfb),
+      static_cast<std::byte>(0xdc), static_cast<std::byte>(0x11),
+      static_cast<std::byte>(0x85), static_cast<std::byte>(0x97),
+      static_cast<std::byte>(0x19), static_cast<std::byte>(0x6a),
+      static_cast<std::byte>(0x0b), static_cast<std::byte>(0x32)};
 
-//   const auto ptrRijndael =
-//       std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128, 0x1B);
-//   ptrRijndael->keyGen(std::span(key));
+  std::vector<std::byte> BUFFER(plain.size());
+  std::vector<std::byte> BUFFER_res(plain.size());
 
-//   const auto algo =
-//       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
-//           ptrRijndael);
+  const auto ptrRijndael =
+      std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128, 0x1B);
+  // ptrRijndael->keyGen(std::span(key));
 
-//   auto ctx = meow::cypher::symm::SymmetricCypherContext(
-//       key, meow::cypher::symm::encryptionMode::ECB,
-//       meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
-//   ctx.setAlgo(algo);
+  const auto algo =
+      std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+          ptrRijndael);
 
-//   ctx.encrypt(BUFFER, plain);
-//   ctx.decrypt(BUFFER_res, BUFFER);
+  auto ctx = meow::cypher::symm::SymmetricCypherContext(
+      key, meow::cypher::symm::encryptionMode::ECB,
+      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+  ctx.setAlgo(algo);
 
-//   for (const auto& elem : BUFFER_res) {
-//     std::cout << static_cast<char>(elem);
-//   }
+  // BUFFER= algo->encrypt(plain);
 
-//   ASSERT_EQ(BUFFER_res, plain);
-// }
+  ctx.encrypt(BUFFER, plain);
+  // ctx.decrypt(BUFFER_res, BUFFER);
+
+  for (size_t i = 0; i < exp_enc.size(); ++i) {
+    ASSERT_EQ(BUFFER[i], exp_enc[i]) << i;
+  }
+  // ASSERT_EQ(plain, BUFFER_res);
+}
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
