@@ -67,37 +67,23 @@ TEST(Key, KeyGen) {
   auto res = meow::cypher::symm::Rijndael::Rijndael(128, 128, 0x1B);
   ASSERT_NO_THROW(res.keyGen(std::span(key)));
 }
-
 TEST(Rijndael, Stupid) {
   std::vector key{
-      static_cast<std::byte>(0x2b), static_cast<std::byte>(0x7e),
-      static_cast<std::byte>(0x15), static_cast<std::byte>(0x16),
-      static_cast<std::byte>(0x28), static_cast<std::byte>(0xae),
-      static_cast<std::byte>(0xd2), static_cast<std::byte>(0xa6),
-      static_cast<std::byte>(0xab), static_cast<std::byte>(0xf7),
-      static_cast<std::byte>(0x15), static_cast<std::byte>(0x88),
-      static_cast<std::byte>(0x09), static_cast<std::byte>(0xcf),
-      static_cast<std::byte>(0x4f), static_cast<std::byte>(0x3c),
-  };
+      std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+      std::byte{0x04}, std::byte{0x05}, std::byte{0x06}, std::byte{0x07},
+      std::byte{0x08}, std::byte{0x09}, std::byte{0x0a}, std::byte{0x0b},
+      std::byte{0x0c}, std::byte{0x0d}, std::byte{0x0e}, std::byte{0x0f}};
   const std::vector plain = {
-      static_cast<std::byte>(0x32), static_cast<std::byte>(0x43),
-      static_cast<std::byte>(0xf6), static_cast<std::byte>(0xa8),
-      static_cast<std::byte>(0x88), static_cast<std::byte>(0x5a),
-      static_cast<std::byte>(0x30), static_cast<std::byte>(0x8d),
-      static_cast<std::byte>(0x31), static_cast<std::byte>(0x31),
-      static_cast<std::byte>(0x98), static_cast<std::byte>(0xa2),
-      static_cast<std::byte>(0xe0), static_cast<std::byte>(0x37),
-      static_cast<std::byte>(0x07), static_cast<std::byte>(0x34)};
+      std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33},
+      std::byte{0x44}, std::byte{0x55}, std::byte{0x66}, std::byte{0x77},
+      std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
+      std::byte{0xcc}, std::byte{0xdd}, std::byte{0xee}, std::byte{0xff}};
 
   constexpr std::array exp_enc = {
-      static_cast<std::byte>(0x39), static_cast<std::byte>(0x25),
-      static_cast<std::byte>(0x84), static_cast<std::byte>(0x1d),
-      static_cast<std::byte>(0x02), static_cast<std::byte>(0xdc),
-      static_cast<std::byte>(0x09), static_cast<std::byte>(0xfb),
-      static_cast<std::byte>(0xdc), static_cast<std::byte>(0x11),
-      static_cast<std::byte>(0x85), static_cast<std::byte>(0x97),
-      static_cast<std::byte>(0x19), static_cast<std::byte>(0x6a),
-      static_cast<std::byte>(0x0b), static_cast<std::byte>(0x32)};
+      std::byte{0x69}, std::byte{0xc4}, std::byte{0xe0}, std::byte{0xd8},
+      std::byte{0x6a}, std::byte{0x7b}, std::byte{0x04}, std::byte{0x30},
+      std::byte{0xd8}, std::byte{0xcd}, std::byte{0xb7}, std::byte{0x80},
+      std::byte{0x70}, std::byte{0xb4}, std::byte{0xc5}, std::byte{0x5a}};
 
   std::vector<std::byte> BUFFER(plain.size());
   std::vector<std::byte> BUFFER_res(plain.size());
@@ -125,6 +111,65 @@ TEST(Rijndael, Stupid) {
   }
   // ASSERT_EQ(plain, BUFFER_res);
 }
+
+// TEST(Rijndael, Stupid) {
+//   std::vector key{
+//       static_cast<std::byte>(0x2b), static_cast<std::byte>(0x7e),
+//       static_cast<std::byte>(0x15), static_cast<std::byte>(0x16),
+//       static_cast<std::byte>(0x28), static_cast<std::byte>(0xae),
+//       static_cast<std::byte>(0xd2), static_cast<std::byte>(0xa6),
+//       static_cast<std::byte>(0xab), static_cast<std::byte>(0xf7),
+//       static_cast<std::byte>(0x15), static_cast<std::byte>(0x88),
+//       static_cast<std::byte>(0x09), static_cast<std::byte>(0xcf),
+//       static_cast<std::byte>(0x4f), static_cast<std::byte>(0x3c),
+//   };
+//   const std::vector plain = {
+//       static_cast<std::byte>(0x32), static_cast<std::byte>(0x43),
+//       static_cast<std::byte>(0xf6), static_cast<std::byte>(0xa8),
+//       static_cast<std::byte>(0x88), static_cast<std::byte>(0x5a),
+//       static_cast<std::byte>(0x30), static_cast<std::byte>(0x8d),
+//       static_cast<std::byte>(0x31), static_cast<std::byte>(0x31),
+//       static_cast<std::byte>(0x98), static_cast<std::byte>(0xa2),
+//       static_cast<std::byte>(0xe0), static_cast<std::byte>(0x37),
+//       static_cast<std::byte>(0x07), static_cast<std::byte>(0x34)};
+//
+//   constexpr std::array exp_enc = {
+//       static_cast<std::byte>(0x39), static_cast<std::byte>(0x25),
+//       static_cast<std::byte>(0x84), static_cast<std::byte>(0x1d),
+//       static_cast<std::byte>(0x02), static_cast<std::byte>(0xdc),
+//       static_cast<std::byte>(0x09), static_cast<std::byte>(0xfb),
+//       static_cast<std::byte>(0xdc), static_cast<std::byte>(0x11),
+//       static_cast<std::byte>(0x85), static_cast<std::byte>(0x97),
+//       static_cast<std::byte>(0x19), static_cast<std::byte>(0x6a),
+//       static_cast<std::byte>(0x0b), static_cast<std::byte>(0x32)};
+//
+//   std::vector<std::byte> BUFFER(plain.size());
+//   std::vector<std::byte> BUFFER_res(plain.size());
+//
+//   const auto ptrRijndael =
+//       std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128,
+//       0x1B);
+//   // ptrRijndael->keyGen(std::span(key));
+//
+//   const auto algo =
+//       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+//           ptrRijndael);
+//
+//   auto ctx = meow::cypher::symm::SymmetricCypherContext(
+//       key, meow::cypher::symm::encryptionMode::ECB,
+//       meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+//   ctx.setAlgo(algo);
+//
+//   // BUFFER= algo->encrypt(plain);
+//
+//   ctx.encrypt(BUFFER, plain);
+//   // ctx.decrypt(BUFFER_res, BUFFER);
+//
+//   for (size_t i = 0; i < exp_enc.size(); ++i) {
+//     ASSERT_EQ(BUFFER[i], exp_enc[i]) << i;
+//   }
+//   // ASSERT_EQ(plain, BUFFER_res);
+// }
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

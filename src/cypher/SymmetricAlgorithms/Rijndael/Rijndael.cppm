@@ -114,8 +114,8 @@ class Rijndael final : public ISymmetricCypher,
     const auto copy = state;
     for (size_t r = 1; r < 4; ++r) {
       for (size_t c = 0; c < _Nb; ++c) {
-        const size_t pos = (c - r + _Nb) % _Nb;
-        state[r + 4 * pos] = copy[r + 4 * c];
+        const size_t new_pos = (c + r) % _Nb;
+        state[r + 4 * c] = copy[r + 4 * new_pos];
       }
     }
   }
@@ -128,9 +128,8 @@ class Rijndael final : public ISymmetricCypher,
     const auto copy = state;
     for (size_t r = 1; r < 4; ++r) {
       for (size_t c = 0; c < _Nb; ++c) {
-        const size_t pos = (c + r) % _Nb;
-        state[r + 4 * c] = copy[r + 4 * ((c + r) % _Nb)];
-        // state[r + 4 * pos] = copy[r + 4 * c];
+        const size_t new_pos = (c + _Nb - r) % _Nb;
+        state[r + 4 * c] = copy[r + 4 * new_pos];
       }
     }
   }
@@ -343,7 +342,7 @@ class Rijndael final : public ISymmetricCypher,
     return result;
   }
 
-  constexpr auto keyGen(const std::span<std::byte> key) const
+  [[nodiscard]] constexpr auto keyGen(const std::span<std::byte> key) const
       -> std::vector<std::vector<std::byte>> {
     if (key.size() != 4 * _Nk) {
       throw std::runtime_error("keyGen: bad key size " +
@@ -476,8 +475,7 @@ class Rijndael final : public ISymmetricCypher,
     genSBox();
   }
 
-  static void AddRoundKey(std::span<std::byte> state,
-                          std::span<std::byte> rK) {
+  static void AddRoundKey(std::span<std::byte> state, std::span<std::byte> rK) {
     if (state.empty()) {
       throw std::runtime_error("EncRound state empty");
     }
