@@ -147,7 +147,7 @@ constexpr auto plus(const std::byte& a, const std::byte& b) -> std::byte {
 
 // здесь тупо сдвиг вправо + если выход за границу - возврат
 constexpr auto multToX(std::byte a, const std::byte& mod) -> std::byte {
-  const bool hasEight = (std::to_integer<uint16_t>(a) & 0b10000000) != 0;
+  const bool hasEight = (std::to_integer<uint16_t>(a) & 0x80) != 0;
   a <<= 1;
   if (hasEight) {
     a ^= mod;

@@ -5,6 +5,7 @@
  */
 module;
 // #include <cstddef>
+#include <any>
 #include <vector>
 
 #include "debug.h"
@@ -47,9 +48,9 @@ class Rijndael final : public ISymmetricCypher,
  public:
   // std::vector<uint32_t> _round_keys;
 
-#define RCON_MAX_SIZ (10)
-
-  std::vector<uint32_t> _rcon{};
+  // #define RCON_MAX_SIZ (10)
+  //
+  // std::vector<uint32_t> _rcon{};
 
 #define SBOX_SIZ (1 << 8)
 
@@ -105,6 +106,8 @@ class Rijndael final : public ISymmetricCypher,
   }
 
   // TODO" вот это вот всё туду
+
+  // =================================================================
 
   // сдвиг строчки влево
   constexpr void shiftRows(std::span<std::byte> state) const {
@@ -293,54 +296,103 @@ class Rijndael final : public ISymmetricCypher,
     return static_cast<std::byte>(x ^ shift1 ^ shift2 ^ shift3 ^ shift4);
   }
 
+  static auto inv_affine(const std::byte inv) -> std::byte {
+    const uint8_t x = std::to_integer<uint8_t>(inv);
+
+    const uint8_t shift1 = x << 1 | x >> 7;
+    const uint8_t shift2 = x << 3 | x >> 5;
+    const uint8_t shift3 = x << 6 | x >> 2;
+
+    return static_cast<std::byte>(shift1 ^ shift2 ^ shift3);
+  }
+
+  // [[nodiscard]] static constexpr std::vector<std::byte> rotWord(
+  //     std::vector<std::byte> word) {
+  //   if (word.size() != 4) {
+  //     throw std::invalid_argument("word must be 4 bytes len");
+  //   }
+  //   // return std::vector{word[1], word[2], word[3], word[0]};
+  //   std::rotate(word.begin(), word.begin() + 1, word.end());
+  //   return word;
+  // }
+
+  // [[nodiscard]] constexpr std::vector<std::byte> subWord(
+  //     const std::vector<std::byte>& word) const {
+  //   std::vector<std::byte> result(4);
+  //   for (size_t i = 0; i < 4; ++i) {
+  //     result[i] = _S_box[static_cast<uint8_t>(word[i])];
+  //   }
+  //   return result;
+  // }
+
+  static constexpr void rotWord(std::vector<std::byte>& word) {
+    if (word.size() != 4) {
+      throw std::invalid_argument("word must be 4 bytes len");
+    }
+    std::ranges::rotate(word, word.begin() + 1);
+  }
+
+  constexpr void subWord(std::vector<std::byte>& word) const {
+    for (size_t i = 0; i < 4; ++i) {
+      word[i] = _S_box[static_cast<uint8_t>(word[i])];
+    }
+  }
+
   auto genSBox() -> void {
     // афинное преобразование : обратный байт * матрицу специальную XOR 0x63
     // умножение есть & а потом всебайтовый xor
     for (size_t i = 0; i < SBOX_SIZ; ++i) {
       const auto inv = math::GaloisFieldPoly::invElem(
           static_cast<std::byte>(i), static_cast<std::byte>(_mod));
-      const std::byte meow = affine(inv);
-      const auto newVal =
-          static_cast<std::byte>(std::to_integer<std::uint8_t>(meow) ^ 0x63);
-      _S_box[i] = newVal;
-      _inv_S_box[std::to_integer<int>(newVal)] = static_cast<std::byte>(i);
+      _S_box[i] = static_cast<std::byte>(
+          std::to_integer<std::uint8_t>(affine(inv)) ^ 0x63);
+
+      const auto affine_result = inv_affine(static_cast<std::byte>(i));
+      _inv_S_box[i] = math::GaloisFieldPoly::invElem(
+          static_cast<std::byte>(std::to_integer<std::uint8_t>(affine_result) ^
+                                 0x05),
+          static_cast<std::byte>(_mod));
     }
   }
 
   template <size_t N>
-  constexpr void genRcon() {
+  [[nodiscard]] constexpr auto genRcon() const
+      -> std::vector<std::vector<std::byte>> {
     // rcon тупо из стандарта - 1 байт меняются, а остальные 3 нули
     static_assert(N == 10UL || N == 8UL || N == 7UL, "N must be 10, 8, or 7");
-    _rcon.resize(N);
-    uint32_t rc = 0x01;
+
+    std::vector _rcon(N, std::vector<std::byte>(4));
+    _rcon.shrink_to_fit();
+
+    auto rc = std::byte{0x01};
 
     for (size_t i = 0; i < N; i++) {
-      _rcon[i] = rc << 24;
+      _rcon[i][0] = std::byte{rc};
+      _rcon[i][1] = std::byte{0x00};
+      _rcon[i][2] = std::byte{0x00};
+      _rcon[i][3] = std::byte{0x00};
 
-      rc <<= 1;
-      if (rc & 0x100) {
-        rc ^= _mod;
-      }
-      rc &= 0xFF;
+      rc = math::GaloisFieldPoly::multToX(std::byte{rc},
+                                          static_cast<std::byte>(_mod));
+    }
+
+    return _rcon;
+  }
+
+  [[nodiscard]] constexpr auto pickRcon() const -> auto {
+    switch (_Nk) {
+      case 4:
+        return genRcon<10>();
+      case 6:
+        return genRcon<8>();
+      case 8:
+        return genRcon<7>();
+      default:
+        throw std::runtime_error("rcon gen err");
     }
   }
 
-  [[nodiscard]] static constexpr std::vector<std::byte> rotWord(
-      const std::vector<std::byte>& word) {
-    if (word.size() != 4) {
-      throw std::invalid_argument("word must be 4 bytes len");
-    }
-    return std::vector{word[1], word[2], word[3], word[0]};
-  }
-
-  [[nodiscard]] constexpr std::vector<std::byte> subWord(
-      const std::vector<std::byte>& word) const {
-    std::vector<std::byte> result(4);
-    for (size_t i = 0; i < 4; ++i) {
-      result[i] = _S_box[static_cast<uint8_t>(word[i])];
-    }
-    return result;
-  }
+  auto getRcon() const { return pickRcon(); }
 
   [[nodiscard]] constexpr auto keyGen(const std::span<std::byte> key) const
       -> std::vector<std::vector<std::byte>> {
@@ -350,47 +402,47 @@ class Rijndael final : public ISymmetricCypher,
                                std::to_string(4 * _Nk));
     }
 
-    if (_rcon.empty()) {
-      throw std::runtime_error("keyGen: _rcon not initialized");
-    }
+    const auto _rcon = getRcon();
 
+    // std::vector rk(_Nb * (_Nr + 1), std::vector<std::byte>(4));
     std::vector<std::vector<std::byte>> rk;
     rk.resize(_Nb * (_Nr + 1));
+    rk.shrink_to_fit();
     for (auto& elem : rk) {
       elem.resize(4);
+      elem.shrink_to_fit();
     }
 
     for (size_t i = 0; i < _Nk; ++i) {
-      rk[i] = std::vector{key[4 * i], key[4 * i + 1], key[4 * i + 2],
-                          key[4 * i + 3]};
+      rk[i] = {key[4 * i], key[4 * i + 1], key[4 * i + 2], key[4 * i + 3]};
     }
 
     for (size_t i = _Nk; i < _Nb * (_Nr + 1); ++i) {
-      std::vector<std::byte> temp = rk[i - 1];
+      std::vector<std::byte> tmp = rk[i - 1];
 
       if (i % _Nk == 0) {
-        temp = subWord(rotWord(temp));
+        // tmp = subWord(rotWord(tmp));
+        rotWord(tmp);
+        subWord(tmp);
 
-        const size_t rcon_idx = i / _Nk - 1;
+        const size_t rcon_idx = (i / _Nk) - 1;
         if (rcon_idx >= _rcon.size()) {
           throw std::runtime_error("keyGen: Rcon index out of bounds " +
                                    std::to_string(rcon_idx) + " vs " +
                                    std::to_string(_rcon.size()));
         }
 
-        const uint32_t rcon_val = _rcon[rcon_idx];
-        const auto rcon_byte =
-            std::byte{static_cast<uint8_t>((rcon_val >> 24) & 0xFF)};
-        temp[0] = temp[0] ^ rcon_byte;
+        tmp[0] = tmp[0] ^ _rcon[rcon_idx][0];
       } else if (_Nk > 6 && i % _Nk == 4) {
-        temp = subWord(temp);
+        // tmp = subWord(tmp);
+        subWord(tmp);
       }
 
       for (size_t j = 0; j < 4; ++j) {
         if (i - _Nk >= rk.size()) {
           throw std::runtime_error("keyGen: rk index out of bounds");
         }
-        rk[i][j] = rk[i - _Nk][j] ^ temp[j];
+        rk[i][j] = rk[i - _Nk][j] ^ tmp[j];
       }
     }
 
@@ -427,7 +479,7 @@ class Rijndael final : public ISymmetricCypher,
      */
     switch (_Nk) {
       case 4: {
-        genRcon<10>();
+        // genRcon<10>();
         switch (_Nb) {
           case 4: {
             _Nr = 10;
@@ -443,7 +495,7 @@ class Rijndael final : public ISymmetricCypher,
         }
       } break;
       case 6: {
-        genRcon<8>();
+        // genRcon<8>();
         switch (_Nb) {
           case 4:
           case 6:
@@ -457,7 +509,7 @@ class Rijndael final : public ISymmetricCypher,
         }
       } break;
       case 8: {
-        genRcon<7>();
+        // genRcon<7>();
         switch (_Nb) {
           case 4:
           case 6:

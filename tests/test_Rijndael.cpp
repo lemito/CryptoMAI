@@ -40,15 +40,21 @@ TEST(SBox, TestSBoxGen) {
   for (size_t i = 0; i < 256; ++i) {
     ASSERT_EQ(res._S_box[i], static_cast<std::byte>(exp[i]));
   }
+  ASSERT_EQ(res._inv_S_box[0], static_cast<std::byte>(0x52));
+  ASSERT_EQ(res._inv_S_box[255], static_cast<std::byte>(0x7d));
 }
 
 TEST(RCon, TestRcon) {
-  static constexpr uint32_t exp[] = {
-      0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10000000,
-      0x20000000, 0x40000000, 0x80000000, 0x1B000000, 0x36000000};
+  static constexpr std::byte exp[] = {
+      std::byte{0x01}, std::byte{0x02}, std::byte{0x04}, std::byte{0x08},
+      std::byte{0x10}, std::byte{0x20}, std::byte{0x40}, std::byte{0x80},
+      std::byte{0x1B}, std::byte{0x36}};
   const auto res = meow::cypher::symm::Rijndael::Rijndael(128, 128, 0x1B);
   for (size_t i = 0; i < 10; ++i) {
-    ASSERT_EQ(res._rcon[i], (exp[i]));
+    ASSERT_EQ(res.getRcon()[i][0], (exp[i]));
+    ASSERT_EQ(res.getRcon()[i][1], std::byte{0x00});
+    ASSERT_EQ(res.getRcon()[i][2], std::byte{0x00});
+    ASSERT_EQ(res.getRcon()[i][3], std::byte{0x00});
   }
 }
 
@@ -63,9 +69,10 @@ TEST(Key, KeyGen) {
       static_cast<std::byte>(0x09), static_cast<std::byte>(0xcf),
       static_cast<std::byte>(0x4f), static_cast<std::byte>(0x3c),
   };
-  // const std::span key_span(key);
-  auto res = meow::cypher::symm::Rijndael::Rijndael(128, 128, 0x1B);
-  ASSERT_NO_THROW(res.keyGen(std::span(key)));
+  const auto res = meow::cypher::symm::Rijndael::Rijndael(128, 128, 0x1B);
+  const auto meow = res.keyGen(std::span(key));
+  ASSERT_EQ(meow[10][0], static_cast<std::byte>(0xd0));
+  ASSERT_EQ(meow[10][15], static_cast<std::byte>(0xa6));
 }
 TEST(Rijndael, Stupid) {
   const std::vector key{
