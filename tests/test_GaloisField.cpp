@@ -22,6 +22,16 @@ TEST(GF, Multiply) {
   // std::cout << exp << std::endl;
 }
 
+TEST(GF, Multiply2) {
+  constexpr auto a(static_cast<std::byte>(0x53));
+  constexpr auto b(static_cast<std::byte>(0x02));
+  constexpr auto exp(static_cast<std::byte>(0xA6));
+  const auto meow = meow::math::GaloisFieldPoly::mult(
+      a, b, meow::math::GaloisFieldPoly::MOD_byte);
+  ASSERT_EQ(meow, exp);
+  // std::cout << exp << std::endl;
+}
+
 TEST(GF, allIrreducibleFor8) {
   const auto res = meow::math::GaloisFieldPoly::allIrreducibleFor8();
   ASSERT_EQ(res.size(), 30);
