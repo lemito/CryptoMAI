@@ -218,7 +218,7 @@ TEST(Rijndael, Stupid) {
   ctx.setAlgo(algo);
 
   ctx.encrypt("BUFFER", "2.txt");
-  ctx.decrypt("BUFFER_res", "BUFFER");
+  ctx.decrypt("BUFFER_res1", "BUFFER");
 
   ASSERT_TRUE(isFilesEqual("2.txt", "BUFFER_res"));
 }
@@ -248,8 +248,7 @@ TEST(Rijndael, Stupid2) {
   std::vector<std::byte> BUFFER_res(plain.size());
 
   const auto ptrRijndael =
-      std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128,
-      0x1B);
+      std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128, 0x1B);
   // ptrRijndael->keyGen(std::span(key));
 
   const auto algo =
@@ -264,6 +263,88 @@ TEST(Rijndael, Stupid2) {
   ctx.encrypt(BUFFER, plain);
   ctx.decrypt(BUFFER_res, BUFFER);
   ASSERT_EQ(plain, BUFFER_res);
+}
+
+TEST(Rijndael, Stupid256) {
+  const std::vector key{
+      std::byte{0x60}, std::byte{0x3d}, std::byte{0xeb}, std::byte{0x10},
+      std::byte{0x15}, std::byte{0xca}, std::byte{0x71}, std::byte{0xbe},
+      std::byte{0x2b}, std::byte{0x73}, std::byte{0xae}, std::byte{0xf0},
+      std::byte{0x85}, std::byte{0x7d}, std::byte{0x77}, std::byte{0x81},
+      std::byte{0x1f}, std::byte{0x35}, std::byte{0x2c}, std::byte{0x07},
+      std::byte{0x3b}, std::byte{0x61}, std::byte{0x08}, std::byte{0xd7},
+      std::byte{0x2d}, std::byte{0x98}, std::byte{0x10}, std::byte{0xa3},
+      std::byte{0x09}, std::byte{0x14}, std::byte{0xdf}, std::byte{0xf4}};
+  const std::vector plain = {
+      static_cast<std::byte>(0x32), static_cast<std::byte>(0x43),
+      static_cast<std::byte>(0xf6), static_cast<std::byte>(0xa8),
+      static_cast<std::byte>(0x88), static_cast<std::byte>(0x5a),
+      static_cast<std::byte>(0x30), static_cast<std::byte>(0x8d),
+      static_cast<std::byte>(0x31), static_cast<std::byte>(0x31),
+      static_cast<std::byte>(0x98), static_cast<std::byte>(0xa2),
+      static_cast<std::byte>(0xe0), static_cast<std::byte>(0x37),
+      static_cast<std::byte>(0x07), static_cast<std::byte>(0x34)};
+
+  std::vector<std::byte> BUFFER(plain.size());
+  std::vector<std::byte> BUFFER_res(plain.size());
+
+  const auto ptrRijndael =
+      std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 256, 0x1B);
+  // ptrRijndael->keyGen(std::span(key));
+
+  const auto algo =
+      std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+          ptrRijndael);
+
+  auto ctx = meow::cypher::symm::SymmetricCypherContext(
+      key, meow::cypher::symm::encryptionMode::ECB,
+      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+  ctx.setAlgo(algo);
+
+  ctx.encrypt("BUFFER", "2.txt");
+  ctx.decrypt("BUFFER_res256", "BUFFER");
+
+  ASSERT_TRUE(isFilesEqual("2.txt", "BUFFER_res256"));
+}
+
+TEST(Rijndael, Stupid192) {
+  const std::vector key{
+      std::byte{0x8e}, std::byte{0x73}, std::byte{0xb0}, std::byte{0xf7},
+      std::byte{0xda}, std::byte{0x0e}, std::byte{0x64}, std::byte{0x52},
+      std::byte{0xc8}, std::byte{0x10}, std::byte{0xf3}, std::byte{0x2b},
+      std::byte{0x80}, std::byte{0x90}, std::byte{0x79}, std::byte{0xe5},
+      std::byte{0x62}, std::byte{0xf8}, std::byte{0xea}, std::byte{0xd2},
+      std::byte{0x52}, std::byte{0x2c}, std::byte{0x6b}, std::byte{0x7b}};
+  const std::vector plain = {
+      static_cast<std::byte>(0x32), static_cast<std::byte>(0x43),
+      static_cast<std::byte>(0xf6), static_cast<std::byte>(0xa8),
+      static_cast<std::byte>(0x88), static_cast<std::byte>(0x5a),
+      static_cast<std::byte>(0x30), static_cast<std::byte>(0x8d),
+      static_cast<std::byte>(0x31), static_cast<std::byte>(0x31),
+      static_cast<std::byte>(0x98), static_cast<std::byte>(0xa2),
+      static_cast<std::byte>(0xe0), static_cast<std::byte>(0x37),
+      static_cast<std::byte>(0x07), static_cast<std::byte>(0x34)};
+
+  std::vector<std::byte> BUFFER(plain.size());
+  std::vector<std::byte> BUFFER_res(plain.size());
+
+  const auto ptrRijndael =
+      std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 192, 0x1B);
+  // ptrRijndael->keyGen(std::span(key));
+
+  const auto algo =
+      std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+          ptrRijndael);
+
+  auto ctx = meow::cypher::symm::SymmetricCypherContext(
+      key, meow::cypher::symm::encryptionMode::ECB,
+      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
+  ctx.setAlgo(algo);
+
+  ctx.encrypt("BUFFER", "2.txt");
+  ctx.decrypt("BUFFER_res192", "BUFFER");
+
+  ASSERT_TRUE(isFilesEqual("2.txt", "BUFFER_res192"));
 }
 
 int main(int argc, char** argv) {

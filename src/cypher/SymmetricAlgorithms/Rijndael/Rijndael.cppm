@@ -34,24 +34,17 @@ class Rijndael final : public ISymmetricCypher,
   2  6 10  14
   3  7 11  15
   */
+ public:
 
   // Number of columns (32-bit words) comprising the State
   size_t _Nb = 4;
   // Number of 32-bit words comprising the Cipher Key
-  size_t _Nk = 4;  // or 6 or 8
+  size_t _Nk;  // 4 or 6 or 8
   // Number of rounds, which is a function of Nk and Nb (which is fixed).
-  size_t _Nr = 10;  // or 12 or 14
+  size_t _Nr;  // 10 or 12 or 14
 
   uint32_t _mod;
 
-  // std::size_t _blockSize;  // размер блока указан в байт (для DES = 8)
-
- public:
-  // std::vector<uint32_t> _round_keys;
-
-  // #define RCON_MAX_SIZ (10)
-  //
-  // std::vector<uint32_t> _rcon{};
 
 #define SBOX_SIZ (1 << 8)
 
