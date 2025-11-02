@@ -35,16 +35,14 @@ class Rijndael final : public ISymmetricCypher,
   3  7 11  15
   */
  public:
-
   // Number of columns (32-bit words) comprising the State
-  size_t _Nb = 4;
+  size_t _Nb;
   // Number of 32-bit words comprising the Cipher Key
   size_t _Nk;  // 4 or 6 or 8
   // Number of rounds, which is a function of Nk and Nb (which is fixed).
   size_t _Nr;  // 10 or 12 or 14
 
   uint32_t _mod;
-
 
 #define SBOX_SIZ (1 << 8)
 
@@ -112,13 +110,7 @@ class Rijndael final : public ISymmetricCypher,
       throw std::runtime_error("mixColumns: state size is too small");
     }
 
-    const std::array shifts = {0, 1,
-                               (_Nb == 6)   ? 2
-                               : (_Nb == 8) ? 3
-                                            : 2,
-                               (_Nb == 6)   ? 4
-                               : (_Nb == 8) ? 4
-                                            : 3};
+    const std::array shifts = {0, 1, (_Nb == 8) ? 3 : 2, (_Nb == 8) ? 4 : 3};
 
     const std::vector cpy(state.begin(), state.end());
 
@@ -138,13 +130,7 @@ class Rijndael final : public ISymmetricCypher,
     if (state.size() != 4 * _Nb) {
       throw std::runtime_error("mixColumns: state size is too small");
     }
-    const std::array shifts = {0, 1,
-                               (_Nb == 6)   ? 2
-                               : (_Nb == 8) ? 3
-                                            : 2,
-                               (_Nb == 6)   ? 4
-                               : (_Nb == 8) ? 4
-                                            : 3};
+    const std::array shifts = {0, 1, (_Nb == 8) ? 3 : 2, (_Nb == 8) ? 4 : 3};
     const std::vector cpy(state.begin(), state.end());
 
     for (size_t r = 1; r < 4; r++) {
@@ -201,21 +187,22 @@ class Rijndael final : public ISymmetricCypher,
       throw std::runtime_error("mixColumns: state size is too small");
     }
 
-    std::vector<std::byte> copy(state.begin(), state.end());
+    const std::vector cpy(state.begin(), state.end());
 
     for (size_t c = 0; c < _Nb; ++c) {
-      std::byte s0 = copy[c];
-      std::byte s1 = copy[4 + c];
-      std::byte s2 = copy[8 + c];
-      std::byte s3 = copy[12 + c];
+      const std::byte s0 = cpy[0 * _Nb + c];
+      const std::byte s1 = cpy[1 * _Nb + c];
+      const std::byte s2 = cpy[2 * _Nb + c];
+      const std::byte s3 = cpy[3 * _Nb + c];
 
-      state[c] = math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x02),
-                                             static_cast<std::byte>(_mod)) ^
-                 math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x03),
-                                             static_cast<std::byte>(_mod)) ^
-                 s2 ^ s3;
+      state[0 * _Nb + c] =
+          math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x02),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x03),
+                                      static_cast<std::byte>(_mod)) ^
+          s2 ^ s3;
 
-      state[4 + c] =
+      state[1 * _Nb + c] =
           s0 ^
           math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x02),
                                       static_cast<std::byte>(_mod)) ^
@@ -223,14 +210,14 @@ class Rijndael final : public ISymmetricCypher,
                                       static_cast<std::byte>(_mod)) ^
           s3;
 
-      state[8 + c] =
+      state[2 * _Nb + c] =
           s0 ^ s1 ^
           math::GaloisFieldPoly::mult(s2, static_cast<std::byte>(0x02),
                                       static_cast<std::byte>(_mod)) ^
           math::GaloisFieldPoly::mult(s3, static_cast<std::byte>(0x03),
                                       static_cast<std::byte>(_mod));
 
-      state[12 + c] =
+      state[3 * _Nb + c] =
           math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x03),
                                       static_cast<std::byte>(_mod)) ^
           s1 ^ s2 ^
@@ -248,24 +235,25 @@ class Rijndael final : public ISymmetricCypher,
     if (state.empty()) {
       throw std::runtime_error("inv_mixColumns state empty :((");
     }
-    const std::vector copy(state.begin(), state.end());
+    const std::vector cpy(state.begin(), state.end());
 
     for (size_t c = 0; c < _Nb; ++c) {
-      std::byte s0 = copy[c];
-      std::byte s1 = copy[4 + c];
-      std::byte s2 = copy[8 + c];
-      std::byte s3 = copy[12 + c];
+      const std::byte s0 = cpy[0 * _Nb + c];
+      const std::byte s1 = cpy[1 * _Nb + c];
+      const std::byte s2 = cpy[2 * _Nb + c];
+      const std::byte s3 = cpy[3 * _Nb + c];
 
-      state[c] = math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x0e),
-                                             static_cast<std::byte>(_mod)) ^
-                 math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x0b),
-                                             static_cast<std::byte>(_mod)) ^
-                 math::GaloisFieldPoly::mult(s2, static_cast<std::byte>(0x0d),
-                                             static_cast<std::byte>(_mod)) ^
-                 math::GaloisFieldPoly::mult(s3, static_cast<std::byte>(0x09),
-                                             static_cast<std::byte>(_mod));
+      state[0 * _Nb + c] =
+          math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x0e),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x0b),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(s2, static_cast<std::byte>(0x0d),
+                                      static_cast<std::byte>(_mod)) ^
+          math::GaloisFieldPoly::mult(s3, static_cast<std::byte>(0x09),
+                                      static_cast<std::byte>(_mod));
 
-      state[4 + c] =
+      state[1 * _Nb + c] =
           math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x09),
                                       static_cast<std::byte>(_mod)) ^
           math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x0e),
@@ -275,7 +263,7 @@ class Rijndael final : public ISymmetricCypher,
           math::GaloisFieldPoly::mult(s3, static_cast<std::byte>(0x0d),
                                       static_cast<std::byte>(_mod));
 
-      state[8 + c] =
+      state[2 * _Nb + c] =
           math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x0d),
                                       static_cast<std::byte>(_mod)) ^
           math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x09),
@@ -285,7 +273,7 @@ class Rijndael final : public ISymmetricCypher,
           math::GaloisFieldPoly::mult(s3, static_cast<std::byte>(0x0b),
                                       static_cast<std::byte>(_mod));
 
-      state[12 + c] =
+      state[3 * _Nb + c] =
           math::GaloisFieldPoly::mult(s0, static_cast<std::byte>(0x0b),
                                       static_cast<std::byte>(_mod)) ^
           math::GaloisFieldPoly::mult(s1, static_cast<std::byte>(0x0d),
@@ -375,7 +363,7 @@ class Rijndael final : public ISymmetricCypher,
   [[nodiscard]] constexpr auto genRcon() const
       -> std::vector<std::vector<std::byte>> {
     // rcon тупо из стандарта - 1 байт меняются, а остальные 3 нули
-    static_assert(N == 10UL || N == 8UL || N == 7UL, "N must be 10, 8, or 7");
+    static_assert(N == 10UL || N == 12UL || N == 14UL, "N must be 10, 8, or 7");
 
     std::vector _rcon(N, std::vector<std::byte>(4));
     _rcon.shrink_to_fit();
@@ -400,9 +388,9 @@ class Rijndael final : public ISymmetricCypher,
       case 4:
         return genRcon<10>();
       case 6:
-        return genRcon<8>();
+        return genRcon<12>();
       case 8:
-        return genRcon<7>();
+        return genRcon<14>();
       default:
         throw std::runtime_error("rcon gen err");
     }
@@ -514,6 +502,8 @@ class Rijndael final : public ISymmetricCypher,
         // genRcon<8>();
         switch (_Nb) {
           case 4:
+            _Nr = 12;
+            break;
           case 6:
             _Nr = 12;
             break;
@@ -528,7 +518,11 @@ class Rijndael final : public ISymmetricCypher,
         // genRcon<7>();
         switch (_Nb) {
           case 4:
+            _Nr = 14;
+            break;
           case 6:
+            _Nr = 14;
+            break;
           case 8:
             _Nr = 14;
             break;
