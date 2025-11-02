@@ -762,8 +762,33 @@ class SymmetricCypherContext {
     if (_roundKeys.empty()) {
       throw std::runtime_error("рандовые ключи пусты, проверь ключ");
     }
+    if (in.empty()) {
+      throw std::runtime_error("empty in");
+    }
     // TODO: ляляля тут шифрование
     dest = std::move(_processBlock(ACTION_MODE::encrypt, in).get());
+  }
+
+  constexpr auto encryptAsync(std::vector<std::byte>& dest,
+                              const std::vector<std::byte>& in)
+      -> std::future<void> {
+    if (_algo == nullptr) {
+      throw std::runtime_error(
+          "алгоритм шифрования/дешифрования не установлен. воспользуйся "
+          "методом setAlgo");
+    }
+    if (_encryptionKey.empty()) {
+      throw std::runtime_error("ключ должен быть не пустым");
+    }
+    if (_roundKeys.empty()) {
+      throw std::runtime_error("рандовые ключи пусты, проверь ключ");
+    }
+    if (in.empty()) {
+      throw std::runtime_error("empty in");
+    }
+    return std::async(std::launch::async, [&]() {
+      dest = std::move(_processBlock(ACTION_MODE::encrypt, in).get());
+    });
   }
 
   // constexpr void encrypt(std::vector<std::byte>& dest,
@@ -786,8 +811,33 @@ class SymmetricCypherContext {
     if (_roundKeys.empty()) {
       throw std::runtime_error("рандовые ключи пусты, проверь ключ");
     }
+    if (in.empty()) {
+      throw std::runtime_error("empty in");
+    }
     // TODO: ляляля тут дешифрование
     dest = std::move(_processBlock(ACTION_MODE::decrypt, in).get());
+  }
+
+  constexpr auto decryptAsync(std::vector<std::byte>& dest,
+                              const std::vector<std::byte>& in)
+      -> std::future<void> {
+    if (_algo == nullptr) {
+      throw std::runtime_error(
+          "алгоритм шифрования/дешифрования не установлен. воспользуйся "
+          "методом setAlgo");
+    }
+    if (_encryptionKey.empty()) {
+      throw std::runtime_error("ключ должен быть не пустым");
+    }
+    if (_roundKeys.empty()) {
+      throw std::runtime_error("рандовые ключи пусты, проверь ключ");
+    }
+    if (in.empty()) {
+      throw std::runtime_error("empty in");
+    }
+    return std::async(std::launch::async, [&]() {
+      dest = std::move(_processBlock(ACTION_MODE::decrypt, in).get());
+    });
   }
 
   // constexpr void decrypt(std::vector<std::byte>& dest,
@@ -803,7 +853,14 @@ class SymmetricCypherContext {
       _processFile(ACTION_MODE::encrypt, inPath, destPath);
     });
     f.get();
-    // _processFile(ACTION_MODE::encrypt, inPath, destPath);
+  }
+
+  constexpr auto encryptAsync(const std::string& destPath,
+                              const std::string& inPath) -> std::future<void> {
+    std::future<void> f = std::async(std::launch::async, [&]() {
+      _processFile(ACTION_MODE::encrypt, inPath, destPath);
+    });
+    return f;
   }
 
   constexpr void decrypt(const std::string& destPath,
@@ -812,7 +869,14 @@ class SymmetricCypherContext {
       _processFile(ACTION_MODE::decrypt, inPath, destPath);
     });
     f.get();
-    // _processFile(ACTION_MODE::decrypt, inPath, destPath);
+  }
+
+  constexpr auto decryptAsync(const std::string& destPath,
+                              const std::string& inPath) -> std::future<void> {
+    std::future<void> f = std::async(std::launch::async, [&]() {
+      _processFile(ACTION_MODE::decrypt, inPath, destPath);
+    });
+    return f;
   }
 };
 }  // namespace meow::cypher::symm
