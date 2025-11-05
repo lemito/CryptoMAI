@@ -145,6 +145,9 @@ class Rijndael final : public ISymmetricCypher,
     if (state.empty()) {
       throw std::runtime_error("subBytes state empty :((");
     }
+    if (_S_box.empty()) {
+      throw std::runtime_error("sBox is empty");
+    }
     for (size_t i = 0; i < state.size(); ++i) {
       state[i] = _S_box[static_cast<uint8_t>(state[i])];
     }
@@ -154,6 +157,9 @@ class Rijndael final : public ISymmetricCypher,
     if (state.empty()) {
       throw std::runtime_error("inv_subBytes state empty :((");
     }
+    if (_inv_S_box.empty()) {
+      throw std::runtime_error("_inv_S_box is empty");
+    }
     for (size_t i = 0; i < state.size(); ++i) {
       state[i] = _inv_S_box[static_cast<uint8_t>(state[i])];
     }
@@ -162,6 +168,9 @@ class Rijndael final : public ISymmetricCypher,
   constexpr auto subWord(std::span<std::byte> in) const -> void {
     if (in.size() != 4) {
       throw std::invalid_argument("word must be 4 bytes len");
+    }
+    if (_S_box.empty()) {
+      throw std::runtime_error("sBox is empty");
     }
     for (size_t i = 0; i < in.size(); ++i) {
       in[i] = _S_box[std::to_integer<uint16_t>(in[i])];
@@ -469,6 +478,9 @@ class Rijndael final : public ISymmetricCypher,
     }
     if (key_size != 128 && key_size != 192 && key_size != 256) {
       throw std::invalid_argument("key_size only 128/192/256 bit");
+    }
+    if (mod > 255) {
+      throw std::runtime_error("mod too big. only [0x00,0xFF] allowed");
     }
 
     _Nb = block_size / (8 * 4);
