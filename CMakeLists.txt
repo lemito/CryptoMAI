@@ -26,6 +26,65 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
+
+find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
+
+find_package(Protobuf REQUIRED)
+message(STATUS "Protobuf version: ${Protobuf_VERSION}")
+message(STATUS "Protobuf include dir: ${Protobuf_INCLUDE_DIRS}")
+message(STATUS "Protobuf libraries: ${Protobuf_LIBRARIES}")
+
+find_package(gRPC REQUIRED)
+message(STATUS "gRPC version: ${gRPC_VERSION}")
+message(STATUS "gRPC include dir: ${gRPC_INCLUDE_DIRS}")
+message(STATUS "gRPC libraries: ${gRPC_LIBRARIES}")
+
+set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
+set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+file(MAKE_DIRECTORY ${GENERATED_DIR})
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_DIR}/cypher.proto)
+
+# set(PROTO_FILE ${PROTO_DIR}/cypher.proto)
+# set(PROTO_SRCS "${GENERATED_DIR}/cypher.pb.cc")
+# set(PROTO_HDRS "${GENERATED_DIR}/cypher.pb.h")
+# set(GRPC_SRCS "${GENERATED_DIR}/cypher.grpc.pb.cc")
+# set(GRPC_HDRS "${GENERATED_DIR}/cypher.grpc.pb.h")
+
+# add_custom_command(
+#         OUTPUT ${PROTO_SRCS} ${PROTO_HDRS}
+#         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+#         ARGS
+#         --cpp_out=${GENERATED_DIR}
+#         -I ${PROTO_DIR}
+#         ${PROTO_FILE}
+#         DEPENDS ${PROTO_FILE} ${Protobuf_PROTOC_EXECUTABLE}
+#         COMMENT "Generating protobuf code"
+# )
+
+# add_custom_command(
+#         OUTPUT ${GRPC_SRCS} ${GRPC_HDRS}
+#         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
+#         ARGS
+#         --grpc_out=${GENERATED_DIR}
+#         --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+#         -I ${PROTO_DIR}
+#         ${PROTO_FILE}
+#         DEPENDS ${PROTO_FILE} ${Protobuf_PROTOC_EXECUTABLE} gRPC::grpc_cpp_plugin
+#         COMMENT "Generating gRPC code"
+# )
+
+# add_custom_target(generate_proto_files ALL
+#         DEPENDS ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
+# )
+
+# include_directories(
+#         ${CMAKE_CURRENT_SOURCE_DIR}
+#         ${GENERATED_DIR}
+#         ${Protobuf_INCLUDE_DIRS}
+#         ${gRPC_INCLUDE_DIRS}
+# )
 #find_program(CLANG_TIDY_EXE NAMES "clang-tidy" REQUIRED)
 #set(CLANG_TIDY_COMMAND "${CLANG_TIDY_EXE}" "-checks=-*,modernize-*,performance-*,cppcoreguidelines-*")
 
