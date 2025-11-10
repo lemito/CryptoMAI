@@ -9,13 +9,13 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
 # set_property(DIRECTORY PROPERTY CXX_MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/module-cache")
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    #     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
 
     file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/module_cache)
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/module_cache)
-endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -stdlib=libc++")
+endif ()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -stdlib=libc++ -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR} -pthread ")
 
 project(CryptoMAI LANGUAGES CXX)
 
@@ -44,7 +44,28 @@ set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 file(MAKE_DIRECTORY ${GENERATED_DIR})
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_DIR}/cypher.proto)
+
+add_library(CypherProto ${PROTO_DIR}/cypher.proto)
+target_link_libraries(CypherProto PUBLIC gRPC::grpc++)
+
+protobuf_generate(TARGET CypherProto)
+protobuf_generate(
+        TARGET CypherProto
+        LANGUAGE grpc
+        PLUGIN protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+        PLUGIN_OPTIONS generate_mock_code=true
+        GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+)
+
+
+target_include_directories(CypherProto PUBLIC
+        ${PROTO_GEN_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_link_libraries(CypherProto PUBLIC gRPC::grpc++)
+
+#protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_DIR}/cypher.proto)
 
 # set(PROTO_FILE ${PROTO_DIR}/cypher.proto)
 # set(PROTO_SRCS "${GENERATED_DIR}/cypher.pb.cc")
@@ -174,23 +195,25 @@ target_link_libraries(Crypto INTERFACE
 )
 
 foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
-   target_compile_options(${target} PRIVATE
-           -fmodules
-           -fbuiltin-module-map
-           -fimplicit-modules
-           -stdlib=libc++
-           -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
-   )
-#   set_target_properties(${target} PROPERTIES CXX_STANDART 23 CXX_STANDART_REQUIRED ON CXX_EXTENSIONS OFF CXX_MODULE_STD 1)
+    target_compile_options(${target} PRIVATE
+            -fmodules
+            -fbuiltin-module-map
+            -fimplicit-modules
+            -stdlib=libc++
+            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
+            -pthread
+    )
+    #   set_target_properties(${target} PROPERTIES CXX_STANDART 23 CXX_STANDART_REQUIRED ON CXX_EXTENSIONS OFF CXX_MODULE_STD 1)
 endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
+add_subdirectory("src/server")
 
 add_executable(experiments tests/experiments/experiments.cpp)
 
 if (Boost_FOUND)
-    include_directories (SYSTEM ${Boost_INCLUDE_DIR})
-    target_link_libraries (experiments ${Boost_LIBRARIES})
+    include_directories(SYSTEM ${Boost_INCLUDE_DIR})
+    target_link_libraries(experiments ${Boost_LIBRARIES})
 endif ()
 #set_target_properties(CryptoSymmetric PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")

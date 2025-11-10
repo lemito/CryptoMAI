@@ -1,0 +1,3 @@
+sudo sed -i '1i #include <ratio>' /usr/include/absl/time/internal/cctz/include/cctz/time_zone.h
+sudo sed -i 's/std::femto/std::atto/g' /usr/include/absl/time/internal/cctz/include/cctz/time_zone.h
+sudo sed -i 's/femtoseconds/attoseconds/g' /usr/include/absl/time/internal/cctz/include/cctz/time_zone.h
