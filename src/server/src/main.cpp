@@ -1,8 +1,10 @@
+#include <grpcpp/grpcpp.h>
+
 #include <iostream>
 
-#include "utils_math.h"
-
 #include "proto/cypher.grpc.pb.h"
+#include "proto/cypher.pb.h"
+#include "utils_math.h"
 
 import <vector>;
 import <any>;
@@ -23,6 +25,7 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
     if (name == "DES") {
       return std::make_shared<meow::cypher::symm::DES::DES>();
     }
+    // TODO: 
     throw std::invalid_argument("Unsupported algorithm: " + name);
   }
 
@@ -126,7 +129,20 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
   }
 };
 
+void RunServer(const std::string& addr) {
+  CypherServiceImpl service_impl;
+  ServerBuilder builder;
+  builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
+  builder.RegisterService(&service_impl);
+
+  const std::unique_ptr server(builder.BuildAndStart());
+  std::cout << "Crypto server listening on " << addr << std::endl;
+  server->Wait();
+}
+
 auto main() -> int {
   std::cout << "1" << std::endl;
+  const std::string address = "0.0.0.0:50052";
+  RunServer(address);
   return 0;
 }
