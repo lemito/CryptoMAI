@@ -1,8 +1,11 @@
 /**
  *
  */
-
 #include <grpcpp/grpcpp.h>
+
+import cypher;
+import cypher.DES;
+import Rijndael;
 
 #include <any>
 #include <iostream>
@@ -12,10 +15,6 @@
 #include "proto/cypher.grpc.pb.h"
 #include "proto/cypher.pb.h"
 #include "utils_math.h"
-
-import cypher;
-import cypher.DES;
-import Rijndael;
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -42,17 +41,43 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
   static std::vector<std::byte> bytes2vector(const std::string& bytes) {
     std::vector<std::byte> result;
     result.reserve(bytes.size());
-    for (char c : bytes) {
+    for (const char c : bytes) {
       result.push_back(static_cast<std::byte>(c));
     }
     return result;
   }
 
  public:
+  Status GetSupportedAlgorithms(ServerContext* context,
+                                const crypto::Empty* request,
+                                crypto::AlgorithmList* response) override {
+    try {
+      const std::vector<std::tuple<std::string, int32_t, int32_t>> algos = {
+          {"DES", 64, 64},          {"LOKI97_128", 128, 128},
+          {"LOKI97_192", 192, 128}, {"LOKI97_256", 256, 128},
+          {"RC6_128", 128, 128},    {"RC6_192", 192, 128},
+          {"RC6_256", 256, 128}};
+
+      for (const auto& [name, key_size, block_size] : algos) {
+        crypto::Algorithm* algo = response->add_algorithms();
+        algo->set_name(name);
+        algo->set_key_size_bits(key_size);
+        algo->set_block_size_bits(block_size);
+      }
+
+      return Status::OK;
+    } catch (const std::exception& e) {
+      return Status(
+          grpc::StatusCode::INTERNAL,
+          "Failed to generate algorithms list: " + std::string(e.what()));
+    }
+  }
+
   Status Encrypt(ServerContext* context, const crypto::EncryptRequest* request,
                  crypto::EncryptResponse* response) override {
     try {
       std::vector<std::byte> key = bytes2vector(request->key());
+      std::cout << request->key() << " " << key.size() << std::endl;
       std::vector<std::byte> data = bytes2vector(request->data());
       std::optional<std::vector<std::byte>> iv;
       std::optional<BI> iv_bigint;
@@ -72,16 +97,20 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
           key, static_cast<meow::cypher::symm::encryptionMode>(request->mode()),
           static_cast<meow::cypher::symm::paddingMode>(request->padding()), iv,
           request->random_delta());
+      std::cout << "Meow" << std::endl;
 
       auto algo = createAlgorithm(request->algorithm());
       ctx.setAlgo(algo);
+      std::cout << "Meow" << std::endl;
 
       std::vector<std::byte> output;
       ctx.encrypt(output, data);
+      std::cout << "Meow" << std::endl;
 
       response->set_ciphertext(
           std::string(reinterpret_cast<char*>(output.data()), output.size()));
       response->set_success(true);
+      std::cout << "Meow" << std::endl;
       return Status::OK;
     } catch (const std::exception& e) {
       response->set_success(false);
@@ -94,6 +123,7 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
                  crypto::DecryptResponse* response) override {
     try {
       std::vector<std::byte> key = bytes2vector(request->key());
+      std::cout << key.size() << std::endl;
       std::vector<std::byte> data = bytes2vector(request->ciphertext());
       std::optional<std::vector<std::byte>> iv;
       std::optional<BI> iv_bigint;
@@ -127,6 +157,7 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
     } catch (const std::exception& e) {
       response->set_success(false);
       response->set_error(e.what());
+      std::cerr << e.what() << std::endl;
       return Status(grpc::StatusCode::INTERNAL, e.what());
     }
   }
