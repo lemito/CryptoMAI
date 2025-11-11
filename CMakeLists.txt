@@ -15,7 +15,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/module_cache)
     file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/module_cache)
 endif ()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -stdlib=libc++ -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR} -pthread ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR} -pthread ")
 
 project(CryptoMAI LANGUAGES CXX)
 
@@ -57,57 +57,10 @@ protobuf_generate(
         GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
 )
 
-
 target_include_directories(CypherProto PUBLIC
         ${PROTO_GEN_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}
 )
-
-target_link_libraries(CypherProto PUBLIC gRPC::grpc++)
-
-#protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_DIR}/cypher.proto)
-
-# set(PROTO_FILE ${PROTO_DIR}/cypher.proto)
-# set(PROTO_SRCS "${GENERATED_DIR}/cypher.pb.cc")
-# set(PROTO_HDRS "${GENERATED_DIR}/cypher.pb.h")
-# set(GRPC_SRCS "${GENERATED_DIR}/cypher.grpc.pb.cc")
-# set(GRPC_HDRS "${GENERATED_DIR}/cypher.grpc.pb.h")
-
-# add_custom_command(
-#         OUTPUT ${PROTO_SRCS} ${PROTO_HDRS}
-#         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
-#         ARGS
-#         --cpp_out=${GENERATED_DIR}
-#         -I ${PROTO_DIR}
-#         ${PROTO_FILE}
-#         DEPENDS ${PROTO_FILE} ${Protobuf_PROTOC_EXECUTABLE}
-#         COMMENT "Generating protobuf code"
-# )
-
-# add_custom_command(
-#         OUTPUT ${GRPC_SRCS} ${GRPC_HDRS}
-#         COMMAND ${Protobuf_PROTOC_EXECUTABLE}
-#         ARGS
-#         --grpc_out=${GENERATED_DIR}
-#         --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
-#         -I ${PROTO_DIR}
-#         ${PROTO_FILE}
-#         DEPENDS ${PROTO_FILE} ${Protobuf_PROTOC_EXECUTABLE} gRPC::grpc_cpp_plugin
-#         COMMENT "Generating gRPC code"
-# )
-
-# add_custom_target(generate_proto_files ALL
-#         DEPENDS ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
-# )
-
-# include_directories(
-#         ${CMAKE_CURRENT_SOURCE_DIR}
-#         ${GENERATED_DIR}
-#         ${Protobuf_INCLUDE_DIRS}
-#         ${gRPC_INCLUDE_DIRS}
-# )
-#find_program(CLANG_TIDY_EXE NAMES "clang-tidy" REQUIRED)
-#set(CLANG_TIDY_COMMAND "${CLANG_TIDY_EXE}" "-checks=-*,modernize-*,performance-*,cppcoreguidelines-*")
 
 include(FetchContent)
 FetchContent_Declare(
@@ -198,7 +151,7 @@ foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
             -fmodules
             -fbuiltin-module-map
             -fimplicit-modules
-            -stdlib=libc++
+#            -stdlib=libc++
             -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
             -pthread
     )
@@ -209,10 +162,10 @@ enable_testing()
 add_subdirectory(tests)
 add_subdirectory("src/server")
 
-add_executable(experiments tests/experiments/experiments.cpp)
+# add_executable(experiments tests/experiments/experiments.cpp)
 
-if (Boost_FOUND)
-    include_directories(SYSTEM ${Boost_INCLUDE_DIR})
-    target_link_libraries(experiments ${Boost_LIBRARIES})
-endif ()
+# if (Boost_FOUND)
+#     include_directories(SYSTEM ${Boost_INCLUDE_DIR})
+#     target_link_libraries(experiments ${Boost_LIBRARIES})
+# endif ()
 #set_target_properties(CryptoSymmetric PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")

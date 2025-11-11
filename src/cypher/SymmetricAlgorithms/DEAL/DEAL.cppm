@@ -1,24 +1,24 @@
 module;
 
+#include <array>
 #include <bit>
+#include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <vector>
 
 #include "debug.h"
-
 export module cypher.DEAL;
-import <cstdint>;
-import <array>;
-import <cstddef>;
-import <memory>;
-import <span>;
-import <stdexcept>;
-import <tuple>;
-import <vector>;
 
 import cypher.utils;
+import cypher;
+
 import cypher.FeistelNet;
 import cypher.DES;
-import cypher;
 
 export class BadDEALKey final : public std::exception {
  public:

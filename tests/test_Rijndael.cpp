@@ -1,16 +1,17 @@
 #include <gtest/gtest.h>
 
+#include <array>
+#include <exception>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <span>
+
 #include "utils_math.h"
 
 import cypher;
 import Rijndael;
 import math.GaloisFieldPoly;
-import <array>;
-import <span>;
-import <exception>;
-import <iostream>;
-import <fstream>;
-import <format>;
 
 bool isFilesEqual(const std::string& filePath1, const std::string& filePath2) {
   std::ifstream file1(filePath1, std::ios::binary);
@@ -219,15 +220,15 @@ TEST(Rijndael, Stupid) {
 
 TEST(Rijndael, Biggest) {
   const std::vector key{
-    std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
-    std::byte{0x04}, std::byte{0x05}, std::byte{0x06}, std::byte{0x07},
-    std::byte{0x08}, std::byte{0x09}, std::byte{0x0a}, std::byte{0x0b},
-    std::byte{0x0c}, std::byte{0x0d}, std::byte{0x0e}, std::byte{0x0f}};
+      std::byte{0x00}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03},
+      std::byte{0x04}, std::byte{0x05}, std::byte{0x06}, std::byte{0x07},
+      std::byte{0x08}, std::byte{0x09}, std::byte{0x0a}, std::byte{0x0b},
+      std::byte{0x0c}, std::byte{0x0d}, std::byte{0x0e}, std::byte{0x0f}};
   const std::vector plain = {
-    std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33},
-    std::byte{0x44}, std::byte{0x55}, std::byte{0x66}, std::byte{0x77},
-    std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
-    std::byte{0xcc}, std::byte{0xdd}, std::byte{0xee}, std::byte{0xff}};
+      std::byte{0x00}, std::byte{0x11}, std::byte{0x22}, std::byte{0x33},
+      std::byte{0x44}, std::byte{0x55}, std::byte{0x66}, std::byte{0x77},
+      std::byte{0x88}, std::byte{0x99}, std::byte{0xaa}, std::byte{0xbb},
+      std::byte{0xcc}, std::byte{0xdd}, std::byte{0xee}, std::byte{0xff}};
 
   const auto ptrRijndael =
       std::make_shared<meow::cypher::symm::Rijndael::Rijndael>(128, 128, 0x1B);

@@ -1,8 +1,9 @@
 #include <gtest/gtest.h>
 #include <stddef.h>
 
+#include <array>
+
 import math.GaloisFieldPoly;
-import <array>;
 
 TEST(GF, Add) {
   const auto a(static_cast<std::byte>(0x57));

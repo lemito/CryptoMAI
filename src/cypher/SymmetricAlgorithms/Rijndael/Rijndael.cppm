@@ -5,7 +5,14 @@
  */
 module;
 // #include <cstddef>
+#include <algorithm>
 #include <any>
+#include <array>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <print>
+#include <span>
 #include <vector>
 
 #include "debug.h"
@@ -13,14 +20,6 @@ export module Rijndael;
 import cypher;
 import math.GaloisFieldPoly;
 import cypher.utils;
-import <array>;
-import <algorithm>;
-import <cstring>;
-import <span>;
-import <cstdint>;
-import <vector>;
-import <iostream>;
-import <print>;
 
 export namespace meow::cypher::symm::Rijndael {
 class Rijndael final : public ISymmetricCypher,
@@ -479,9 +478,9 @@ class Rijndael final : public ISymmetricCypher,
     if (key_size != 128 && key_size != 192 && key_size != 256) {
       throw std::invalid_argument("key_size only 128/192/256 bit");
     }
-   /* if (mod > 255) {
-      throw std::runtime_error("mod too big. only [0x00,0xFF] allowed");
-    } */
+    /* if (mod > 255) {
+       throw std::runtime_error("mod too big. only [0x00,0xFF] allowed");
+     } */
 
     _Nb = block_size / (8 * 4);
     _blockSize = _Nb * 4;

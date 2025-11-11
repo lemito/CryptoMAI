@@ -41,10 +41,10 @@ add_executable(test_DES
 )
 target_link_libraries(test_DES PRIVATE Crypto GTest::gtest GTest::gtest_main) #
 
-add_executable(test_DES_clear
-        test_DES_clear.cpp
-)
-target_link_libraries(test_DES_clear PRIVATE Crypto) #
+# add_executable(test_DES_clear
+#         test_DES_clear.cpp
+# )
+# target_link_libraries(test_DES_clear PRIVATE Crypto) #
 #set_target_properties(test_DES_clear PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
 
 add_executable(test_WiennerAttack test_WiennerAttack.cpp)

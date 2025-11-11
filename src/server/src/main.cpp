@@ -1,14 +1,17 @@
+/**
+ *
+ */
+
 #include <grpcpp/grpcpp.h>
 
+#include <any>
 #include <iostream>
+#include <optional>
+#include <vector>
 
 #include "proto/cypher.grpc.pb.h"
 #include "proto/cypher.pb.h"
 #include "utils_math.h"
-
-import <vector>;
-import <any>;
-import <optional>;
 
 import cypher;
 import cypher.DES;
@@ -25,7 +28,7 @@ class CypherServiceImpl final : public crypto::CypherService::Service {
     if (name == "DES") {
       return std::make_shared<meow::cypher::symm::DES::DES>();
     }
-    // TODO: 
+    // TODO:
     throw std::invalid_argument("Unsupported algorithm: " + name);
   }
 

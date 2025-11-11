@@ -8,6 +8,9 @@ module;
 #include <any>
 // #include <boost/multiprecision/gmp.hpp>
 // #include <cstddef>
+#include <algorithm>
+#include <any>
+#include <cstddef>
 #include <cstdint>
 #include <execution>
 #include <fstream>
@@ -17,6 +20,7 @@ module;
 #include <print>
 #include <random>
 #include <ranges>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -24,19 +28,6 @@ module;
 #include "utils_math.h"
 
 export module cypher;
-
-import <any>;
-import <future>;
-import <vector>;
-import <fstream>;
-import <memory>;
-import <cstddef>;
-import <algorithm>;
-import <type_traits>;
-import <random>;
-import <optional>;
-import <print>;
-import <ranges>;
 
 export std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
                                       const std::vector<std::byte>& b) {

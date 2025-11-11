@@ -7,20 +7,19 @@
 module;
 // #include <array>
 // #include <cstdint>
+#include <array>;
+#include <cstddef>;
+#include <cstdint>;
+#include <format>;
 #include <iostream>
+#include <iterator>;
 #include <ostream>
+#include <sstream>;
+#include <tuple>;
+#include <vector>;
 // #include <sstream>
 // #include <vector>
 export module math.GaloisFieldPoly;
-import <array>;
-import <cstddef>;
-import <format>;
-import <tuple>;
-import <iterator>;
-import <cstdint>;
-import <vector>;
-import <sstream>;
-import <cstddef>;
 
 // https://en.wikipedia.org/wiki/M%C3%B6bius_function
 /**
