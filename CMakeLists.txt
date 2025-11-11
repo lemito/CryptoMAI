@@ -208,7 +208,7 @@ endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
-add_subdirectory("src/server")
+#add_subdirectory("src/server")
 
 add_executable(experiments tests/experiments/experiments.cpp)
 

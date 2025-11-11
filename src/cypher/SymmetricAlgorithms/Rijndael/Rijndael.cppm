@@ -479,9 +479,9 @@ class Rijndael final : public ISymmetricCypher,
     if (key_size != 128 && key_size != 192 && key_size != 256) {
       throw std::invalid_argument("key_size only 128/192/256 bit");
     }
-    if (mod > 255) {
+   /* if (mod > 255) {
       throw std::runtime_error("mod too big. only [0x00,0xFF] allowed");
-    }
+    } */
 
     _Nb = block_size / (8 * 4);
     _blockSize = _Nb * 4;
