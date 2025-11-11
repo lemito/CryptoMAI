@@ -179,7 +179,6 @@ target_link_libraries(CryptoGaloisFieldPoly PUBLIC)
 target_compile_features(Rijndael PRIVATE cxx_std_23)
 target_sources(Rijndael PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-        src/cypher/SymmetricAlgorithms/utils.cppm
         src/cypher/SymmetricAlgorithms/Rijndael/Rijndael.cppm
 )
 target_link_libraries(Rijndael PUBLIC CryptoSymmetric CryptoGaloisFieldPoly)
@@ -208,7 +207,7 @@ endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
-#add_subdirectory("src/server")
+add_subdirectory("src/server")
 
 add_executable(experiments tests/experiments/experiments.cpp)
 
