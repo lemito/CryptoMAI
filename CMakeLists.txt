@@ -77,6 +77,8 @@ add_library(CryptoDES STATIC)
 add_library(CryptoDEAL STATIC)
 add_library(CryptoGaloisFieldPoly STATIC)
 add_library(Rijndael STATIC)
+add_library(CryptoRC6 STATIC)
+add_library(CryptoLOKI97 STATIC)
 add_library(Crypto INTERFACE
         include/debug.h)
 
@@ -128,6 +130,20 @@ target_sources(CryptoGaloisFieldPoly PUBLIC
         src/math/GaloisFieldPoly.cppm
 )
 target_link_libraries(CryptoGaloisFieldPoly PUBLIC)
+
+target_compile_features(CryptoLOKI97 PRIVATE cxx_std_23)
+target_sources(CryptoLOKI97 PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/LOKI97/loki97.cppm
+)
+target_link_libraries(CryptoLOKI97 PUBLIC CryptoSymmetric)
+
+target_compile_features(CryptoRC6 PRIVATE cxx_std_23)
+target_sources(CryptoRC6 PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/RC6/rc6.cppm
+)
+target_link_libraries(CryptoRC6 PUBLIC CryptoSymmetric)
 
 target_compile_features(Rijndael PRIVATE cxx_std_23)
 target_sources(Rijndael PUBLIC
