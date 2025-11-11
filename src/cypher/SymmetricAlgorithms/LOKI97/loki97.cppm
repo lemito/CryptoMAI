@@ -1,4 +1,11 @@
 module;
+
+#include <vector>
+#include <cstddef>
+#include <stdexcept>
+#include <cassert>
+#include <memory>
+
 export module cypher.loki97;
 
 import cypher.FeistelNet;
@@ -24,6 +31,7 @@ class LOKI97GenRoundKey final : public IGenRoundKey {
     if (inputKey.size() != 8) {
       throw std::runtime_error("ключ должен быть 8 байт == 64 бит");
     }
+    std::vector<std::vector<std::byte>> res;
 
     // TODO: !!! про разные ключи не забыть!
 
@@ -36,11 +44,11 @@ export class LOKI97EncryptionDecryption final : public IEncryptionDecryption {
   [[nodiscard]] constexpr std::vector<std::byte> encryptDecryptBlock(
       const std::vector<std::byte>& inputBlock,
       const std::vector<std::byte>& roundKey) const override {
-    if (big.size() != roundKey.size()) {
-      throw std::runtime_error(
-          "размер раундового ключа не совпал с размером расширенного блока "
-          "(ожидается 6 байт / 48 бит)");
-    }
+    // if (big.size() != roundKey.size()) {
+    //   throw std::runtime_error(
+    //       "размер раундового ключа не совпал с размером расширенного блока "
+    //       "(ожидается 6 байт / 48 бит)");
+    // }
     // TODO:
   }
 };
@@ -55,20 +63,12 @@ class LOKI97 final : public FeistelNet::FeistelNet {
 
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
-    auto pre =
-        permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
-    auto encr = FeistelNet::encrypt(std::move(pre));
-    return permutate::permutation(std::move(encr), IP_inv,
-                                  permutate::bitIndexingRule::MSB2LSB, 1);
+
   }
 
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
       const std::vector<std::byte>& in) const override {
-    auto pre =
-        permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
-    auto decr = FeistelNet::decrypt(std::move(pre));
-    return permutate::permutation(std::move(decr), IP_inv,
-                                  permutate::bitIndexingRule::MSB2LSB, 1);
+ 
   }
 };
 }  // namespace meow::cypher::symm::LOKI97
