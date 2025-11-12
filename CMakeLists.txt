@@ -79,6 +79,7 @@ add_library(CryptoGaloisFieldPoly STATIC)
 add_library(Rijndael STATIC)
 add_library(CryptoRC6 STATIC)
 add_library(CryptoLOKI97 STATIC)
+add_library(CryptoDiffieHelman STATIC)
 add_library(Crypto INTERFACE
         include/debug.h)
 
@@ -145,6 +146,13 @@ target_sources(CryptoRC6 PUBLIC
 )
 target_link_libraries(CryptoRC6 PUBLIC CryptoSymmetric)
 
+target_compile_features(CryptoDiffieHelman PRIVATE cxx_std_23)
+target_sources(CryptoDiffieHelman PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/DiffieHelman/DiffieHelman.cppm
+)
+target_link_libraries(CryptoDiffieHelman PUBLIC CryptoSymmetric)
+
 target_compile_features(Rijndael PRIVATE cxx_std_23)
 target_sources(Rijndael PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
@@ -160,6 +168,9 @@ target_link_libraries(Crypto INTERFACE
         CryptoDEAL
         CryptoGaloisFieldPoly
         Rijndael
+        CryptoLOKI97
+        CryptoRC6
+        CryptoDiffieHelman
 )
 
 foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
