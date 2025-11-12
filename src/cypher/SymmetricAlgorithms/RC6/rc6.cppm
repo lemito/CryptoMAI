@@ -3,11 +3,12 @@
  */
 module;
 
-#include <vector>
-#include <cstddef>
-#include <stdexcept>
+#include <array>
 #include <cassert>
+#include <cstddef>
 #include <memory>
+#include <stdexcept>
+#include <vector>
 
 export module cypher.rc6;
 
@@ -67,24 +68,26 @@ class RC6GenRoundKey final : public IGenRoundKey {
     auto L = bytesToWords(inputKey);                     // байты в цифры
     std::size_t c = std::max<std::size_t>(1, L.size());  // длина
 
-    _S.reserve(2 * roundCnt + 4); // это будет юзаться
+    _S.reserve(2 * roundCnt + 4);  // это будет юзаться
 
     _S[0] = P;
     for (size_t i = 1; i < _S.size(); ++i) {
       _S[i] = _S[i - 1] + Q;
     }
 
-    uint32_t A = 0; uint32_t  B = 0;
-    std::size_t ix1 = 0;std::size_t  ix2 = 0;
+    uint32_t A = 0;
+    uint32_t B = 0;
+    std::size_t i = 0;
+    std::size_t j = 0;
+
     size_t n = 3 * std::max(_S.size(), c);
-
     for (std::size_t k = 0; k < n; ++k) {
-      A = _S[ix1] = utils::ShiftBytesLeft(_S[ix1] + A + B, 3, 32);
-      B = L[ix2] = utils::ShiftBytesLeft(L[ix2] + A + B,
-                                         static_cast<int>(A + B) % 32, 32);
+      A = _S[i] = utils::ShiftBytesLeft(_S[i] + A + B, 3, 32);
+      B = L[j] =
+          utils::ShiftBytesLeft(L[j] + A + B, static_cast<int>(A + B) % 32, 32);
 
-      ix1 = (ix1 + 1) % _S.size();
-      ix2 = (ix2 + 1) % c;
+      i = (i + 1) % _S.size();
+      j = (j + 1) % c;
     }
 
     std::vector<std::vector<std::byte>> res;
@@ -99,7 +102,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
       res.push_back(std::move(tmp));
     }
 
-    return res;
+    return res;  // по апи возвращаем ключ в байтах (пустой не подойдет)
   }
 };
 
@@ -127,7 +130,8 @@ class RC6 final : public FeistelNet::FeistelNet {
   [[nodiscard]] constexpr std::vector<std::byte> encrypt(
       const std::vector<std::byte>& in) const override {
     // auto pre =
-    //     permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
+    //     permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB,
+    //     1);
     // auto encr = FeistelNet::encrypt(std::move(pre));
     // return permutate::permutation(std::move(encr), IP_inv,
     //                               permutate::bitIndexingRule::MSB2LSB, 1);
@@ -136,7 +140,8 @@ class RC6 final : public FeistelNet::FeistelNet {
   [[nodiscard]] constexpr std::vector<std::byte> decrypt(
       const std::vector<std::byte>& in) const override {
     // auto pre =
-    //     permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB, 1);
+    //     permutate::permutation(in, IP, permutate::bitIndexingRule::MSB2LSB,
+    //     1);
     // auto decr = FeistelNet::decrypt(std::move(pre));
     // return permutate::permutation(std::move(decr), IP_inv,
     //                               permutate::bitIndexingRule::MSB2LSB, 1);
