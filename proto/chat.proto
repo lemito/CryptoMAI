@@ -5,6 +5,10 @@ package chat;
 option go_package = "github.com/lemit/CryptoMAI/proto;chat";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+message UsernameRequest { string username = 1; }
+message ChatIdRequest { string chat_id = 1; }
 
 enum EncryptionAlgorithm {
   LOKI97_128 = 0; LOKI97_192 = 1; LOKI97_256 = 2; RC6_128 = 3; RC6_192 = 4;
@@ -21,4 +25,122 @@ message DHParameters {
   bytes prime = 1;
   bytes generator = 2;
   bytes public_key = 3;
+}
+
+message CommonResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// === РЕГИСТРАЦИЯ/АВТОРИЗАЦИЯ ===
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  bool success = 1;
+  string session_token = 2;
+  string message = 3;
+}
+
+// === УПРАВЛЕНИЕ КОНТАКТАМИ ===
+message ContactRequest {
+  string requester = 1;
+  string target = 2;
+}
+
+message ContactActionRequest {
+  int32 request_id = 1;
+  bool approve = 2;
+}
+
+message RemoveContactRequest {
+  string username = 1;
+  string contact_username = 2;
+}
+
+// === УПРАВЛЕНИЕ ЧАТАМИ ===
+message CreateChatRequest {
+  string initiator = 1;
+  string contact = 2;
+  EncryptionAlgorithm algorithm = 3;
+  EncryptionMode mode = 4;
+  PaddingMode padding = 5;
+  DHParameters initiator_params = 6;
+}
+
+message ChatInfo {
+  string chat_id = 1;
+  repeated string participants = 2;
+  DHParameters peer_params = 3;
+}
+
+message JoinChatRequest {
+  string chat_id = 1;
+  string username = 2;
+}
+
+// === ЧАНКМЕТА ===
+message ChunkMetadata {
+  string chat_id = 1;
+  string sender = 2;  // Отправитель
+  google.protobuf.Timestamp timestamp = 3;
+  string file_id = 4;  // ID файла
+  bool is_file = 5;
+  int32 chunk_index = 6;
+  int32 total_chunks = 7;
+  bool is_last_chunk = 8;
+}
+
+message EncryptedChunk {
+  ChunkMetadata metadata = 1;
+  bytes encrypted_content = 2;
+}
+
+message ChunkAcknowledgement {
+  string file_id = 1;     // ID файла
+  int32 chunk_index = 2;  // Номер подтвержденного чанка
+  bool success = 3;
+  string error = 4;  // еррорка
+}
+
+// === СЕРВИСЫ ===
+service AuthService {
+  rpc Register(RegisterRequest) returns(CommonResponse);
+  rpc Login(LoginRequest) returns(AuthResponse);
+}
+
+service ContactService {
+  rpc AddContact(ContactRequest) returns(CommonResponse);
+  rpc HandleContactRequest(ContactActionRequest) returns(CommonResponse);
+  rpc RemoveContact(RemoveContactRequest) returns(CommonResponse);
+}
+
+service ChatService {
+  rpc CreateChat(CreateChatRequest) returns(ChatInfo);
+  rpc JoinChat(JoinChatRequest) returns(CommonResponse);
+  rpc CloseChat(ChatIdRequest) returns(CommonResponse);
+  rpc GetActiveChats(UsernameRequest) returns(stream ChatInfo);
+}
+
+service MessagingService {
+  // Отправка чанков
+  rpc SendChunks(stream EncryptedChunk) returns(stream ChunkAcknowledgement);
+
+  // Получение чанков
+  rpc SubscribeToChunks(UsernameRequest) returns(stream EncryptedChunk);
+
+  // Отмена передачи файла
+  rpc CancelTransfer(TransferCancellation) returns(CommonResponse);
+}
+
+message TransferCancellation {
+  string file_id = 1;
+  string reason = 2;
 }
