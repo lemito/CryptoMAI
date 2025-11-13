@@ -60,7 +60,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
           "ключ должен быть 16/24/32 байт == 128/192/256 бит");
     }
 
-    auto bytesToWords = [](const std::vector<std::byte>& bytes) {
+    const auto bytesToWords = [](const std::vector<std::byte>& bytes) {
       std::vector<uint32_t> words;
       words.reserve(bytes.size() / 4);
 
@@ -79,10 +79,11 @@ class RC6GenRoundKey final : public IGenRoundKey {
       return words;
     };
 
-    auto L = bytesToWords(inputKey);                           // байты в цифры
-    const std::size_t c = std::max<std::size_t>(1, L.size());  // длина
+    auto L = bytesToWords(inputKey);
+    const std::size_t c = L.size();
 
-    _S.reserve(2 * roundCnt + 4);  // это будет юзаться
+    _S.clear();
+    _S.resize(2 * roundCnt + 4);
 
     _S[0] = P;
     for (size_t i = 1; i < _S.size(); ++i) {
@@ -94,7 +95,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
     std::size_t i = 0;
     std::size_t j = 0;
 
-    size_t n = 3 * std::max(_S.size(), c);
+    const size_t n = 3 * std::max(_S.size(), c);
     for (std::size_t k = 0; k < n; ++k) {
       A = _S[i] = utils::ShiftBytesLeft(_S[i] + A + B, 3, 32);
       B = L[j] =
@@ -105,7 +106,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
     }
 
     std::vector<std::vector<std::byte>> res;
-    res.reserve(_S.size());
+    // res.reserve(_S.size());
 
     for (const uint32_t word : _S) {
       std::vector<std::byte> tmp(4);
@@ -157,16 +158,16 @@ class RC6 final : public ISymmetricCypher {
     B += _keyGen._S[0];
     D += _keyGen._S[1];
 
-    for (int i = 1; i <= rn; --i) {
+    for (int i = 1; i <= rn; ++i) {
       const auto u = _detailRC6::cycleLeft(D * (2 * D + 1), 5);
       const auto t = _detailRC6::cycleLeft(B * (2 * B + 1), 5);
-      C = _detailRC6::cycleLeft(A ^ t, u) + _keyGen._S[2 * i];
-      A = _detailRC6::cycleLeft(C ^ u, t) + _keyGen._S[2 * i];
+      A = _detailRC6::cycleLeft(A ^ t, u) + _keyGen._S[2 * i];
+      C = _detailRC6::cycleLeft(C ^ u, t) + _keyGen._S[2 * i + 1];
       std::tie(A, B, C, D) = std::tuple(B, C, D, A);
     }
 
     A += _keyGen._S[2 * rn + 2];
-    C += _keyGen._S[2 * rn + 1];
+    C += _keyGen._S[2 * rn + 3];
 
     std::vector<std::byte> res(16);
     const std::array words2 = {A, B, C, D};

@@ -61,6 +61,9 @@ add_executable(test_Rijndael
         test_Rijndael.cpp)
 target_link_libraries(test_Rijndael PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
+add_executable(test_rc6 test_rc6.cpp)
+target_link_libraries(test_rc6 PRIVATE Crypto GTest::gtest GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(test_gcd)
 gtest_discover_tests(test_symbols)
@@ -74,3 +77,4 @@ gtest_discover_tests(test_DES)
 gtest_discover_tests(test_DEAL)
 gtest_discover_tests(test_GaloisField)
 gtest_discover_tests(test_Rijndael)
+gtest_discover_tests(test_rc6)
