@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/lemit/CryptoMAI/proto;chat";
+
+import "google/protobuf/timestamp.proto";
+
+enum EncryptionAlgorithm {
+  LOKI97_128 = 0; LOKI97_192 = 1; LOKI97_256 = 2; RC6_128 = 3; RC6_192 = 4;
+  RC6_256 = 5;
+}
+
+enum EncryptionMode {
+  ECB = 0; CBC = 1; PCBC = 2; CFB = 3; OFB = 4; CTR = 5; RANDOM_DELTA = 6;
+}
+
+enum PaddingMode { ZEROS = 0; ANSI_X923 = 1; PKCS7 = 2; ISO10126 = 3; }
+
+message DHParameters {
+  bytes prime = 1;
+  bytes generator = 2;
+  bytes public_key = 3;
+}

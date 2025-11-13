@@ -62,6 +62,24 @@ target_include_directories(CypherProto PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# это тупо отдельная либа для прото чатика
+add_library(ChatProto ${PROTO_DIR}/chat.proto)
+target_link_libraries(ChatProto PUBLIC gRPC::grpc++)
+
+protobuf_generate(TARGET ChatProto)
+protobuf_generate(
+        TARGET ChatProto
+        LANGUAGE grpc
+        PLUGIN protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
+        PLUGIN_OPTIONS generate_mock_code=true
+        GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+)
+
+target_include_directories(ChatProto PUBLIC
+        ${PROTO_GEN_DIR}
+        ${CMAKE_CURRENT_BINARY_DIR}
+)
+
 include(FetchContent)
 FetchContent_Declare(
         googletest
