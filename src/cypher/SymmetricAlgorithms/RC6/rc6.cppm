@@ -106,7 +106,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
     }
 
     std::vector<std::vector<std::byte>> res;
-    // res.reserve(_S.size());
+    res.reserve(_S.size());
 
     for (const uint32_t word : _S) {
       std::vector<std::byte> tmp(4);
