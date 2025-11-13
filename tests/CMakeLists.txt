@@ -64,6 +64,9 @@ target_link_libraries(test_Rijndael PRIVATE Crypto GTest::gtest GTest::gtest_mai
 add_executable(test_rc6 test_rc6.cpp)
 target_link_libraries(test_rc6 PRIVATE Crypto GTest::gtest GTest::gtest_main)
 
+add_executable(test_loki97 test_loki97.cpp)
+target_link_libraries(test_loki97 PRIVATE Crypto GTest::gtest GTest::gtest_main)
+
 include(GoogleTest)
 gtest_discover_tests(test_gcd)
 gtest_discover_tests(test_symbols)
@@ -78,3 +81,8 @@ gtest_discover_tests(test_DEAL)
 gtest_discover_tests(test_GaloisField)
 gtest_discover_tests(test_Rijndael)
 gtest_discover_tests(test_rc6)
+gtest_discover_tests(test_loki97)
+
+add_executable(test_dh test_dh.cpp)
+gtest_discover_tests(test_dh)
+target_link_libraries(test_dh PRIVATE Crypto GTest::gtest GTest::gtest_main)
