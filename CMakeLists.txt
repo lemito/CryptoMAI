@@ -205,6 +205,7 @@ endforeach ()
 
 enable_testing()
 add_subdirectory(tests)
+add_subdirectory("GUI/CryptoMAI")
 add_subdirectory("src/server")
 
 # add_executable(experiments tests/experiments/experiments.cpp)
