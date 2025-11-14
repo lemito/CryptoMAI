@@ -927,6 +927,28 @@ QMenu::item:selected {
     <string>О программе</string>
    </property>
   </action>
+  <action name="actionLogin">
+   <property name="checkable">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Login</string>
+   </property>
+   <property name="toolTip">
+    <string>Вход</string>
+   </property>
+  </action>
+  <action name="actionShowContacts">
+   <property name="icon">
+    <iconset theme="weather-fog"/>
+   </property>
+   <property name="text">
+    <string>ShowContacts</string>
+   </property>
+   <property name="toolTip">
+    <string>Входик</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections>

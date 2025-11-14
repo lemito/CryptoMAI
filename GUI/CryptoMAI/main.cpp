@@ -16,7 +16,13 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  MainWindow w;
-  w.show();
-  return a.exec();
+  LoginDialog loginDialog;
+  if (loginDialog.exec() == QDialog::Accepted) {
+    MainWindow window;
+    window.show();
+    return a.exec();
+  } else {
+    return 0;
+  }
+  return 0;
 }

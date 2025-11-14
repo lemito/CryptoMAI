@@ -1,19 +1,41 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<!-- contacts_dialog.ui -->
 <ui version="4.0">
- <class>ContactsDialog</class>
- <widget class="QDialog" name="ContactsDialog">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>640</width>
-    <height>480</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>Dialog</string>
-  </property>
- </widget>
- <resources/>
- <connections/>
+<class>ContactsDialog</class>
+<widget class="QDialog" name="ContactsDialog">
+    <property name="windowTitle">
+        <string>Контакты</string>
+    </property>
+    <property name="minimumSize">
+        <size>
+            <width>500</width>
+            <height>400</height>
+        </size>
+    </property>
+    <property name="modal">
+        <bool>false</bool>  <!-- Немодальное -->
+    </property>
+    <layout class="QVBoxLayout">
+        <item>
+            <layout class="QHBoxLayout">
+                <item>
+                    <widget class="QLineEdit" name="searchEdit">
+                        <property name="placeholderText">
+                            <string>Поиск контактов...</string>
+                        </property>
+                    </widget>
+                </item>
+                <item>
+                    <widget class="QPushButton" name="addContactButton">
+                        <property name="text">
+                            <string>Добавить</string>
+                        </property>
+                    </widget>
+                </item>
+            </layout>
+        </item>
+        <item>
+            <widget class="QListWidget" name="contactsList"/>
+        </item>
+    </layout>
+</widget>
 </ui>

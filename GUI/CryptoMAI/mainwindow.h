@@ -3,6 +3,9 @@
 
 #include <QMainWindow>
 
+#include "contactsdialog.h"
+#include "logindialog.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -18,5 +21,9 @@ class MainWindow : public QMainWindow {
 
  private:
   Ui::MainWindow *ui;
+  ContactsDialog *contactsDialog;
+
+ private slots:
+  void showContactsDialog();
 };
 #endif  // MAINWINDOW_H
