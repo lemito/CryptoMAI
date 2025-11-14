@@ -23,6 +23,10 @@ set(PROJECT_SOURCES
 qt_add_executable(CryptoMAI
     MANUAL_FINALIZATION
     ${PROJECT_SOURCES}
+    logindialog.h logindialog.cpp logindialog.ui
+    registerdialog.h registerdialog.cpp registerdialog.ui
+    contactsdialog.h contactsdialog.cpp contactsdialog.ui
+
 )
 
 qt_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
