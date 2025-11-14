@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package chat;
 
-option go_package = "github.com/lemit/CryptoMAI/proto;chat";
+option go_package = "github.com/lemito/CryptoMAI/proto;chat";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
@@ -11,8 +11,8 @@ message UsernameRequest { string username = 1; }
 message ChatIdRequest { string chat_id = 1; }
 
 enum EncryptionAlgorithm {
-  LOKI97 = 1;
-  RC6 = 2;
+  LOKI97 = 0;
+  RC6 = 1;
 }
 
 enum EncryptionMode {
