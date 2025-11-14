@@ -11,8 +11,8 @@ message UsernameRequest { string username = 1; }
 message ChatIdRequest { string chat_id = 1; }
 
 enum EncryptionAlgorithm {
-  LOKI97_128 = 0; LOKI97_192 = 1; LOKI97_256 = 2; RC6_128 = 3; RC6_192 = 4;
-  RC6_256 = 5;
+  LOKI97 = 1;
+  RC6 = 2;
 }
 
 enum EncryptionMode {
