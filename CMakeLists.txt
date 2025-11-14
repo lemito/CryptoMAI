@@ -1,28 +1,86 @@
 ﻿cmake_minimum_required(VERSION 3.29.3...3.32)
-#
-#set(CMAKE_BUILD_TYPE Debug)
-#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pg -g")
+
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API "2182bf5c-ef0d-489a-91da-49dbc3090d2a")
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
-set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API ON)
-# set_property(DIRECTORY PROPERTY CXX_MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/module-cache")
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    #     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules-cache-path=${CMAKE_BINARY_DIR}/module_cache")
 
-    file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/module_cache)
-    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/module_cache)
-endif ()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmodules -fbuiltin-module-map -fimplicit-modules -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR} -pthread ")
+set(MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/module_cache")
+file(REMOVE_RECURSE ${MODULE_CACHE_DIR})
+file(MAKE_DIRECTORY ${MODULE_CACHE_DIR})
+
+set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
 project(CryptoMAI LANGUAGES CXX)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/global_module_cache")
+    file(MAKE_DIRECTORY ${MODULE_CACHE_DIR})
+
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+        OUTPUT_VARIABLE CLANG_RESOURCE_DIR
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    set(MODULE_MAP_FLAG "")
+    if(CLANG_RESOURCE_DIR)
+        set(MODULE_MAP_PATH "${CLANG_RESOURCE_DIR}/include/module.modulemap")
+        if(EXISTS "${MODULE_MAP_PATH}")
+            set(MODULE_MAP_FLAG "-fmodule-map-file=${MODULE_MAP_PATH}")
+            message(STATUS "Using Clang module map: ${MODULE_MAP_PATH}")
+        endif()
+    endif()
+
+    set(COMMON_MODULE_FLAGS
+        -fmodules
+        -fno-implicit-modules
+        -fmodules-cache-path=${MODULE_CACHE_DIR}
+        -fimplicit-modules
+        -fimplicit-module-maps
+        ${MODULE_MAP_FLAG}
+        -Xclang -fmodules-validate-system-headers
+        -pthread
+    )
+
+    add_compile_options(${COMMON_MODULE_FLAGS})
+
+    set(SYSTEM_MODULE_PREBUILD_FLAGS
+        -fmodules
+        -fno-implicit-modules
+        -fmodules-cache-path=${MODULE_CACHE_DIR}
+        -fimplicit-modules
+        -fimplicit-module-maps
+        ${MODULE_MAP_FLAG}
+        -Xclang -emit-module
+        -Xclang -fmodules-validate-system-headers
+        -c
+        -x c++
+        -o ${MODULE_CACHE_DIR}/system_modules.pcm
+        /dev/null
+    )
+
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} ${SYSTEM_MODULE_PREBUILD_FLAGS}
+        ERROR_QUIET
+        RESULT_VARIABLE PREBUILD_RESULT
+    )
+
+    if(NOT MODULE_MAP_FLAG)
+        message(WARNING "Clang module map not found - modules may fail to build")
+    endif()
+endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-#set(CMAKE_CXX_MODULE_STD ON)
+
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -62,7 +120,6 @@ target_include_directories(CypherProto PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# это тупо отдельная либа для прото чатика
 add_library(ChatProto ${PROTO_DIR}/chat.proto)
 target_link_libraries(ChatProto PUBLIC gRPC::grpc++)
 
@@ -83,7 +140,7 @@ target_include_directories(ChatProto PUBLIC
 include(FetchContent)
 FetchContent_Declare(
         googletest
-        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+        URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip  
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
@@ -98,7 +155,7 @@ add_library(Rijndael STATIC)
 add_library(CryptoRC6 STATIC)
 add_library(CryptoLOKI97 STATIC)
 add_library(CryptoDiffieHelman STATIC)
-add_library(Crypto INTERFACE
+add_library(Crypto STATIC
         include/debug.h)
 
 target_compile_features(CryptoMath PRIVATE cxx_std_23)
@@ -148,7 +205,6 @@ target_sources(CryptoGaloisFieldPoly PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
         src/math/GaloisFieldPoly.cppm
 )
-target_link_libraries(CryptoGaloisFieldPoly PUBLIC)
 
 target_compile_features(CryptoLOKI97 PRIVATE cxx_std_23)
 target_sources(CryptoLOKI97 PUBLIC
@@ -178,40 +234,59 @@ target_sources(Rijndael PUBLIC
 )
 target_link_libraries(Rijndael PUBLIC CryptoSymmetric CryptoGaloisFieldPoly)
 
-target_link_libraries(Crypto INTERFACE
-        CryptoMath
-        CryptoRSA
-        CryptoSymmetric
-        CryptoDES
-        CryptoDEAL
-        CryptoGaloisFieldPoly
-        Rijndael
-        CryptoLOKI97
-        CryptoRC6
-        CryptoDiffieHelman
+target_link_libraries(Crypto PUBLIC
+    CryptoMath
+    CryptoRSA
+    CryptoSymmetric
+    CryptoDES
+    CryptoDEAL
+    CryptoGaloisFieldPoly
+    Rijndael
+    CryptoLOKI97
+    CryptoRC6
+    CryptoDiffieHelman
 )
 
-foreach (target CryptoMath CryptoRSA CryptoSymmetric CryptoDES CryptoDEAL)
-    target_compile_options(${target} PRIVATE
-            -fmodules
-            -fbuiltin-module-map
-            -fimplicit-modules
-#            -stdlib=libc++
-            -fprebuilt-module-path=${CMAKE_CURRENT_BINARY_DIR}
-            -pthread
-    )
-    #   set_target_properties(${target} PROPERTIES CXX_STANDART 23 CXX_STANDART_REQUIRED ON CXX_EXTENSIONS OFF CXX_MODULE_STD 1)
-endforeach ()
+
+# GUI
+set(GUI_SOURCES
+    src/GUI/main.cpp
+    src/GUI/mainwindow.cpp
+    src/GUI/mainwindow.h
+    src/GUI/mainwindow.ui
+    src/GUI/logindialog.cpp
+    src/GUI/logindialog.h
+    src/GUI/logindialog.ui
+    src/GUI/registerdialog.cpp
+    src/GUI/registerdialog.h
+    src/GUI/registerdialog.ui
+    src/GUI/contactsdialog.cpp
+    src/GUI/contactsdialog.h
+    src/GUI/contactsdialog.ui
+)
+
+qt_add_executable(CryptoGUI
+    MANUAL_FINALIZATION
+    ${GUI_SOURCES}
+)
+
+target_compile_features(CryptoGUI PUBLIC cxx_std_23)
+
+target_include_directories(CryptoGUI PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/GUI
+)
+
+set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
+qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
+
+target_link_libraries(CryptoGUI PRIVATE
+    Crypto
+    Qt6::Widgets
+)
+
+qt_finalize_executable(CryptoGUI)
 
 enable_testing()
 add_subdirectory(tests)
-add_subdirectory("GUI/CryptoMAI")
 add_subdirectory("src/server")
-
-# add_executable(experiments tests/experiments/experiments.cpp)
-
-# if (Boost_FOUND)
-#     include_directories(SYSTEM ${Boost_INCLUDE_DIR})
-#     target_link_libraries(experiments ${Boost_LIBRARIES})
-# endif ()
-#set_target_properties(CryptoSymmetric PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}")

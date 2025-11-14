@@ -1,6 +1,10 @@
 #include "mainwindow.h"
 
-#include "./ui_mainwindow.h"
+#include "src/GUI//ui_mainwindow.h"
+
+#include "lib.h"
+
+import cypher;
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
@@ -10,8 +14,6 @@ MainWindow::MainWindow(QWidget* parent)
 
   connect(ui->actionShowContacts, &QAction::triggered, this,
           &MainWindow::showContactsDialog);
-
-
 }
 
 MainWindow::~MainWindow() { delete ui; }

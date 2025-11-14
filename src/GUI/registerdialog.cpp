@@ -1,6 +1,6 @@
 #include "registerdialog.h"
 
-#include "ui_registerdialog.h"
+#include "src/GUI/ui_registerdialog.h"
 
 RegisterDialog::RegisterDialog(QWidget *parent)
     : QDialog(parent), ui(new Ui::RegisterDialog) {
