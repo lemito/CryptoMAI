@@ -644,10 +644,13 @@ class SymmetricCypherContext {
 
     const auto wasAdded = static_cast<std::uint8_t>(in.back());
 
-    // if (wasAdded == 0 || wasAdded > in.size() ||
-    //     wasAdded > this->_algo->_blockSize) {
-    //   throw std::runtime_error("ошибка в анпаддинге");
-    // }
+    if (wasAdded > in.size() ||
+        wasAdded > this->_algo->_blockSize) {
+      std::cout << "WARNING: Invalid padding detected, wasAdded="
+                << static_cast<int>(wasAdded) << ", in.size()=" << in.size()
+                << ", blockSize=" << this->_algo->_blockSize << std::endl;
+      throw std::runtime_error("Invalid padding");
+    }
 
     std::vector<std::byte> res;
 
@@ -656,7 +659,7 @@ class SymmetricCypherContext {
         const auto it =
             std::find_if(in.rbegin(), in.rend(),
                          [](const std::byte b) { return b != std::byte{0}; });
-        res = std::move(std::vector(in.begin(), it.base()));
+        res = std::vector(in.begin(), it.base());
       } break;
 
       case paddingMode::AnsiX923: {
@@ -665,20 +668,20 @@ class SymmetricCypherContext {
             throw std::runtime_error("в AnsiX923 должны быть нули байты");
           }
         }
-        res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+        res = std::vector(in.begin(), in.end() - wasAdded);
       } break;
 
       case paddingMode::PKCS7: {
-        // for (size_t i = in.size() - wasAdded; i < in.size() + 1; ++i) {
-        //   if (in[i] != static_cast<std::byte>(wasAdded)) {
-        //     throw std::runtime_error("в PKCS7 должны быть одинаковые байты");
-        //   }
-        // }
-        res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+        for (size_t i = in.size() - wasAdded; i < in.size(); ++i) {
+          if (in[i] != static_cast<std::byte>(wasAdded)) {
+            throw std::runtime_error("в PKCS7 должны быть одинаковые байты");
+          }
+        }
+        res = std::vector(in.begin(), in.end() - wasAdded);
       } break;
 
       case paddingMode::ISO10126: {
-        res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+        res = std::vector(in.begin(), in.end() - wasAdded);
       } break;
 
       default:
@@ -687,6 +690,67 @@ class SymmetricCypherContext {
 
     return res;
   }
+  // [[nodiscard]] constexpr std::vector<std::byte> _doUnpadding(
+  //     const std::vector<std::byte>& in) const {
+  //   if (in.empty()) return {};
+  //
+  //   const auto wasAdded = static_cast<std::uint8_t>(in.back());
+  //   if (wasAdded > in.size()) {
+  //     throw std::runtime_error("Padding value exceeds input size");
+  //   }
+  //
+  //   // if (wasAdded == 0 || wasAdded > in.size() ||
+  //   //     wasAdded > this->_algo->_blockSize) {
+  //   //   throw std::runtime_error("ошибка в анпаддинге");
+  //   // }
+  //
+  //   std::vector<std::byte> res;
+  //
+  //   switch (_padMode) {
+  //     case paddingMode::Zeros: {
+  //       const auto it =
+  //           std::find_if(in.rbegin(), in.rend(),
+  //                        [](const std::byte b) { return b != std::byte{0};
+  //                        });
+  //       res = std::move(std::vector(in.begin(), it.base()));
+  //     } break;
+  //
+  //     case paddingMode::AnsiX923: {
+  //       for (std::size_t i = in.size() - wasAdded; i < in.size() - 1; ++i) {
+  //         if (in[i] != static_cast<std::byte>(0)) {
+  //           throw std::runtime_error("в AnsiX923 должны быть нули байты");
+  //         }
+  //       }
+  //       res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+  //     } break;
+  //
+  //     case paddingMode::PKCS7: {
+  //       if (wasAdded == 0 || wasAdded > in.size() || wasAdded >
+  //       this->_algo->_blockSize) {
+  //         throw std::runtime_error("Invalid PKCS#7 padding: invalid padding
+  //         value");
+  //       }
+  //
+  //       for (size_t i = in.size() - wasAdded; i < in.size(); ++i) {
+  //         if (static_cast<std::uint8_t>(in[i]) != wasAdded) {
+  //           throw std::runtime_error("Invalid PKCS#7 padding: inconsistent
+  //           padding bytes");
+  //         }
+  //       }
+  //
+  //       res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+  //     } break;
+  //
+  //     case paddingMode::ISO10126: {
+  //       res = std::move(std::vector(in.begin(), in.end() - wasAdded));
+  //     } break;
+  //
+  //     default:
+  //       throw std::logic_error("нет такого режима набивки");
+  //   }
+  //
+  //   return res;
+  // }
 
  protected:
   std::vector<std::byte> _encryptionKey;
