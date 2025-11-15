@@ -5,9 +5,9 @@ set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-set(MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/module_cache")
-file(REMOVE_RECURSE ${MODULE_CACHE_DIR})
-file(MAKE_DIRECTORY ${MODULE_CACHE_DIR})
+# set(MODULE_CACHE_DIR "${CMAKE_BINARY_DIR}/module_cache")
+# file(REMOVE_RECURSE ${MODULE_CACHE_DIR})
+# file(MAKE_DIRECTORY ${MODULE_CACHE_DIR})
 
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
@@ -76,11 +76,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_AUTOUIC ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+# set(CMAKE_AUTOUIC ON)
+# set(CMAKE_AUTOMOC ON)
+# set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools)
+# find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -206,6 +206,13 @@ target_sources(CryptoGaloisFieldPoly PUBLIC
         src/math/GaloisFieldPoly.cppm
 )
 
+target_compile_features(Rijndael PRIVATE cxx_std_23)
+target_sources(Rijndael PUBLIC
+        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
+        src/cypher/SymmetricAlgorithms/Rijndael/Rijndael.cppm
+)
+target_link_libraries(Rijndael PUBLIC CryptoSymmetric CryptoGaloisFieldPoly)
+
 target_compile_features(CryptoLOKI97 PRIVATE cxx_std_23)
 target_sources(CryptoLOKI97 PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
@@ -225,14 +232,7 @@ target_sources(CryptoDiffieHelman PUBLIC
         FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
         src/cypher/DiffieHelman/DiffieHelman.cppm
 )
-target_link_libraries(CryptoDiffieHelman PUBLIC CryptoSymmetric)
-
-target_compile_features(Rijndael PRIVATE cxx_std_23)
-target_sources(Rijndael PUBLIC
-        FILE_SET CXX_MODULES TYPE CXX_MODULES FILES
-        src/cypher/SymmetricAlgorithms/Rijndael/Rijndael.cppm
-)
-target_link_libraries(Rijndael PUBLIC CryptoSymmetric CryptoGaloisFieldPoly)
+target_link_libraries(CryptoDiffieHelman PUBLIC CryptoMath)
 
 target_link_libraries(Crypto PUBLIC
     CryptoMath
@@ -248,44 +248,44 @@ target_link_libraries(Crypto PUBLIC
 )
 
 
-# GUI
-set(GUI_SOURCES
-    src/GUI/main.cpp
-    src/GUI/mainwindow.cpp
-    src/GUI/mainwindow.h
-    src/GUI/mainwindow.ui
-    src/GUI/logindialog.cpp
-    src/GUI/logindialog.h
-    src/GUI/logindialog.ui
-    src/GUI/registerdialog.cpp
-    src/GUI/registerdialog.h
-    src/GUI/registerdialog.ui
-    src/GUI/contactsdialog.cpp
-    src/GUI/contactsdialog.h
-    src/GUI/contactsdialog.ui
-)
+# # GUI
+# set(GUI_SOURCES
+#     src/GUI/main.cpp
+#     src/GUI/mainwindow.cpp
+#     src/GUI/mainwindow.h
+#     src/GUI/mainwindow.ui
+#     src/GUI/logindialog.cpp
+#     src/GUI/logindialog.h
+#     src/GUI/logindialog.ui
+#     src/GUI/registerdialog.cpp
+#     src/GUI/registerdialog.h
+#     src/GUI/registerdialog.ui
+#     src/GUI/contactsdialog.cpp
+#     src/GUI/contactsdialog.h
+#     src/GUI/contactsdialog.ui
+# )
 
-qt_add_executable(CryptoGUI
-    MANUAL_FINALIZATION
-    ${GUI_SOURCES}
-)
+# qt_add_executable(CryptoGUI
+#     MANUAL_FINALIZATION
+#     ${GUI_SOURCES}
+# )
 
-target_compile_features(CryptoGUI PUBLIC cxx_std_23)
+# target_compile_features(CryptoGUI PUBLIC cxx_std_23)
 
-target_include_directories(CryptoGUI PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/GUI
-)
+# target_include_directories(CryptoGUI PRIVATE
+#     ${CMAKE_CURRENT_BINARY_DIR}
+#     ${CMAKE_CURRENT_SOURCE_DIR}/src/GUI
+# )
 
-set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
-qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
+# set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
+# qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
 
-target_link_libraries(CryptoGUI PRIVATE
-    Crypto
-    Qt6::Widgets
-)
+# target_link_libraries(CryptoGUI PRIVATE
+#     Crypto
+#     Qt6::Widgets
+# )
 
-qt_finalize_executable(CryptoGUI)
+# qt_finalize_executable(CryptoGUI)
 
 enable_testing()
 add_subdirectory(tests)

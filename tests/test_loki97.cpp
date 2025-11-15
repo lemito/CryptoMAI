@@ -60,22 +60,23 @@ bool isFilesEqual(const std::string& filePath1, const std::string& filePath2) {
 
 TEST(LOKI97, SimpleWithPad) {
   const std::vector key{
-    std::byte{0x8e}, std::byte{0x73}, std::byte{0xb0}, std::byte{0xf7},
-    std::byte{0xda}, std::byte{0x0e}, std::byte{0x64}, std::byte{0x52},
-    std::byte{0xc8}, std::byte{0x10}, std::byte{0xf3}, std::byte{0x2b},
-    std::byte{0x80}, std::byte{0x90}, std::byte{0x79}, std::byte{0xe5},
-    std::byte{0x62}, std::byte{0xf8}, std::byte{0xea}, std::byte{0xd2},
-    std::byte{0x52}, std::byte{0x2c}, std::byte{0x6b}, std::byte{0x7b}};
+      std::byte{0x8e}, std::byte{0x73}, std::byte{0xb0}, std::byte{0xf7},
+      std::byte{0xda}, std::byte{0x0e}, std::byte{0x64}, std::byte{0x52},
+      std::byte{0xc8}, std::byte{0x10}, std::byte{0xf3}, std::byte{0x2b},
+      std::byte{0x80}, std::byte{0x90}, std::byte{0x79}, std::byte{0xe5},
+      std::byte{0x62}, std::byte{0xf8}, std::byte{0xea}, std::byte{0xd2},
+      std::byte{0x52}, std::byte{0x2c}, std::byte{0x6b}, std::byte{0x7b}};
   const std::vector plain = {
       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
       static_cast<std::byte>('o'), static_cast<std::byte>('w'),
       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
       static_cast<std::byte>('o'), static_cast<std::byte>('w'),
       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
-      static_cast<std::byte>('o'), static_cast<std::byte>('w')};
+      static_cast<std::byte>('o'), static_cast<std::byte>('w'),
+      static_cast<std::byte>('!')};
 
-  std::vector<std::byte> BUFFER(plain.size());
-  std::vector<std::byte> BUFFER_res(plain.size());
+  std::vector<std::byte> BUFFER;
+  std::vector<std::byte> BUFFER_res;
   const auto algo =
       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
           std::make_shared<meow::cypher::symm::LOKI97::LOKI97>());
@@ -97,20 +98,21 @@ TEST(LOKI97, SimpleWithPad) {
 
 TEST(LOKI97, Simple) {
   const std::vector key{
-    std::byte{0x8e}, std::byte{0x73}, std::byte{0xb0}, std::byte{0xf7},
-    std::byte{0xda}, std::byte{0x0e}, std::byte{0x64}, std::byte{0x52},
-    std::byte{0xc8}, std::byte{0x10}, std::byte{0xf3}, std::byte{0x2b},
-    std::byte{0x80}, std::byte{0x90}, std::byte{0x79}, std::byte{0xe5},
-    std::byte{0x62}, std::byte{0xf8}, std::byte{0xea}, std::byte{0xd2},
-    std::byte{0x52}, std::byte{0x2c}, std::byte{0x6b}, std::byte{0x7b}};
+      std::byte{0x8e}, std::byte{0x73}, std::byte{0xb0}, std::byte{0xf7},
+      std::byte{0xda}, std::byte{0x0e}, std::byte{0x64}, std::byte{0x52},
+      std::byte{0xc8}, std::byte{0x10}, std::byte{0xf3}, std::byte{0x2b},
+      std::byte{0x80}, std::byte{0x90}, std::byte{0x79}, std::byte{0xe5},
+      //   std::byte{0x62}, std::byte{0xf8}, std::byte{0xea}, std::byte{0xd2},
+      //   std::byte{0x52}, std::byte{0x2c}, std::byte{0x6b}, std::byte{0x7b}
+  };
   const std::vector plain = {
       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
       static_cast<std::byte>('o'), static_cast<std::byte>('w'),
       static_cast<std::byte>('m'), static_cast<std::byte>('e'),
       static_cast<std::byte>('o'), static_cast<std::byte>('w')};
 
-  std::vector<std::byte> BUFFER(plain.size());
-  std::vector<std::byte> BUFFER_res(plain.size());
+  std::vector<std::byte> BUFFER;
+  std::vector<std::byte> BUFFER_res;
   const auto algo =
       std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
           std::make_shared<meow::cypher::symm::LOKI97::LOKI97>());
