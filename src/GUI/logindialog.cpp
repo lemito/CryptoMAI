@@ -13,20 +13,22 @@ LoginDialog::LoginDialog(QWidget *parent)
 
   ui->passwordEdit->setEchoMode(QLineEdit::Password);
 
-  connect(ui->loginButton, &QPushButton::clicked, this, &LoginDialog::on_loginButton_clicked);
-  connect(ui->registerButton, &QPushButton::clicked, this, &LoginDialog::on_registerButton_clicked);
+  connect(ui->loginButton, &QPushButton::clicked, this,
+          &LoginDialog::on_loginButton_clicked);
+  connect(ui->registerButton, &QPushButton::clicked, this,
+          &LoginDialog::on_registerButton_clicked);
 
-  connect(ui->usernameEdit, &QLineEdit::returnPressed, this, &LoginDialog::checkCredentials);
-  connect(ui->passwordEdit, &QLineEdit::returnPressed, this, &LoginDialog::checkCredentials);
+  connect(ui->usernameEdit, &QLineEdit::returnPressed, this,
+          &LoginDialog::checkCredentials);
+  connect(ui->passwordEdit, &QLineEdit::returnPressed, this,
+          &LoginDialog::checkCredentials);
 
   ui->usernameEdit->setFocus();
 }
 
 LoginDialog::~LoginDialog() { delete ui; }
 
-void LoginDialog::on_loginButton_clicked() {
-  checkCredentials();
-}
+void LoginDialog::on_loginButton_clicked() { checkCredentials(); }
 
 void LoginDialog::on_registerButton_clicked() {
   QMessageBox::information(this, "Регистрация",
@@ -35,8 +37,8 @@ void LoginDialog::on_registerButton_clicked() {
 }
 
 void LoginDialog::checkCredentials() {
-  QString username = ui->usernameEdit->text().trimmed();
-  QString password = ui->passwordEdit->text();
+  const QString username = ui->usernameEdit->text().trimmed();
+  const QString password = ui->passwordEdit->text();
 
   if (username.isEmpty() || password.isEmpty()) {
     QMessageBox::warning(this, "Ошибка", "Заполните все поля!");
