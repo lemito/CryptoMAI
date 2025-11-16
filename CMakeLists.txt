@@ -257,9 +257,6 @@ target_link_libraries(Crypto PUBLIC
 #     src/GUI/logindialog.cpp
 #     src/GUI/logindialog.h
 #     src/GUI/logindialog.ui
-#     src/GUI/registerdialog.cpp
-#     src/GUI/registerdialog.h
-#     src/GUI/registerdialog.ui
 #     src/GUI/contactsdialog.cpp
 #     src/GUI/contactsdialog.h
 #     src/GUI/contactsdialog.ui
