@@ -1,8 +1,6 @@
 /**
  * https://people.csail.mit.edu/rivest/pubs/RRSY98.pdf?spm=a2ty_o01.29997173.0.0.78cec921twWyWp&file=RRSY98.pdf
  */
-module;
-
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -11,10 +9,8 @@ module;
 #include <stdexcept>
 #include <vector>
 
-export module cypher.rc6;
+#include "cypher.hpp"
 
-import cypher.utils;
-import cypher;
 
 namespace meow::cypher::symm::_detailRC6 {
 constexpr uint32_t cycleLeft(const uint32_t num, uint32_t shift) {
@@ -121,7 +117,7 @@ class RC6GenRoundKey final : public IGenRoundKey {
 };
 }  // namespace meow::cypher::symm::_detailRC6
 
-export namespace meow::cypher::symm::RC6 {
+namespace meow::cypher::symm::RC6 {
 class RC6 final : public ISymmetricCypher {
   _detailRC6::RC6GenRoundKey _keyGen;
 

@@ -24,6 +24,6 @@ class MainWindow : public QMainWindow {
   ContactsDialog *contactsDialog;
 
  private slots:
-  void showContactsDialog();
+  void showContactsDialog() const;
 };
 #endif  // MAINWINDOW_H

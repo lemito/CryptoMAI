@@ -1,10 +1,7 @@
 #include "mainwindow.h"
 
-#include "src/GUI//ui_mainwindow.h"
-
-#include "lib.h"
-
-import cypher;
+#include "cypher/SymmetricAlgorithms/cypher.hpp"
+#include "src/GUI/ui_mainwindow.h"
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
@@ -14,12 +11,15 @@ MainWindow::MainWindow(QWidget* parent)
 
   connect(ui->actionShowContacts, &QAction::triggered, this,
           &MainWindow::showContactsDialog);
+
+  auto ctx = meow::cypher::symm::SymmetricCypherContext(
+      {}, meow::cypher::symm::encryptionMode::ECB,
+      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
 }
 
 MainWindow::~MainWindow() { delete ui; }
 
-
-void MainWindow::showContactsDialog() {
+void MainWindow::showContactsDialog() const {
   contactsDialog->show();
   contactsDialog->raise();
   contactsDialog->activateWindow();
