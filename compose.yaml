@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: postgres
+    environment:
+      POSTGRES_USER: meow
+      POSTGRES_PASSWORD: meow
+      POSTGRES_DB: cryptomai_db
+    volumes:
+      - postgres_data:/var/lib/postgresql@16/data
+      - ./init:/docker-entrypoint-initdb.d/
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

@@ -7,32 +7,16 @@ option go_package = "github.com/lemito/CryptoMAI/proto;chat";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
-message UsernameRequest { string username = 1; }
-message ChatIdRequest { string chat_id = 1; }
-
-enum EncryptionAlgorithm {
-  LOKI97 = 0;
-  RC6 = 1;
-}
-
-enum EncryptionMode {
-  ECB = 0; CBC = 1; PCBC = 2; CFB = 3; OFB = 4; CTR = 5; RANDOM_DELTA = 6;
-}
-
-enum PaddingMode { ZEROS = 0; ANSI_X923 = 1; PKCS7 = 2; ISO10126 = 3; }
-
-message DHParameters {
-  bytes prime = 1;
-  bytes generator = 2;
-  bytes public_key = 3;
-}
-
 message CommonResponse {
   bool success = 1;
   string message = 2;
 }
 
-// === РЕГИСТРАЦИЯ/АВТОРИЗАЦИЯ ===
+message UsernameRequest { string username = 1; }
+
+message ChatIdRequest { string chat_id = 1; }
+
+// === АВТОРИЗАЦИЯ ===
 message RegisterRequest {
   string username = 1;
   string password = 2;
@@ -49,53 +33,88 @@ message AuthResponse {
   string message = 3;
 }
 
+message LogoutRequest { string session_token = 1; }
+
+message ValidateTokenRequest { string session_token = 1; }
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string username = 3;
+}
+
+// === ШИФРОВАНИЕ ===
+enum EncryptionAlgorithm { LOKI97 = 0; RC6 = 1; }
+
+enum EncryptionMode {
+  ECB = 0; CBC = 1; PCBC = 2; CFB = 3; OFB = 4; CTR = 5; RANDOM_DELTA = 6;
+}
+
+enum PaddingMode { ZEROS = 0; ANSI_X923 = 1; PKCS7 = 2; ISO10126 = 3; }
+
+message DHParameters {
+  bytes prime = 1;
+  bytes generator = 2;
+  bytes public_key = 3;
+}
+
 // === УПРАВЛЕНИЕ КОНТАКТАМИ ===
 message ContactRequest {
-  string requester = 1;
-  string target = 2;
+  string target_username = 1;  // кому
 }
 
 message ContactActionRequest {
-  int32 request_id = 1;
-  bool approve = 2;
+  string request_id = 1;  // ID запроса
+  bool approve = 2;       // Принять/отклонить
 }
 
-message RemoveContactRequest {
+message RemoveContactRequest { string contact_username = 1; }
+
+message ContactInfo {
   string username = 1;
-  string contact_username = 2;
+  string status = 2;  // "online", "offline", "pending"
+  string request_id = 3;
 }
 
 // === УПРАВЛЕНИЕ ЧАТАМИ ===
 message CreateChatRequest {
-  string initiator = 1;
-  string contact = 2;
-  EncryptionAlgorithm algorithm = 3;
-  EncryptionMode mode = 4;
-  PaddingMode padding = 5;
-  DHParameters initiator_params = 6;
+  string contact_username = 1;  // создатель
+  EncryptionAlgorithm algorithm = 2;
+  EncryptionMode mode = 3;
+  PaddingMode padding = 4;
+  DHParameters initiator_params = 5;
 }
 
 message ChatInfo {
   string chat_id = 1;
   repeated string participants = 2;
-  DHParameters peer_params = 3;
+  EncryptionAlgorithm algorithm = 3;
+  EncryptionMode mode = 4;
+  PaddingMode padding = 5;
+  DHParameters peer_params = 6;
+  bool is_active = 7;
 }
 
 message JoinChatRequest {
   string chat_id = 1;
-  string username = 2;
+  DHParameters peer_params = 2;  // DH присоединяющегося
 }
 
-// === ЧАНКМЕТА ===
+message CloseChatRequest { string chat_id = 1; }
+
+// === ПЕРЕДАЧА СООБЩЕНИЙ ===
 message ChunkMetadata {
   string chat_id = 1;
-  string sender = 2;  // Отправитель
-  google.protobuf.Timestamp timestamp = 3;
-  string file_id = 4;  // ID файла
-  bool is_file = 5;
-  int32 chunk_index = 6;
-  int32 total_chunks = 7;
-  bool is_last_chunk = 8;
+  google.protobuf.Timestamp timestamp = 2;
+  string file_id = 3;
+  bool is_file = 4;
+  int32 chunk_index = 5;
+  int32 total_chunks = 6;
+  bool is_last_chunk = 7;
+  string original_filename = 8;
+  int64 file_size = 9;
+  bytes iv = 10;
+  string message_id = 11;
 }
 
 message EncryptedChunk {
@@ -104,43 +123,105 @@ message EncryptedChunk {
 }
 
 message ChunkAcknowledgement {
-  string file_id = 1;     // ID файла
-  int32 chunk_index = 2;  // Номер подтвержденного чанка
+  string file_id = 1;
+  int32 chunk_index = 2;
   bool success = 3;
-  string error = 4;  // еррорка
+  string error = 4;
+}
+
+message TransferCancellation {
+  string message_id = 1;
+  string file_id = 2;
+  string chat_id = 3;
+  string reason = 4;
+}
+
+message TransferStatus {
+  string message_id = 1;
+  TransferState state = 2;
+  float progress = 3;
+  string error = 4;
+}
+
+enum TransferState {
+  PENDING = 0; TRANSFERRING = 1; COMPLETED = 2; CANCELLED = 3; FAILED = 4;
+}
+
+message TransferStatusRequest { string message_id = 1; }
+
+message ContactUpdate {
+  string type = 1;  // "added", "removed", "status_changed", "request"
+  ContactInfo contact = 2;
+}
+
+message ChatUpdate {
+  string type = 1;  // "created", "closed", "user_joined", "user_left"
+  ChatInfo chat = 2;
 }
 
 // === СЕРВИСЫ ===
 service AuthService {
+  // Рега
   rpc Register(RegisterRequest) returns(CommonResponse);
+  // Вход
   rpc Login(LoginRequest) returns(AuthResponse);
+  // выход
+  rpc Logout(LogoutRequest) returns(CommonResponse);
+  // проверка токена
+  rpc ValidateToken(ValidateTokenRequest) returns(ValidateTokenResponse);
 }
 
 service ContactService {
+  // Добавить контакт
   rpc AddContact(ContactRequest) returns(CommonResponse);
+
+  // Получить список контактов
+  rpc GetContacts(google.protobuf.Empty) returns(stream ContactInfo);
+
+  // Обработать входящий запрос на добавление в контакты
   rpc HandleContactRequest(ContactActionRequest) returns(CommonResponse);
+
+  // Удалить контакт
   rpc RemoveContact(RemoveContactRequest) returns(CommonResponse);
+
+  // Стриминг обновлений контактов
+  rpc SubscribeToContactUpdates(google.protobuf.Empty)
+      returns(stream ContactUpdate);
 }
 
 service ChatService {
+  // Создать новый чат
   rpc CreateChat(CreateChatRequest) returns(ChatInfo);
+
+  // Присоединиться к существующему чату
   rpc JoinChat(JoinChatRequest) returns(CommonResponse);
-  rpc CloseChat(ChatIdRequest) returns(CommonResponse);
-  rpc GetActiveChats(UsernameRequest) returns(stream ChatInfo);
+
+  // Закрыть чат
+  rpc CloseChat(CloseChatRequest) returns(CommonResponse);
+
+  // Получить активные чаты пользователя
+  rpc GetActiveChats(google.protobuf.Empty) returns(stream ChatInfo);
+
+  // Покинуть чат
+  rpc LeaveChat(CloseChatRequest) returns(CommonResponse);
+
+  // Стриминг чатов
+  rpc SubscribeToChatUpdates(google.protobuf.Empty) returns(stream ChatUpdate);
 }
 
 service MessagingService {
-  // Отправка чанков
+  // Отправка зашифрованных чанков
   rpc SendChunks(stream EncryptedChunk) returns(stream ChunkAcknowledgement);
 
   // Получение чанков
-  rpc SubscribeToChunks(UsernameRequest) returns(stream EncryptedChunk);
+  rpc SubscribeToChunks(google.protobuf.Empty) returns(stream EncryptedChunk);
 
   // Отмена передачи файла
   rpc CancelTransfer(TransferCancellation) returns(CommonResponse);
-}
 
-message TransferCancellation {
-  string file_id = 1;
-  string reason = 2;
+  // Получить историю сообщений для чата
+  rpc GetChatHistory(ChatIdRequest) returns(stream EncryptedChunk);
+
+  // Статус о получении/отмены
+  rpc GetTransferStatus(TransferStatusRequest) returns(stream TransferStatus);
 }
