@@ -335,6 +335,9 @@ set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
 qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
 
 target_link_libraries(CryptoGUI PRIVATE
+        gRPC::grpc++
+        protobuf::libprotobuf
+        ChatProto
         CryptoSymmetricH CryptoRC6H CryptoLOKI97H CryptoDiffieHelmanH
         Qt6::Widgets
 )
