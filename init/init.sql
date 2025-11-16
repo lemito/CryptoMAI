@@ -11,7 +11,7 @@ CREATE INDEX idx_users_username ON users(username);
 CREATE TABLE user_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_token VARCHAR(64) UNIQUE NOT NULL, 
+    session_token VARCHAR(64) UNIQUE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMPTZ NOT NULL,
     is_active BOOLEAN DEFAULT true
@@ -31,3 +31,17 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_users_modtime
 BEFORE UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+CREATE TABLE contacts (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'accepted', 'rejected')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, contact_id),
+    CONSTRAINT no_self_contact CHECK (user_id != contact_id)
+);
+
+CREATE INDEX idx_contacts_user_id ON contacts(user_id);
+CREATE INDEX idx_contacts_contact_id ON contacts(contact_id);
+CREATE INDEX idx_contacts_status ON contacts(status);
+CREATE INDEX idx_contacts_pending ON contacts(status) WHERE status = 'pending';
