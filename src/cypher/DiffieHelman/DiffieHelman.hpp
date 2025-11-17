@@ -3,8 +3,8 @@
 #include <future>
 #include <stdexcept>
 
-#include "utils_math.h"
 #include "math/primary/PrimaryTests.hpp"
+#include "utils_math.h"
 
 namespace meow::cypher {
 class DiffieHelmanParams final {
@@ -143,53 +143,7 @@ class DiffieHelmanParams final {
 
   constexpr void findGenerator() {
     const BI q = (P - 1) / 2;
-
-    static constexpr std::array FAST_CANDIDATES = {
-        2,   3,   5,   7,   11,  13,  17,  19,  23,  29,  31,  37,  41,
-        43,  47,  53,  59,  61,  67,  71,  73,  79,  83,  89,  97,  101,
-        103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167,
-        173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239,
-        241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313,
-        317, 331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397,
-        401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 467,
-        479, 487, 491, 499, 503, 509, 521, 523, 541};
-
-    for (int prime_candidate : FAST_CANDIDATES) {
-      BI candidate(prime_candidate);
-      if (candidate >= P) break;
-      // g^q mod P != 1 => g - генератор
-      if (math::modPow(candidate, q, P) != 1) {
-        g = candidate;
-        return;
-      }
-    }
-
-    // если не прокнуло из готовой таблицы
-    if (tryRandomSearch(q)) {
-      return;
-    }
-
-    // если и рандом не прокнул
     findGeneratorDeterministic(q);
-  }
-
-  bool tryRandomSearch(const BI& q) {
-    // P = 2q+1
-    // phi(P) = P - 1 = 2q => phi(2q) = phi(2)*phi(q)=1*(q-1)=q-1 => на прямой
-    // может быть P-3 потенциальных генератора вероятность того, что мы его
-    // нашли: p = (q - 1) / (P - 3) = (q - 1) / (2q - 2) = 1/2
-    constexpr size_t MAX_ATTEMPTS = 500;
-
-    for (size_t i = 0; i < MAX_ATTEMPTS; ++i) {
-      if (const BI candidate =
-              math::_genRandNumber<boost::random::uniform_int_distribution<BI>>(
-                  2, P - 2);
-          math::modPow(candidate, q, P) != 1) {
-        this->g = candidate;
-        return true;
-      }
-    }
-    return false;
   }
 
   void findGeneratorDeterministic(const BI& q) {
@@ -200,6 +154,7 @@ class DiffieHelmanParams final {
         g = candidate;
         return;
       }
+
       candidate += (candidate % 2 == 0) ? 1 : 2;
     }
 
