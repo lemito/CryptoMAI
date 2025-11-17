@@ -6,6 +6,11 @@
 #include "contactsdialog.h"
 #include "logindialog.h"
 
+#include <memory>
+#include <grpcpp/grpcpp.h>
+#include "proto/chat.pb.h"
+#include "proto/chat.grpc.pb.h"
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -24,8 +29,10 @@ class MainWindow : public QMainWindow {
   void onLogout();
 
  private:
+  std::unique_ptr<chat::AuthService::Stub> authStub_;
   Ui::MainWindow *ui;
-  ContactsDialog *contactsDialog;
+  std::unique_ptr<ContactsDialog> contactsDialog;
+  SessionManager* m_sessionManager;
   QLabel *m_userLabel;
   QPushButton *m_logoutButton;
 
@@ -33,7 +40,8 @@ class MainWindow : public QMainWindow {
   void updateUserInfo();
 
  private slots:
-  void showContactsDialog() const;
+  void showContactsDialog();
   void on_userStatusButton_clicked();
+  void on_contactsButton_clicked();
 };
 #endif  // MAINWINDOW_H

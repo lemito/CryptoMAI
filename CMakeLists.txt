@@ -313,6 +313,8 @@ set(GUI_SOURCES
         src/GUI/contactsdialog.ui
         src/GUI/sessionmanager.cpp
         src/GUI/sessionmanager.h
+        src/GUI/contactlistitem.cpp
+        src/GUI/contactlistitem.h
 )
 
 qt_add_executable(CryptoGUI

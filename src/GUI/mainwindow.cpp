@@ -9,9 +9,15 @@ MainWindow::MainWindow(QWidget* parent)
       contactsDialog(new ContactsDialog(this)) {
   ui->setupUi(this);
 
+  auto channel = grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
+  authStub_ = chat::AuthService::NewStub(channel);
+
 
   connect(ui->actionShowContacts, &QAction::triggered, this,
           &MainWindow::showContactsDialog);
+
+  connect(ui->contactsButton, &QPushButton::clicked,
+          this, &MainWindow::on_contactsButton_clicked);
 
   connect(ui->userStatusButton, &QPushButton::clicked,
           this, &MainWindow::on_userStatusButton_clicked);
@@ -30,7 +36,14 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow() { delete ui; }
 
-void MainWindow::showContactsDialog() const {
+void MainWindow::on_contactsButton_clicked() {
+  showContactsDialog();
+}
+
+void MainWindow::showContactsDialog() {
+  if (!contactsDialog) {
+    contactsDialog = std::make_unique<ContactsDialog>(this);
+  }
   contactsDialog->show();
   contactsDialog->raise();
   contactsDialog->activateWindow();
@@ -45,6 +58,36 @@ void MainWindow::onLoginSuccess(const QString& username, const QString& token)
 
 void MainWindow::onLogout() {
   std::cout << "Logout started" << std::endl;
+
+  if (contactsDialog) {
+    contactsDialog->stopAllThreads();
+    contactsDialog->close();
+    contactsDialog.reset();
+  }
+
+  QString token = SessionManager::instance().sessionToken();
+
+  if (!token.isEmpty()) {
+    try {
+      chat::LogoutRequest request;
+      request.set_session_token(token.toStdString());
+
+      grpc::ClientContext context;
+      chat::CommonResponse response;
+
+      grpc::Status status = authStub_->Logout(&context, request, &response);
+
+      if (status.ok() && response.success()) {
+        std::cout << "Logout successful on server" << std::endl;
+      } else {
+        std::cerr << "Logout failed on server: "
+                  << (status.ok() ? response.message() : status.error_message())
+                  << std::endl;
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "Exception during logout: " << e.what() << std::endl;
+    }
+  }
 
   SessionManager::instance().clearSession();
 
