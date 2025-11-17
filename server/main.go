@@ -66,6 +66,16 @@ type contactsService struct {
 	db *sql.DB
 }
 
+// TODO: реализовать их и вообще добить сервер
+type ChatService struct {
+	pb.UnimplementedChatServiceServer
+	db *sql.DB
+}
+
+type MessagingService struct {
+	pb.UnimplementedMessagingServiceServer
+}
+
 func NewAuthService(db *sql.DB) *authService {
 	return &authService{
 		db: db,
@@ -76,6 +86,16 @@ func NewContactsService(db *sql.DB) *contactsService {
 	return &contactsService{
 		db: db,
 	}
+}
+
+func NewChatService(db *sql.DB) *ChatService {
+	return &ChatService{
+		db: db,
+	}
+}
+
+func NewMessagingService() *MessagingService {
+	return &MessagingService{}
 }
 
 func initDB(cfg DatabaseConfig) (*sql.DB, error) {
