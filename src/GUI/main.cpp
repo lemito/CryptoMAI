@@ -16,13 +16,30 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+  bool hasValidSession = SessionManager::instance().isLoggedIn();
+
+  MainWindow w;
   LoginDialog loginDialog;
-  if (loginDialog.exec() == QDialog::Accepted) {
-    MainWindow window;
-    window.show();
-    return a.exec();
+
+  if (hasValidSession) {
+    w.show();
   } else {
-    return 0;
+    loginDialog.show();
   }
-  return 0;
+
+  QObject::connect(&loginDialog, &LoginDialog::loginSuccess,
+                   &w, &MainWindow::onLoginSuccess);
+
+  QObject::connect(&SessionManager::instance(), &SessionManager::sessionChanged,
+                   [&loginDialog, &w](bool loggedIn) {
+                     if (loggedIn) {
+                       loginDialog.hide();
+                       w.show();
+                     } else {
+                       w.hide();
+                       loginDialog.show();
+                     }
+                   });
+
+  return a.exec();
 }

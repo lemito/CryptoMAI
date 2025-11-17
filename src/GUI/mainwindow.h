@@ -19,11 +19,21 @@ class MainWindow : public QMainWindow {
   MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
+ public slots:
+  void onLoginSuccess(const QString& username, const QString& token);
+  void onLogout();
+
  private:
   Ui::MainWindow *ui;
   ContactsDialog *contactsDialog;
+  QLabel *m_userLabel;
+  QPushButton *m_logoutButton;
+
+  void setupUserInterface();
+  void updateUserInfo();
 
  private slots:
   void showContactsDialog() const;
+  void on_userStatusButton_clicked();
 };
 #endif  // MAINWINDOW_H
