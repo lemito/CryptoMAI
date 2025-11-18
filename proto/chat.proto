@@ -58,6 +58,13 @@ message DHParameters {
   bytes public_key = 3;
 }
 
+message EncryptionParameters {
+  EncryptionAlgorithm algorithm = 1;
+  EncryptionMode mode = 2;
+  PaddingMode padding = 3;
+  bytes chat_iv = 4;
+}
+
 // === УПРАВЛЕНИЕ КОНТАКТАМИ ===
 message ContactRequest {
   string target_username = 1;  // кому
@@ -78,21 +85,17 @@ message ContactInfo {
 
 // === УПРАВЛЕНИЕ ЧАТАМИ ===
 message CreateChatRequest {
-  string contact_username = 1;  // создатель
-  EncryptionAlgorithm algorithm = 2;
-  EncryptionMode mode = 3;
-  PaddingMode padding = 4;
-  DHParameters initiator_params = 5;
+  string contact_username = 1;
+  EncryptionParameters encryption_params = 2;
+  DHParameters initiator_params = 3;
 }
 
 message ChatInfo {
   string chat_id = 1;
   repeated string participants = 2;
-  EncryptionAlgorithm algorithm = 3;
-  EncryptionMode mode = 4;
-  PaddingMode padding = 5;
-  DHParameters peer_params = 6;
-  bool is_active = 7;
+  EncryptionParameters encryption_params = 3;
+  DHParameters peer_params = 4;
+  bool is_active = 5;
 }
 
 message JoinChatRequest {
@@ -113,8 +116,7 @@ message ChunkMetadata {
   bool is_last_chunk = 7;
   string original_filename = 8;
   int64 file_size = 9;
-  bytes iv = 10;
-  string message_id = 11;
+  string message_id = 10;
 }
 
 message EncryptedChunk {

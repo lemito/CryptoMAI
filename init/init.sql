@@ -45,3 +45,41 @@ CREATE INDEX idx_contacts_user_id ON contacts(user_id);
 CREATE INDEX idx_contacts_contact_id ON contacts(contact_id);
 CREATE INDEX idx_contacts_status ON contacts(status);
 CREATE INDEX idx_contacts_pending ON contacts(status) WHERE status = 'pending';
+
+
+CREATE TABLE IF NOT EXISTS chats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    initiator_username VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+    participant_username VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+    algorithm VARCHAR(20) NOT NULL,
+    mode VARCHAR(20) NOT NULL,
+    padding VARCHAR(20) NOT NULL,
+    base_iv BYTEA NOT NULL,
+    initiator_dh_params JSONB NOT NULL,
+    peer_dh_params JSONB,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CHECK (initiator_username != participant_username)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_unique_active 
+ON chats(initiator_username, participant_username) 
+WHERE is_active = true;
+
+CREATE TABLE IF NOT EXISTS user_chats (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    chat_id UUID NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    username VARCHAR(50) NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT true,
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    left_at TIMESTAMP WITH TIME ZONE,
+    
+    PRIMARY KEY (user_id, chat_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chats_initiator ON chats(initiator_username);
+CREATE INDEX IF NOT EXISTS idx_chats_participant ON chats(participant_username);
+CREATE INDEX IF NOT EXISTS idx_chats_active ON chats(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_user_chats_username ON user_chats(username);
+CREATE INDEX IF NOT EXISTS idx_user_chats_active ON user_chats(is_active) WHERE is_active = true;

@@ -14,5 +14,30 @@ services:
     ports:
       - "5432:5432"
 
+  rabbitmq:
+    image: rabbitmq
+    command: rabbitmq-server
+    expose:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+      - RABBITMQ_LOGS=/var/log/rabbitmq/rabbit.log
+      - RABBITMQ_SASL_LOGS=/var/log/rabbitmq/rabbit-sasl.log
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+
 volumes:
   postgres_data:
+  rabbitmq_data:
+    driver: local
+  rabbitmq_logs:
+    driver: local
