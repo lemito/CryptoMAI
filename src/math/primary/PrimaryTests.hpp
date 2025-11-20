@@ -1,17 +1,12 @@
-module;
-
 // #include <boost/container/set.hpp>
 #include <cstdlib>
 #include <limits>
 #include <stdexcept>
 
+#include "math/math.hpp"
 #include "utils_math.h"
 
-export module math.PrimaryTests;
-
-import math;
-
-export namespace meow::math::primary {
+namespace meow::math::primary {
 constexpr double default_epsilon = std::numeric_limits<double>::epsilon();
 
 constexpr bool doubleEqual(const double a, const double b,
