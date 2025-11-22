@@ -105,7 +105,7 @@ func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor
 
 		user, err := authService.ValidateSession(stream.Context(), sessionToken)
 		if err != nil {
-			log.Printf("Auth failed for stream %s: %v", info.FullMethod, err)
+			log.Printf("ошибка %s: %v", info.FullMethod, err)
 			return err
 		}
 
@@ -122,7 +122,7 @@ func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor
 			ctx:          ctx,
 		}
 
-		log.Printf("Auth successful for stream %s, user: %s", info.FullMethod, authContext.Username)
+		log.Printf("Авторизация для потока %s, user: %s", info.FullMethod, authContext.Username)
 
 		return handler(srv, wrappedStream)
 	}

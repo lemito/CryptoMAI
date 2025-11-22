@@ -41,10 +41,9 @@ func (s *ChatService) CreateChat(ctx context.Context, req *pb.CreateChatRequest)
 		return nil, err
 	}
 
-	// Убираем проверку на существующий чат - разрешаем multiple chats
 	newChat, err := s.createNewChatInDB(ctx, authContext.Username, req)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to create chat: "+err.Error())
+		return nil, status.Error(codes.Internal, "не удалось создать чат: "+err.Error())
 	}
 
 	return s.convertChatToChatInfo(newChat), nil
@@ -52,19 +51,19 @@ func (s *ChatService) CreateChat(ctx context.Context, req *pb.CreateChatRequest)
 
 func (s *ChatService) validateCreateChatRequest(req *pb.CreateChatRequest) error {
 	if req.ContactUsername == "" {
-		return fmt.Errorf("contact username is required")
+		return fmt.Errorf("имя пользователя контакта обязательно")
 	}
 	if req.EncryptionParams == nil {
-		return fmt.Errorf("encryption parameters are required")
+		return fmt.Errorf("параметры шифрования обязательны")
 	}
 	if len(req.EncryptionParams.ChatIv) == 0 {
-		return fmt.Errorf("chat IV is required")
+		return fmt.Errorf("IV чата обязателен")
 	}
 	if req.InitiatorParams == nil {
-		return fmt.Errorf("DH parameters are required")
+		return fmt.Errorf("параметры DH обязательны")
 	}
 	if req.InitiatorParams.Prime == nil || req.InitiatorParams.Generator == nil || req.InitiatorParams.PublicKey == nil {
-		return fmt.Errorf("DH parameters are incomplete")
+		return fmt.Errorf("неполные параметры DH")
 	}
 	return nil
 }
@@ -72,19 +71,19 @@ func (s *ChatService) validateCreateChatRequest(req *pb.CreateChatRequest) error
 func (s *ChatService) validateContact(ctx context.Context, username, contactUsername string) error {
 	var exists bool
 	err := s.db.QueryRowContext(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM contacts c
-			JOIN users u1 ON c.user_id = u1.id
-			JOIN users u2 ON c.contact_id = u2.id
-			WHERE u1.username = $1 AND u2.username = $2 AND c.status = 'accepted'
-		)`,
+        SELECT EXISTS(
+            SELECT 1 FROM contacts c
+            JOIN users u1 ON c.user_id = u1.id
+            JOIN users u2 ON c.contact_id = u2.id
+            WHERE u1.username = $1 AND u2.username = $2 AND c.status = 'accepted'
+        )`,
 		username, contactUsername).Scan(&exists)
 
 	if err != nil {
-		return status.Errorf(codes.Internal, "failed to validate contact: %v", err)
+		return status.Errorf(codes.Internal, "не удалось проверить контакт: %v", err)
 	}
 	if !exists {
-		return status.Error(codes.NotFound, "contact not found or not accepted")
+		return status.Error(codes.NotFound, "контакт не найден или не подтвержден")
 	}
 	return nil
 }
@@ -119,7 +118,7 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
 	}
 	initiatorDHJSON, err := json.Marshal(initiatorDH)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal DH params: %v", err)
+		return nil, fmt.Errorf("не удалось сериализовать параметры DH: %v", err)
 	}
 
 	chatID := uuid.New().String()
@@ -127,7 +126,7 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %v", err)
+		return nil, fmt.Errorf("не удалось начать транзакцию: %v", err)
 	}
 	defer tx.Rollback()
 
@@ -144,7 +143,7 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
 		true, now,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert chat: %v", err)
+		return nil, fmt.Errorf("не удалось вставить чат: %v", err)
 	}
 
 	users := []string{initiatorUsername, req.ContactUsername}
@@ -155,12 +154,12 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
             FROM users u WHERE u.username = $3`,
 			chatID, now, username)
 		if err != nil {
-			return nil, fmt.Errorf("failed to add user %s to chat: %v", username, err)
+			return nil, fmt.Errorf("не удалось добавить пользователя %s в чат: %v", username, err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+		return nil, fmt.Errorf("не удалось зафиксировать транзакцию: %v", err)
 	}
 
 	return &Chat{
@@ -185,33 +184,46 @@ func (s *ChatService) JoinChat(ctx context.Context, req *pb.JoinChatRequest) (*p
 	}
 
 	if req.ChatId == "" {
-		return nil, status.Error(codes.InvalidArgument, "chat ID is required")
+		return nil, status.Error(codes.InvalidArgument, "ID чата обязателен")
 	}
 	if req.PeerParams == nil {
-		return nil, status.Error(codes.InvalidArgument, "DH parameters are required")
+		return nil, status.Error(codes.InvalidArgument, "параметры DH обязательны")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to begin transaction: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось начать транзакцию: %v", err)
 	}
 	defer tx.Rollback()
 
-	// Проверяем, что пользователь является участником чата
 	var participantUsername string
 	err = tx.QueryRowContext(ctx, `
-		SELECT participant_username FROM chats 
-		WHERE id = $1 AND is_active = true`,
+        SELECT participant_username FROM chats 
+        WHERE id = $1 AND is_active = true`,
 		req.ChatId).Scan(&participantUsername)
 
 	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "active chat not found")
+		return nil, status.Error(codes.NotFound, "активный чат не найден")
 	} else if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to find chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось найти чат: %v", err)
 	}
 
 	if participantUsername != authContext.Username {
-		return nil, status.Error(codes.PermissionDenied, "you are not the participant of this chat")
+		return nil, status.Error(codes.PermissionDenied, "вы не являетесь участником этого чата")
+	}
+
+	var alreadyJoined bool
+	err = tx.QueryRowContext(ctx, `
+        SELECT EXISTS(
+            SELECT 1 FROM user_chats 
+            WHERE chat_id = $1 AND username = $2 AND is_active = true
+        )`, req.ChatId, authContext.Username).Scan(&alreadyJoined)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ошибка: %v", err)
+	}
+	if alreadyJoined {
+		return nil, status.Error(codes.AlreadyExists, "вы уже находитесь в этом чате")
 	}
 
 	peerDH := DHParams{
@@ -221,33 +233,32 @@ func (s *ChatService) JoinChat(ctx context.Context, req *pb.JoinChatRequest) (*p
 	}
 	peerDHJSON, err := json.Marshal(peerDH)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to marshal DH params: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось сериализовать параметры DH: %v", err)
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		UPDATE chats SET peer_dh_params = $1 
-		WHERE id = $2`,
+        UPDATE chats SET peer_dh_params = $1 
+        WHERE id = $2`,
 		peerDHJSON, req.ChatId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to update chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось обновить чат: %v", err)
 	}
 
-	// Обновляем запись в user_chats для участника
 	_, err = tx.ExecContext(ctx, `
-		UPDATE user_chats SET is_active = true, joined_at = $1 
-		WHERE chat_id = $2 AND username = $3`,
+        UPDATE user_chats SET is_active = true, joined_at = $1 
+        WHERE chat_id = $2 AND username = $3`,
 		time.Now(), req.ChatId, authContext.Username)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to update user chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось обновить информацию о чате пользователя: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to commit transaction: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось зафиксировать транзакцию: %v", err)
 	}
 
 	return &pb.CommonResponse{
 		Success: true,
-		Message: "Successfully joined the chat",
+		Message: "Успешно зашел в чат",
 	}, nil
 }
 
@@ -258,54 +269,54 @@ func (s *ChatService) CloseChat(ctx context.Context, req *pb.CloseChatRequest) (
 	}
 
 	if req.ChatId == "" {
-		return nil, status.Error(codes.InvalidArgument, "chat ID is required")
+		return nil, status.Error(codes.InvalidArgument, "ID чата обязателен")
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to begin transaction: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось начать транзакцию: %v", err)
 	}
 	defer tx.Rollback()
 
 	var initiatorUsername string
 	err = tx.QueryRowContext(ctx, `
-		SELECT initiator_username FROM chats 
-		WHERE id = $1 AND is_active = true`,
+        SELECT initiator_username FROM chats 
+        WHERE id = $1 AND is_active = true`,
 		req.ChatId).Scan(&initiatorUsername)
 
 	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "active chat not found")
+		return nil, status.Error(codes.NotFound, "активный чат не найден")
 	} else if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to find chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось найти чат: %v", err)
 	}
 
 	if initiatorUsername != authContext.Username {
-		return nil, status.Error(codes.PermissionDenied, "only chat initiator can close the chat")
+		return nil, status.Error(codes.PermissionDenied, "только инициатор чата может закрыть чат")
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		UPDATE chats SET is_active = false 
-		WHERE id = $1`,
+        UPDATE chats SET is_active = false 
+        WHERE id = $1`,
 		req.ChatId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to close chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось закрыть чат: %v", err)
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		UPDATE user_chats SET is_active = false, left_at = $1 
-		WHERE chat_id = $2`,
+        UPDATE user_chats SET is_active = false, left_at = $1 
+        WHERE chat_id = $2`,
 		time.Now(), req.ChatId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to update user chats: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось обновить информацию о чатах пользователей: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to commit transaction: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось зафиксировать транзакцию: %v", err)
 	}
 
 	return &pb.CommonResponse{
 		Success: true,
-		Message: "Chat closed successfully",
+		Message: "Чат закрыт успешно",
 	}, nil
 }
 
@@ -318,9 +329,11 @@ func (s *ChatService) startChatCleanup() {
 		cancel()
 		cnt, err := result.RowsAffected()
 		if err != nil {
-			log.Printf("Error cleaning chat: %v", err)
+			log.Printf("Ошибка очистки чатов: %v", err)
 		}
-		log.Printf("Cleaned %d expired chat", cnt)
+		result, _ = s.db.ExecContext(ctx,
+			"DELETE FROM user_chats WHERE is_active = false")
+		log.Printf("Очищено %d неактивных чатов", cnt)
 	}
 }
 
@@ -331,42 +344,83 @@ func (s *ChatService) LeaveChat(ctx context.Context, req *pb.CloseChatRequest) (
 	}
 
 	if req.ChatId == "" {
-		return nil, status.Error(codes.InvalidArgument, "chat ID is required")
+		return nil, status.Error(codes.InvalidArgument, "ID чата обязателен")
 	}
 
-	var userChat UserChat
-	err = s.db.QueryRowContext(ctx, `
-		SELECT username, is_active 
-		FROM user_chats 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "не удалось начать транзакцию: %v", err)
+	}
+	defer tx.Rollback()
+
+	var user bool
+	err = tx.QueryRowContext(ctx, `
+		SELECT is_active FROM user_chats 
 		WHERE chat_id = $1 AND username = $2`,
-		req.ChatId, authContext.Username).Scan(&userChat.Username, &userChat.IsActive)
+		req.ChatId, authContext.Username).Scan(&user)
 
 	if err == sql.ErrNoRows {
-		return nil, status.Error(codes.NotFound, "you are not a participant of this chat")
+		return nil, status.Error(codes.NotFound, "вы не являетесь участником этого чата")
 	} else if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to find user chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось найти чат пользователя: %v", err)
 	}
 
-	if !userChat.IsActive {
+	if !user {
 		return &pb.CommonResponse{
 			Success: false,
-			Message: "You have already left this chat",
+			Message: "Вы уже покинули этот чат",
 		}, nil
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx, `
+	
+	_, err = tx.ExecContext(ctx, `
 		UPDATE user_chats SET is_active = false, left_at = $1 
 		WHERE chat_id = $2 AND username = $3`,
 		now, req.ChatId, authContext.Username)
 
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to leave chat: %v", err)
+		return nil, status.Errorf(codes.Internal, "не удалось покинуть чат: %v", err)
+	}
+
+	var nowUsers int
+	err = tx.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM user_chats 
+		WHERE chat_id = $1 AND is_active = true`,
+		req.ChatId).Scan(&nowUsers)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "не удалось проверить активных участников: %v", err)
+	}
+
+	if nowUsers == 0 {
+		_, err = tx.ExecContext(ctx, `
+			DELETE FROM user_chats WHERE chat_id = $1`,
+			req.ChatId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "не удалось удалить записи пользователей: %v", err)
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			DELETE FROM chats WHERE id = $1`,
+			req.ChatId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "не удалось удалить чат: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, status.Errorf(codes.Internal, "не удалось закоммитить транзакцию: %v", err)
+	}
+
+	msg := "Вы вышли из чата"
+	if nowUsers == 0 {
+		msg = "Чат удален, так как в нем не осталось участников"
 	}
 
 	return &pb.CommonResponse{
 		Success: true,
-		Message: "Successfully left the chat",
+		Message: msg,
 	}, nil
 }
 
@@ -379,8 +433,7 @@ func (s *ChatService) GetActiveChats(empty *emptypb.Empty, stream pb.ChatService
 
 	log.Printf("GetActiveChats stream started for user: %s", authContext.Username)
 
-	// Отправляем все активные чаты пользователя
-	chats, err := s.getCurrentActiveChats(ctx, authContext.Username)
+	chats, err := s.getcurActiveChats(ctx, authContext.Username)
 	if err != nil {
 		return err
 	}
@@ -392,40 +445,39 @@ func (s *ChatService) GetActiveChats(empty *emptypb.Empty, stream pb.ChatService
 		}
 	}
 
-	// Ждем завершения контекста
 	<-ctx.Done()
-	log.Printf("GetActiveChats stream ended for user: %s", authContext.Username)
+	log.Printf("Поток завершен для: %s", authContext.Username)
 	return ctx.Err()
 }
 
-func (s *ChatService) getCurrentActiveChats(ctx context.Context, username string) (map[string]*Chat, error) {
+func (s *ChatService) getcurActiveChats(ctx context.Context, username string) (map[string]*Chat, error) {
 	chats := make(map[string]*Chat)
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.initiator_username, c.participant_username, c.algorithm, c.mode, c.padding,
-		       c.base_iv, c.initiator_dh_params, c.peer_dh_params, c.is_active, c.created_at
-		FROM chats c
-		JOIN user_chats uc ON c.id = uc.chat_id
-		WHERE uc.username = $1 AND uc.is_active = true AND c.is_active = true
-		ORDER BY c.created_at DESC`,
+        SELECT c.id, c.initiator_username, c.participant_username, c.algorithm, c.mode, c.padding,
+               c.base_iv, c.initiator_dh_params, c.peer_dh_params, c.is_active, c.created_at
+        FROM chats c
+        JOIN user_chats uc ON c.id = uc.chat_id
+        WHERE uc.username = $1 AND uc.is_active = true AND c.is_active = true
+        ORDER BY c.created_at DESC`,
 		username)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ошибка: %v", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		chat, err := s.scanChatFromRow(rows)
 		if err != nil {
-			log.Printf("Error scanning chat row: %v", err)
+			log.Printf("ошибка: %v", err)
 			continue
 		}
 		chats[chat.ID] = chat
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ошибка: %v", err)
 	}
 
 	return chats, nil
@@ -449,13 +501,13 @@ func (s *ChatService) scanChatFromRow(rows *sql.Rows) (*Chat, error) {
 	chat.Padding = pb.PaddingMode(pb.PaddingMode_value[paddingStr])
 
 	if err := json.Unmarshal(initiatorDHJSON, &chat.InitiatorDH); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal initiator DH params: %v", err)
+		return nil, fmt.Errorf("не удалось десериализовать параметры DH инициатора: %v", err)
 	}
 
 	if len(peerDHJSON) > 0 {
 		var peerDH DHParams
 		if err := json.Unmarshal(peerDHJSON, &peerDH); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal peer DH params: %v", err)
+			return nil, fmt.Errorf("не удалось десериализовать параметры DH пира: %v", err)
 		}
 		chat.PeerDH = &peerDH
 	}
@@ -501,12 +553,12 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 
 	log.Printf("SubscribeToChatUpdates stream started for user: %s", authContext.Username)
 
-	currentChats, err := s.getCurrentActiveChats(ctx, authContext.Username)
+	curChats, err := s.getcurActiveChats(ctx, authContext.Username)
 	if err != nil {
 		return err
 	}
 
-	for _, chat := range currentChats {
+	for _, chat := range curChats {
 		chatInfo := s.convertChatToChatInfo(chat)
 		if err := stream.Send(&pb.ChatUpdate{
 			Type: "active",
@@ -519,19 +571,19 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	previousChats := currentChats
+	prevChats := curChats
 
 	for {
 		select {
 		case <-ticker.C:
-			currentChats, err := s.getCurrentActiveChats(ctx, authContext.Username)
+			curChats, err := s.getcurActiveChats(ctx, authContext.Username)
 			if err != nil {
-				log.Printf("Error getting chat updates for %s: %v", authContext.Username, err)
+				log.Printf("Ошибка получения обновлений чата для %s: %v", authContext.Username, err)
 				continue
 			}
 
-			for id, chat := range currentChats {
-				if _, exists := previousChats[id]; !exists {
+			for id, chat := range curChats {
+				if _, exists := prevChats[id]; !exists {
 					if err := stream.Send(&pb.ChatUpdate{
 						Type: "created",
 						Chat: s.convertChatToChatInfo(chat),
@@ -541,8 +593,8 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 				}
 			}
 
-			for id := range previousChats {
-				if _, exists := currentChats[id]; !exists {
+			for id := range prevChats {
+				if _, exists := curChats[id]; !exists {
 					if err := stream.Send(&pb.ChatUpdate{
 						Type: "closed",
 						Chat: &pb.ChatInfo{ChatId: id},
@@ -552,10 +604,10 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 				}
 			}
 
-			previousChats = currentChats
+			prevChats = curChats
 
 		case <-ctx.Done():
-			log.Printf("SubscribeToChatUpdates stream ended for user: %s, reason: %v", authContext.Username, ctx.Err())
+			log.Printf("SubscribeToChatUpdates окончен: %s, причина: %v", authContext.Username, ctx.Err())
 			return ctx.Err()
 		}
 	}

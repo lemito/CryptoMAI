@@ -91,6 +91,12 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 	}
 
 	log.Printf("MessagingService запущен с RabbitMQ (пул каналов: %d) и PostgreSQL", conf.PoolSize)
+	go func() {
+		closeChan := serv.rabbitConn.NotifyClose(make(chan *amqp.Error))
+		for err := range closeChan {
+			log.Printf("Соединение с RabbitMQ разорвано: %v", err)
+		}
+	}()
 	return serv, nil
 }
 
@@ -127,24 +133,28 @@ func (s *MessagingService) closeAllChannels() {
 }
 
 func (s *MessagingService) userHasAccessToChat(username, chatID string) bool {
-	var count int
+	var cnt int
 	query := `
-		SELECT COUNT(*) FROM chats 
-		WHERE id = $1 AND is_active = true 
-		AND (initiator_username = $2 OR participant_username = $2)`
+    	SELECT COUNT(*) FROM chats c
+        JOIN user_chats uc ON c.id = uc.chat_id
+        WHERE c.id = $1 AND c.is_active = true 
+        AND uc.username = $2 AND uc.is_active = true`
 
-	err := s.db.QueryRow(query, chatID, username).Scan(&count)
+	err := s.db.QueryRow(query, chatID, username).Scan(&cnt)
 	if err != nil {
-		log.Printf("Ошибка проверки доступа к чату: %v", err)
+		log.Printf("Ошибка: %v", err)
 		return false
 	}
-	return count > 0
+	return cnt > 0
 }
 
 func (s *MessagingService) getChatParticipants(chatID string) ([]string, error) {
 	query := `
-		SELECT initiator_username, participant_username 
-		FROM chats WHERE id = $1 AND is_active = true`
+        SELECT u1.username, u2.username
+        FROM chats c
+        JOIN users u1 ON c.initiator_username = u1.username
+        JOIN users u2 ON c.participant_username = u2.username
+        WHERE c.id = $1 AND c.is_active = true`
 
 	var initiator, participant string
 	err := s.db.QueryRow(query, chatID).Scan(&initiator, &participant)
