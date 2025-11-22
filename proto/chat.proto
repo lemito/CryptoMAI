@@ -117,6 +117,7 @@ message ChunkMetadata {
   string original_filename = 8;
   int64 file_size = 9;
   string message_id = 10;
+  bool is_cancellation = 11;
 }
 
 message EncryptedChunk {
@@ -211,12 +212,16 @@ service ChatService {
   rpc SubscribeToChatUpdates(google.protobuf.Empty) returns(stream ChatUpdate);
 }
 
+message SubscribeToChunksRequest {
+  string chatId = 1;
+}
+
 service MessagingService {
   // Отправка зашифрованных чанков
   rpc SendChunks(stream EncryptedChunk) returns(stream ChunkAcknowledgement);
 
   // Получение чанков
-  rpc SubscribeToChunks(google.protobuf.Empty) returns(stream EncryptedChunk);
+  rpc SubscribeToChunks(SubscribeToChunksRequest) returns(stream EncryptedChunk);
 
   // Отмена передачи файла
   rpc CancelTransfer(TransferCancellation) returns(CommonResponse);

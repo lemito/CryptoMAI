@@ -63,9 +63,13 @@ CREATE TABLE IF NOT EXISTS chats (
     CHECK (initiator_username != participant_username)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_unique_active 
-ON chats(initiator_username, participant_username) 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chats_unique_config 
+ON chats (initiator_username, participant_username, algorithm, mode, padding, base_iv) 
 WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_chats_initiator ON chats(initiator_username);
+CREATE INDEX IF NOT EXISTS idx_chats_participant ON chats(participant_username);
+CREATE INDEX IF NOT EXISTS idx_chats_active ON chats(is_active) WHERE is_active = true;
 
 CREATE TABLE IF NOT EXISTS user_chats (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,8 +82,7 @@ CREATE TABLE IF NOT EXISTS user_chats (
     PRIMARY KEY (user_id, chat_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_chats_initiator ON chats(initiator_username);
-CREATE INDEX IF NOT EXISTS idx_chats_participant ON chats(participant_username);
-CREATE INDEX IF NOT EXISTS idx_chats_active ON chats(is_active) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_user_chats_username ON user_chats(username);
 CREATE INDEX IF NOT EXISTS idx_user_chats_active ON user_chats(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_user_chats_user ON user_chats(username, is_active);
+CREATE INDEX IF NOT EXISTS idx_user_chats_chat ON user_chats(chat_id, is_active);

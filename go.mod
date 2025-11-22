@@ -16,6 +16,7 @@ require (
 
 require (
 	github.com/jackc/pgx/v5 v5.7.6
+	github.com/rabbitmq/amqp091-go v1.10.0
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
