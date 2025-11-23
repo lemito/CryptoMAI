@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net"
 
@@ -11,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println("Starting...")
+	log.Println("Starting...")
 
 	dbConfig := DatabaseConfig{
 		Host:     "localhost",
