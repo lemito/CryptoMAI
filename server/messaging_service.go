@@ -59,7 +59,7 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 	}
 
 	if conf.PoolSize <= 0 {
-		conf.PoolSize = 10
+		conf.PoolSize = 52
 	}
 
 	serv := &MessagingService{
