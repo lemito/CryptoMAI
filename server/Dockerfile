@@ -4,6 +4,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY proto/ ./proto/
 COPY server/ .
+ARG BUILD_DATE
+ARG VERSION
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /server
 
 FROM alpine:3.19
@@ -12,5 +14,5 @@ RUN apk add --no-cache ca-certificates tzdata && \
 COPY --from=builder /server /app/server
 ENV TZ=Europe/Moscow
 WORKDIR /app
-EXPOSE 8080
+EXPOSE 50051
 ENTRYPOINT ["/app/server"]

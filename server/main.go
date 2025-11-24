@@ -13,7 +13,7 @@ func main() {
 	log.Println("Starting...")
 
 	dbConfig := DatabaseConfig{
-		Host:     "localhost",
+		Host:     "db",
 		Port:     "5432",
 		User:     "meow",
 		Password: "meow",
@@ -31,7 +31,7 @@ func main() {
 	contactsService := NewContactsService(db)
 	chatService := NewChatService(db)
 	conf := RabbitMQConfig{
-		URL:      "amqp://guest:guest@localhost:5672/",
+		URL:      "amqp://guest:guest@rabbitmq:5672/",
 		Exchange: "chat_exchange",
 	}
 	msgService, err := NewMessagingService(conf, db, authService)
@@ -53,7 +53,7 @@ func main() {
 	pb.RegisterChatServiceServer(server, chatService)
 	pb.RegisterMessagingServiceServer(server, msgService)
 
-	lis, err := net.Listen("tcp", ":50051")
+	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}

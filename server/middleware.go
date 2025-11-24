@@ -80,7 +80,6 @@ func AuthMiddleware(authService *authService) grpc.UnaryServerInterceptor {
 func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		publicMethods := map[string]bool{
-			// Streaming методы не должны быть публичными, так как требуют аутентификации
 		}
 		log.Printf("Stream method called: %s", info.FullMethod)
 
