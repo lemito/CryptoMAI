@@ -321,7 +321,6 @@ qt_add_executable(CryptoGUI
         src/GUI/sessionmanager.h
         src/GUI/contactlistitem.cpp
         src/GUI/contactlistitem.h
-        src/GUI/choicedialog.ui
         src/GUI/choicedialog.cpp
         src/GUI/choicedialog.h
         src/GUI/dialogutils.cpp
