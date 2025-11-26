@@ -1,12 +1,14 @@
 #ifndef LOGINDIALOG_H
 #define LOGINDIALOG_H
 
+#include <grpcpp/grpcpp.h>
+
 #include <QDialog>
 #include <QMessageBox>
 #include <memory>
-#include <grpcpp/grpcpp.h>
-#include "proto/chat.pb.h"
+
 #include "proto/chat.grpc.pb.h"
+#include "proto/chat.pb.h"
 #include "sessionmanager.h"
 
 namespace Ui {
@@ -17,22 +19,26 @@ class LoginDialog : public QDialog {
   Q_OBJECT
 
  public:
-  explicit LoginDialog(QWidget *parent = nullptr);
+  explicit LoginDialog(QWidget* parent = nullptr);
   ~LoginDialog();
 
-  QString getUsername() const { return m_username; }
-  QString getSessionToken() const { return m_sessionToken; }
+  [[nodiscard]] auto getUsername() const -> QString { return m_username; }
+  [[nodiscard]] auto getSessionToken() const -> QString {
+    return m_sessionToken;
+  }
 
  signals:
   void loginSuccess(const QString& username, const QString& token);
+  void rejected();
 
  private slots:
-  void on_loginButton_clicked();
-  void on_registerButton_clicked();
+  void onLoginButton_clicked();
+  void onRegisterButton_clicked();
   void checkCredentials();
+  void onRejected() { emit rejected(); }
 
  private:
-  Ui::LoginDialog *ui;
+  Ui::LoginDialog* ui;
   std::unique_ptr<chat::AuthService::Stub> auth_stub_;
   QString m_username;
   QString m_sessionToken;

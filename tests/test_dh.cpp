@@ -5,7 +5,7 @@
 import DiffieHelman;
 
 TEST(DH, Sample) {
-  const meow::cypher::DiffieHelmanParams params(1024, 0.95);
+  const meow::cypher::DiffieHelmanParams params(512, 0.95);
 
   const meow::cypher::DiffieHelman dhA(params);
   const meow::cypher::DiffieHelman dhB(params);

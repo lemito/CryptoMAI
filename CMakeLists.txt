@@ -7,6 +7,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 
+include(FetchContent)
+
 project(CryptoMAI LANGUAGES CXX)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -74,7 +76,7 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools Concurrent Sql)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -91,6 +93,9 @@ find_package(gRPC REQUIRED)
 message(STATUS "gRPC version: ${gRPC_VERSION}")
 message(STATUS "gRPC include dir: ${gRPC_INCLUDE_DIRS}")
 message(STATUS "gRPC libraries: ${gRPC_LIBRARIES}")
+
+find_package(SQLite3 REQUIRED)
+message(STATUS "SQLite3 version: ${SQLite3_VERSION}")
 
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -131,7 +136,6 @@ target_include_directories(ChatProto PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-include(FetchContent)
 FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
@@ -300,7 +304,9 @@ target_link_libraries(Crypto PUBLIC
 )
 
 # GUI 
-set(GUI_SOURCES
+qt_add_executable(CryptoGUI
+        MANUAL_FINALIZATION
+        src/GUI/utils.hpp
         src/GUI/main.cpp
         src/GUI/mainwindow.cpp
         src/GUI/mainwindow.h
@@ -315,11 +321,19 @@ set(GUI_SOURCES
         src/GUI/sessionmanager.h
         src/GUI/contactlistitem.cpp
         src/GUI/contactlistitem.h
-)
-
-qt_add_executable(CryptoGUI
-        MANUAL_FINALIZATION
-        ${GUI_SOURCES}
+        src/GUI/choicedialog.ui
+        src/GUI/choicedialog.cpp
+        src/GUI/choicedialog.h
+        src/GUI/dialogutils.cpp
+        src/GUI/dialogutils.h
+        src/GUI/joinchatdialog.cpp
+        src/GUI/joinchatdialog.h
+        src/GUI/createchatdialog.cpp
+        src/GUI/createchatdialog.h
+        src/GUI/chatstreamclient.cpp
+        src/GUI/chatstreamclient.h
+        src/GUI/databasemanager.cpp
+        src/GUI/databasemanager.h
 )
 
 target_compile_features(CryptoGUI PUBLIC cxx_std_23)
@@ -343,8 +357,10 @@ target_link_libraries(CryptoGUI PRIVATE
         protobuf::libprotobuf
         ChatProto
         CryptoSymmetricH CryptoRC6H CryptoLOKI97H CryptoDiffieHelmanH
-        Qt6::Widgets
+        Qt6::Widgets Qt6::Concurrent Qt6::Sql
 )
+target_link_libraries(CryptoGUI PRIVATE ${GMP_LIBRARY})
+target_link_libraries(CryptoGUI PRIVATE SQLite::SQLite3)
 
 qt_finalize_executable(CryptoGUI)
 

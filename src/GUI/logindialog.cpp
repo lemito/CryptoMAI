@@ -22,14 +22,16 @@ LoginDialog::LoginDialog(QWidget *parent)
   setupGRPCChannel();
 
   connect(ui->loginButton, &QPushButton::clicked, this,
-          &LoginDialog::on_loginButton_clicked);
+          &LoginDialog::onLoginButton_clicked);
   connect(ui->registerButton, &QPushButton::clicked, this,
-          &LoginDialog::on_registerButton_clicked);
+          &LoginDialog::onRegisterButton_clicked);
 
   connect(ui->usernameEdit, &QLineEdit::returnPressed, this,
-          &LoginDialog::on_loginButton_clicked);
+          &LoginDialog::onLoginButton_clicked);
   connect(ui->passwordEdit, &QLineEdit::returnPressed, this,
-          &LoginDialog::on_loginButton_clicked);
+          &LoginDialog::onLoginButton_clicked);
+
+  connect(this, &QDialog::rejected, this, &LoginDialog::onRejected);
 
   ui->usernameEdit->setFocus();
 }
@@ -38,13 +40,13 @@ LoginDialog::~LoginDialog() {
   delete ui;
 }
 
-void LoginDialog::on_loginButton_clicked() {
+void LoginDialog::onLoginButton_clicked() {
   if (ui->loginButton->isEnabled()) {
     checkCredentials();
   }
 }
 
-void LoginDialog::on_registerButton_clicked() {
+void LoginDialog::onRegisterButton_clicked() {
   if (!ui->registerButton->isEnabled()) {
     return;
   }
@@ -128,8 +130,6 @@ void LoginDialog::handleLoginResponse(const chat::AuthResponse& response) {
     m_username = ui->usernameEdit->text().trimmed();
 
     SessionManager::instance().setSessionData(m_sessionToken, m_username);
-
-    // showSuccess("Успех", "Добро пожаловать в MeowChat!");
 
     emit loginSuccess(m_username, m_sessionToken);
     accept();

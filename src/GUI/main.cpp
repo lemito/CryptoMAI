@@ -1,45 +1,76 @@
 #include <QApplication>
 #include <QLocale>
+#include <QTimer>
 #include <QTranslator>
+#include <memory>
 
+#include "databasemanager.h"
+#include "logindialog.h"
 #include "mainwindow.h"
+#include "sessionmanager.h"
 
-int main(int argc, char *argv[]) {
-  QApplication a(argc, argv);
+auto main(int argc, char* argv[]) -> int {
+  QApplication app(argc, argv);
+  app.setQuitOnLastWindowClosed(false);
 
   QTranslator translator;
   const QStringList uiLanguages = QLocale::system().uiLanguages();
-  for (const QString &locale : uiLanguages) {
+  for (const QString& locale : uiLanguages) {
     const QString baseName = "CryptoMAI_" + QLocale(locale).name();
     if (translator.load(":/i18n/" + baseName)) {
-      a.installTranslator(&translator);
+      app.installTranslator(&translator);
       break;
     }
   }
-  bool hasValidSession = SessionManager::instance().isLoggedIn();
 
-  MainWindow w;
-  LoginDialog loginDialog;
+  std::unique_ptr<MainWindow> mainWindow;
+  std::unique_ptr<LoginDialog> loginDialog;
 
-  if (hasValidSession) {
-    w.show();
-  } else {
-    loginDialog.show();
-  }
+  auto showMainWindow = [&]() {
+    if (!mainWindow) {
+      mainWindow = std::make_unique<MainWindow>();
+    }
+    if (loginDialog) {
+      loginDialog->hide();
+    }
+    mainWindow->show();
+    mainWindow->raise();
+    mainWindow->activateWindow();
+  };
 
-  QObject::connect(&loginDialog, &LoginDialog::loginSuccess,
-                   &w, &MainWindow::onLoginSuccess);
+  auto showLoginDialog = [&]() {
+    if (!loginDialog) {
+      loginDialog = std::make_unique<LoginDialog>();
+      QObject::connect(loginDialog.get(), &LoginDialog::loginSuccess,
+                       [&]() { showMainWindow(); });
+    }
+    if (mainWindow) {
+      mainWindow->hide();
+      QTimer::singleShot(100, [&]() { mainWindow.reset(); });
+    }
+    loginDialog->show();
+    loginDialog->raise();
+    loginDialog->activateWindow();
+  };
 
   QObject::connect(&SessionManager::instance(), &SessionManager::sessionChanged,
-                   [&loginDialog, &w](bool loggedIn) {
+                   [&](bool loggedIn) {
                      if (loggedIn) {
-                       loginDialog.hide();
-                       w.show();
+                       showMainWindow();
                      } else {
-                       w.hide();
-                       loginDialog.show();
+                       showLoginDialog();
                      }
                    });
 
-  return a.exec();
+  if (SessionManager::instance().isLoggedIn()) {
+    showMainWindow();
+  } else {
+    showLoginDialog();
+  }
+
+  const auto res = app.exec();
+
+  DatabaseManager::destroyInstance();
+
+  return res;
 }

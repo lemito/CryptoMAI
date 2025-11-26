@@ -158,27 +158,6 @@ QPushButton:pressed {
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="chatsLabel">
-         <property name="font">
-          <font>
-           <pointsize>10</pointsize>
-           <bold>false</bold>
-          </font>
-         </property>
-         <property name="styleSheet">
-          <string notr="true">QLabel {
-    color: #b0b3b8;
-    padding: 5px 16px;
-    font-weight: 500;
-}
-</string>
-         </property>
-         <property name="text">
-          <string>😺 Мои чаты</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QListWidget" name="chatsList">
          <property name="styleSheet">
           <string notr="true">QListWidget {
@@ -529,48 +508,6 @@ QPushButton:pressed {
           </spacer>
          </item>
          <item>
-          <widget class="QPushButton" name="membersButton">
-           <property name="minimumSize">
-            <size>
-             <width>36</width>
-             <height>36</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>36</width>
-             <height>36</height>
-            </size>
-           </property>
-           <property name="cursor">
-            <cursorShape>PointingHandCursor</cursorShape>
-           </property>
-           <property name="toolTip">
-            <string>Участники чата</string>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">QPushButton {
-    background-color: #f1f5f9;
-    border-radius: 18px;
-    color: #475569;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #e2e8f0;
-}
-
-QPushButton:pressed {
-    background-color: #cbd5e1;
-}
-</string>
-           </property>
-           <property name="text">
-            <string>😺</string>
-           </property>
-          </widget>
-         </item>
-         <item>
           <widget class="QPushButton" name="settingsButton">
            <property name="minimumSize">
             <size>
@@ -664,11 +601,11 @@ QPushButton:pressed {
 </string>
             </property>
             <property name="text">
-             <string>😻 Добро пожаловать в MeowChat!
+             <string>Пока тут пусто :(
 
-🐾 Начните общение с созданием нового чата или выберите существующий
+Создай чат или вступи в существующий
 
-💬 Безопасные зашифрованные сообщения для котиков и их друзей!</string>
+💬</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -731,7 +668,7 @@ QPushButton:pressed {
           <number>0</number>
          </property>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0,0">
+          <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0,0,0">
            <property name="spacing">
             <number>8</number>
            </property>
@@ -780,6 +717,42 @@ QTextEdit:focus {
              </property>
              <property name="placeholderText">
               <string>💬 Введите сообщение...</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="stickersButton">
+             <property name="minimumSize">
+              <size>
+               <width>40</width>
+               <height>36</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>40</width>
+               <height>36</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QPushButton {
+    background-color: #f1f5f9;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 14pt;
+}
+
+QPushButton:hover {
+    background-color: #e2e8f0;
+}
+
+QPushButton:pressed {
+    background-color: #cbd5e1;
+}
+</string>
+             </property>
+             <property name="text">
+              <string>😀</string>
              </property>
             </widget>
            </item>
@@ -1012,6 +985,14 @@ QMenu::item:selected {
    </property>
    <property name="toolTip">
     <string>Показать контакты</string>
+   </property>
+  </action>
+  <action name="actionOpenSettings">
+   <property name="text">
+    <string>Открыть настройки</string>
+   </property>
+   <property name="toolTip">
+    <string>Открыть настройки</string>
    </property>
   </action>
  </widget>

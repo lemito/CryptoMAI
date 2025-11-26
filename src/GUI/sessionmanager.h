@@ -3,31 +3,37 @@
 
 #include <QObject>
 #include <QSettings>
+#include <QUuid>
+#include <memory>
 
 class SessionManager : public QObject {
   Q_OBJECT
  public:
-  static SessionManager& instance();
+  SessionManager(const SessionManager&) = delete;
+  auto operator=(const SessionManager&) -> SessionManager& = delete;
+
+  static auto instance() -> SessionManager&;
 
   void setSessionData(const QString& token, const QString& username);
-  QString sessionToken() const;
-  QString username() const;
-  bool isLoggedIn() const;
+  [[nodiscard]] auto sessionToken() const -> QString;
+  [[nodiscard]] auto username() const -> QString;
+  [[nodiscard]] auto isLoggedIn() const -> bool;
   void clearSession();
 
   void setUserData(const QString& key, const QVariant& value);
-  QVariant userData(const QString& key) const;
+  [[nodiscard]] auto userData(const QString& key) const -> QVariant;
 
  signals:
   void sessionChanged(bool loggedIn);
   // void logoutRequested();
 
  private:
-  SessionManager() = default;
+  SessionManager();
   ~SessionManager() = default;
 
-  SessionManager(const SessionManager&) = delete;
-  SessionManager& operator=(const SessionManager&) = delete;
+  // QSettings* m_settings;
+  std::unique_ptr<QSettings> m_settings;
+  QString m_instanceId;
 };
 
 #endif  // SESSIONMANAGER_H
