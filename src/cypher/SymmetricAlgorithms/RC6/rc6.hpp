@@ -1,6 +1,8 @@
 /**
  * https://people.csail.mit.edu/rivest/pubs/RRSY98.pdf?spm=a2ty_o01.29997173.0.0.78cec921twWyWp&file=RRSY98.pdf
  */
+#pragma once
+
 #include <array>
 #include <cassert>
 #include <cstddef>
@@ -9,16 +11,17 @@
 #include <stdexcept>
 #include <vector>
 
-#include "cypher.hpp"
+#include "cypher/SymmetricAlgorithms/cypher.hpp"
+#include "cypher/SymmetricAlgorithms/utils.hpp"
 
 
 namespace meow::cypher::symm::_detailRC6 {
-constexpr uint32_t cycleLeft(const uint32_t num, uint32_t shift) {
+inline constexpr uint32_t cycleLeft(const uint32_t num, uint32_t shift) {
   shift %= 32;
   return (num << shift) | (num >> ((32 - shift)));
 }
 
-constexpr uint32_t cycleRight(const uint32_t num, uint32_t shift) {
+inline constexpr uint32_t cycleRight(const uint32_t num, uint32_t shift) {
   shift %= 32;
   return (num >> shift) | (num << ((32 - shift)));
 }

@@ -1,4 +1,5 @@
-module;
+// module;
+#pragma once
 
 #include <array>
 #include <cstdint>
@@ -7,9 +8,11 @@ module;
 #include <stdexcept>
 #include <vector>
 
-export module cypher.loki97;
+// export module cypher.loki97;
 
-import cypher;
+// import cypher;
+#include "cypher/SymmetricAlgorithms/cypher.hpp"
+
 
 namespace meow::cypher::symm::_detailLOKI97 {
 
@@ -24,7 +27,7 @@ static constexpr std::array<uint8_t, 64> P_TABLE = {
     60, 52, 44, 36, 28, 20, 12, 4, 61, 53, 45, 37, 29, 21, 13, 5,
     62, 54, 46, 38, 30, 22, 14, 6, 63, 55, 47, 39, 31, 23, 15, 7};
 
-uint64_t load64(const std::vector<std::byte>& data, const size_t off) {
+inline uint64_t load64(const std::vector<std::byte>& data, const size_t off) {
   if (off > data.size() || data.size() - off < 8) {
     throw std::out_of_range("off out of range");
   }
@@ -35,7 +38,7 @@ uint64_t load64(const std::vector<std::byte>& data, const size_t off) {
   return res;
 }
 
-void store64(std::vector<std::byte>& data, const size_t off,
+inline void store64(std::vector<std::byte>& data, const size_t off,
              const uint64_t val) {
   if (off > data.size() || data.size() - off < 8) {
     throw std::out_of_range("off out of range");
@@ -246,7 +249,7 @@ class LOKI97GenRoundKey : public IGenRoundKey, public LOKI97Core {
 };
 }  // namespace meow::cypher::symm::_detailLOKI97
 
-export namespace meow::cypher::symm::LOKI97 {
+namespace meow::cypher::symm::LOKI97 {
 
 class LOKI97 final : public ISymmetricCypher,
                      public _detailLOKI97::LOKI97GenRoundKey {

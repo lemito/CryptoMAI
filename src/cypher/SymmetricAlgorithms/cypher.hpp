@@ -1,6 +1,7 @@
 /**
  * TODO: ТУТ ШИФРОВАНИЯ ДОДЕЛАТЬ И ВСЯКОЕ РАСПАРАЛЕЛИВАНИЕ/АСИНХРОНЩИНА
  */
+#pragma once
 
 #include <algorithm>
 #include <any>
@@ -25,7 +26,7 @@
 // using BI = boost::multiprecision::mpz_int;
 #include "utils_math.h"
 
-std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
+inline std::vector<std::byte> xorSpan(const std::vector<std::byte>& a,
                                       const std::vector<std::byte>& b) {
   if (a.size() != b.size()) {
     throw std::runtime_error("блоки должны быть одного размера");
