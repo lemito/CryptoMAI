@@ -146,7 +146,7 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
 		return nil, fmt.Errorf("не удалось вставить чат: %v", err)
 	}
 
-	users := []string{initiatorUsername, req.ContactUsername}
+	users := []string{initiatorUsername}
 	for _, username := range users {
 		_, err = tx.ExecContext(ctx, `
             INSERT INTO user_chats (user_id, chat_id, username, is_active, joined_at)
