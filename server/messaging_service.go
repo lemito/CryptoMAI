@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -172,7 +171,7 @@ func (s *MessagingService) reconnectWithBackoff() {
 			continue
 		}
 
-		log.Println("Переподключение к RabbitMQ успешно")
+		s.logger.Infof("Переподключение к RabbitMQ успешно")
 
 		go s.monitorConnection()
 		return
@@ -204,7 +203,7 @@ func (s *MessagingService) closeAllSubscriptions() {
 	}
 	s.activeSubscriptions = make(map[string]context.CancelFunc)
 
-	log.Println("Все подписки закрыты из-за разрыва RabbitMQ соединения")
+	s.logger.Infof("Все подписки закрыты из-за разрыва RabbitMQ соединения")
 }
 
 func (s *MessagingService) getChannel() (*amqp.Channel, error) {
@@ -248,7 +247,7 @@ func (s *MessagingService) releaseChannel(ch *amqp.Channel) {
 	case s.channelPool <- ch:
 	default:
 		ch.Close()
-		log.Println("Пул каналов переполнен, канал закрыт")
+		s.logger.Infof("Пул каналов переполнен, канал закрыт")
 	}
 }
 
@@ -731,7 +730,7 @@ func (s *MessagingService) Close() {
 		s.isClosed.Store(true)
 		s.reconnecting = true
 
-		log.Println("Закрытие MessagingService...")
+		s.logger.Infof("Закрытие MessagingService...")
 		s.closeAllSubscriptions()
 
 		time.Sleep(500 * time.Millisecond)
@@ -756,6 +755,6 @@ func (s *MessagingService) Close() {
 		if s.rabbitConn != nil {
 			s.rabbitConn.Close()
 		}
-		log.Println("MessagingService успешно закрыт")
+		s.logger.Infof("MessagingService успешно закрыт")
 	})
 }

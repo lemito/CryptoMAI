@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"go.uber.org/zap"
 	"net"
 
@@ -28,7 +27,7 @@ func main() {
 
 	db, err := initDB(sugar, dbConfig)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		sugar.Errorf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
@@ -43,7 +42,7 @@ func main() {
 	}
 	msgService, err := NewMessagingService(sugar, conf, db, authService)
 	if err != nil {
-		log.Fatalf("Failed: %v", err)
+		sugar.Errorf("Failed: %v", err)
 	}
 	defer msgService.Close()
 
@@ -65,7 +64,7 @@ func main() {
 		sugar.Errorf("Failed to listen: %v", err)
 	}
 
-	log.Println("port 50051")
+	sugar.Infof("port 50051")
 	if err := server.Serve(lis); err != nil {
 		sugar.Errorf("Failed to serve: %v", err)
 	}
