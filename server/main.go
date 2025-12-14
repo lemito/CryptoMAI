@@ -30,6 +30,8 @@ func main() {
 	authService := NewAuthService(db)
 	contactsService := NewContactsService(db)
 	chatService := NewChatService(db)
+	chatService.Start()
+
 	conf := RabbitMQConfig{
 		URL:      "amqp://guest:guest@rabbitmq:5672/",
 		Exchange: "chat_exchange",

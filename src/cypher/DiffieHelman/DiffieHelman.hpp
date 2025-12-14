@@ -2,6 +2,7 @@
 
 #include <future>
 #include <stdexcept>
+#include <utility>
 
 #include "math/primary/PrimaryTests.hpp"
 #include "utils_math.h"
@@ -17,22 +18,22 @@ class DiffieHelmanParams final {
     generateParams(bitLength, probability);
   }
 
-  constexpr DiffieHelmanParams(const BI& prime, const BI& generator)
-      : P(prime), g(generator) {}
+  constexpr DiffieHelmanParams(BI prime, BI generator)
+      : P(std::move(prime)), g(std::move(generator)) {}
 
   void generateParams(const size_t bitLength, const double probability) {
     P = generateSafePrimeAsync(bitLength, probability);
     findGenerator();
   }
 
-  [[nodiscard]] constexpr BI getModulus() const { return P; }
-  [[nodiscard]] constexpr BI getGenerator() const { return g; }
+  [[nodiscard]] constexpr auto getModulus() const -> BI { return P; }
+  [[nodiscard]] constexpr auto getGenerator() const -> BI { return g; }
 
  private:
-  static BI generatePrimeNumber(const size_t bitLength,
-                                const double probability,
-                                const math::primary::MillerRabinTest& test,
-                                const std::atomic<bool>& found) {
+  static auto generatePrimeNumber(const size_t bitLength,
+                                  const double probability,
+                                  const math::primary::MillerRabinTest& test,
+                                  const std::atomic<bool>& found) -> BI {
     const BI min_val = BI(1) << (bitLength - 1);
     const BI max_val = (BI(1) << bitLength) - 1;
 
@@ -44,17 +45,18 @@ class DiffieHelmanParams final {
         return number;
       }
     }
-    return BI(0);
+    return {0};
   }
 
-  static BI generateSafePrimeAsync(const size_t bitLength,
-                                   const double probability) {
+  static auto generateSafePrimeAsync(const size_t bitLength,
+                                     const double probability) -> BI {
     const math::primary::MillerRabinTest primaryTest{};
     const unsigned num_threads = std::thread::hardware_concurrency();
 
     std::vector<std::future<BI>> futures;
     std::atomic found(false);
 
+    futures.reserve(num_threads);
     for (unsigned i = 0; i < num_threads; ++i) {
       futures.push_back(
           std::async(std::launch::async,
@@ -66,7 +68,9 @@ class DiffieHelmanParams final {
                                                    primaryTest, found);
                          }
 
-                         if (found) return BI(0);
+                         if (found) {
+                           return {0};
+                         }
 
                          if (BI P_candidate = q * 2 + 1;
                              primaryTest.isPrimary(P_candidate, probability)) {
@@ -75,7 +79,7 @@ class DiffieHelmanParams final {
                            }
                          }
                        }
-                       return BI(0);
+                       return {0};
                      }));
     }
 
@@ -89,8 +93,8 @@ class DiffieHelmanParams final {
     throw std::runtime_error("Failed to generate safe prime");
   }
 
-  static BI generateSafePrimeOptimized(const size_t bitLength,
-                                       const double probability) {
+  static auto generateSafePrimeOptimized(const size_t bitLength,
+                                         const double probability) -> BI {
     const math::primary::MillerRabinTest primaryTest{};
     const unsigned num_threads = std::thread::hardware_concurrency();
 
@@ -101,7 +105,7 @@ class DiffieHelmanParams final {
       constexpr size_t batch_size = 100;
       futures.push_back(std::async(
           std::launch::async,
-          [bitLength, probability, &primaryTest, &found, batch_size]() -> BI {
+          [bitLength, probability, &primaryTest, &found]() -> BI {
             const BI min_val = BI(1) << (bitLength - 2);
             const BI max_val = (BI(1) << (bitLength - 1)) - 1;
 
@@ -114,8 +118,10 @@ class DiffieHelmanParams final {
                                                                      max_val));
               }
 
-              for (BI q : candidates) {
-                if (found) break;
+              for (const BI& q : candidates) {
+                if (found) {
+                  break;
+                }
 
                 if (primaryTest.isPrimary(q, probability)) {
                   if (BI P_candidate = q * 2 + 1;
@@ -127,7 +133,7 @@ class DiffieHelmanParams final {
                 }
               }
             }
-            return BI(0);
+            return {0};
           }));
     }
 
@@ -163,13 +169,15 @@ class DiffieHelmanParams final {
 };
 
 class DiffieHelman final {
-  BI secret;
   BI publicKey;
+
   const DiffieHelmanParams _params;
 
  public:
-  constexpr explicit DiffieHelman(const DiffieHelmanParams& params)
-      : _params(params) {
+  BI secret;
+
+  constexpr explicit DiffieHelman(DiffieHelmanParams params)
+      : _params(std::move(params)) {
     genKeys();
   }
 
@@ -190,9 +198,10 @@ class DiffieHelman final {
         math::modPow(_params.getGenerator(), secret, _params.getModulus());
   }
 
-  [[nodiscard]] constexpr BI getPublicKey() const { return publicKey; }
+  [[nodiscard]] constexpr auto getPublicKey() const -> BI { return publicKey; }
 
-  [[nodiscard]] constexpr BI calcSharedSecret(const BI& otherPublicKey) const {
+  [[nodiscard]] constexpr auto calcSharedSecret(const BI& otherPublicKey) const
+      -> BI {
     if (otherPublicKey <= 1 ||
         otherPublicKey >= this->_params.getModulus() - 1) {
       throw std::invalid_argument("Public key must be in (1, P-1)");

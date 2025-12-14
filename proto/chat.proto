@@ -105,6 +105,24 @@ message JoinChatRequest {
 
 message CloseChatRequest { string chat_id = 1; }
 
+message DHParametersExchange {
+  string chat_id = 1;
+  oneof message {
+    DHParameters parameters = 2;
+    bool ready = 3;
+    string error = 4;
+  }
+}
+
+message DHParametersResponse {
+  oneof response {
+    DHParameters peer_params = 1;
+    bool success = 2;
+    string error = 3;
+    bool exchange_complete = 4;
+  }
+}
+
 // === ПЕРЕДАЧА СООБЩЕНИЙ ===
 message ChunkMetadata {
   string chat_id = 1;
@@ -162,6 +180,15 @@ message ChatUpdate {
   ChatInfo chat = 2;
 }
 
+message GetChatDHParamsRequest { string chat_id = 1; }
+
+message GetChatDHParamsResponse {
+  bool success = 1;
+  DHParameters initiator_params = 2;
+  bytes peer_public_key = 3;
+  string error = 4;
+}
+
 // === СЕРВИСЫ ===
 service AuthService {
   // Рега
@@ -210,18 +237,21 @@ service ChatService {
 
   // Стриминг чатов
   rpc SubscribeToChatUpdates(google.protobuf.Empty) returns(stream ChatUpdate);
+
+  // DH
+  rpc ExchangeDHParametersStream(stream DHParametersExchange) returns (stream DHParametersResponse);
+  rpc GetChatDHParams(GetChatDHParamsRequest) returns(GetChatDHParamsResponse);
 }
 
-message SubscribeToChunksRequest {
-  string chatId = 1;
-}
+message SubscribeToChunksRequest { string chatId = 1; }
 
 service MessagingService {
   // Отправка зашифрованных чанков
   rpc SendChunks(stream EncryptedChunk) returns(stream ChunkAcknowledgement);
 
   // Получение чанков
-  rpc SubscribeToChunks(SubscribeToChunksRequest) returns(stream EncryptedChunk);
+  rpc SubscribeToChunks(SubscribeToChunksRequest)
+      returns(stream EncryptedChunk);
 
   // Отмена передачи файла
   rpc CancelTransfer(TransferCancellation) returns(CommonResponse);

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pb "github.com/lemito/CryptoMAI/proto"
@@ -32,6 +33,21 @@ type MessagingService struct {
 
 	activeSubscriptions map[string]context.CancelFunc
 	subscriptionsMu     sync.RWMutex
+
+	activeConsumers map[string]*ConsumerState
+	consumersMu     sync.RWMutex
+
+	isClosed atomic.Bool
+
+	reconnectMu  sync.RWMutex
+	reconnecting bool
+	exchange     string
+	rabbitURL    string
+}
+
+type ConsumerState struct {
+	ch          *amqp.Channel
+	consumerTag string
 }
 
 func (s *MessagingService) setupRabbit(exchange string) error {
@@ -53,13 +69,16 @@ func (s *MessagingService) setupRabbit(exchange string) error {
 }
 
 func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) (*MessagingService, error) {
-	conn, err := amqp.Dial(conf.URL)
+	conn, err := amqp.DialConfig(conf.URL, amqp.Config{
+		Heartbeat: 60 * time.Second,
+		Dial:      amqp.DefaultDial(time.Minute),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("не удалось подключиться к RabbitMQ: %v", err)
 	}
 
 	if conf.PoolSize <= 0 {
-		conf.PoolSize = 52
+		conf.PoolSize = 42
 	}
 
 	serv := &MessagingService{
@@ -70,6 +89,9 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 		channelPool:         make(chan *amqp.Channel, conf.PoolSize),
 		poolSize:            conf.PoolSize,
 		activeSubscriptions: make(map[string]context.CancelFunc),
+		activeConsumers:     make(map[string]*ConsumerState),
+		exchange:            conf.Exchange,
+		rabbitURL:           conf.URL,
 	}
 
 	for i := 0; i < conf.PoolSize; i++ {
@@ -90,19 +112,118 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 		return nil, fmt.Errorf("не удалось настроить RabbitMQ: %v", err)
 	}
 
-	log.Printf("MessagingService запущен с RabbitMQ (пул каналов: %d) и PostgreSQL", conf.PoolSize)
-	go func() {
-		closeChan := serv.rabbitConn.NotifyClose(make(chan *amqp.Error))
-		for err := range closeChan {
-			log.Printf("Соединение с RabbitMQ разорвано: %v", err)
-		}
-	}()
+	log.Printf("MessagingService запущен с RabbitMQ (пул каналов: %d)", conf.PoolSize)
+
+	go serv.monitorConnection()
+
 	return serv, nil
 }
 
+func (s *MessagingService) monitorConnection() {
+	closeChan := s.rabbitConn.NotifyClose(make(chan *amqp.Error, 1))
+	for err := range closeChan {
+		if err != nil {
+			log.Printf("Соединение с RabbitMQ разорвано: %v", err)
+			s.reconnectMu.Lock()
+			s.reconnecting = true
+			s.reconnectMu.Unlock()
+
+			s.closeAllSubscriptions()
+
+			go s.reconnectWithBackoff()
+		}
+	}
+}
+
+func (s *MessagingService) reconnectWithBackoff() {
+	s.reconnectMu.Lock()
+	defer s.reconnectMu.Unlock()
+
+	backoff := 1 * time.Second
+	maxBackoff := 30 * time.Second
+	maxRetries := 10
+
+	for i := 0; i < maxRetries; i++ {
+		log.Printf("Попытка переподключения #%d к RabbitMQ через %v", i+1, backoff)
+		time.Sleep(backoff)
+
+		conn, err := amqp.Dial(s.rabbitURL)
+		if err != nil {
+			log.Printf("Не удалось переподключиться: %v", err)
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		s.rabbitConn = conn
+		s.reconnecting = false
+
+		s.recreateChannelPool()
+
+		if err := s.setupRabbit(s.exchange); err != nil {
+			log.Printf("Не удалось восстановить exchange: %v", err)
+			conn.Close()
+			continue
+		}
+
+		log.Println("Переподключение к RabbitMQ успешно")
+
+		go s.monitorConnection()
+		return
+	}
+
+	log.Fatal("Не удалось переподключиться к RabbitMQ после нескольких попыток")
+}
+
+func (s *MessagingService) recreateChannelPool() {
+	s.closeAllChannels()
+
+	s.channelPool = make(chan *amqp.Channel, s.poolSize)
+	for i := 0; i < s.poolSize; i++ {
+		ch, err := s.rabbitConn.Channel()
+		if err != nil {
+			log.Printf("Не удалось создать канал при переподключении: %v", err)
+			continue
+		}
+		s.channelPool <- ch
+	}
+}
+
+func (s *MessagingService) closeAllSubscriptions() {
+	s.subscriptionsMu.Lock()
+	defer s.subscriptionsMu.Unlock()
+
+	for _, cancel := range s.activeSubscriptions {
+		cancel()
+	}
+	s.activeSubscriptions = make(map[string]context.CancelFunc)
+
+	log.Println("Все подписки закрыты из-за разрыва RabbitMQ соединения")
+}
+
 func (s *MessagingService) getChannel() (*amqp.Channel, error) {
+	if s.isClosed.Load() {
+		return nil, status.Error(codes.Unavailable, "MessagingService закрыт")
+	}
+
+	s.reconnectMu.RLock()
+	if s.reconnecting {
+		s.reconnectMu.RUnlock()
+		return nil, status.Error(codes.Unavailable, "Переподключение к RabbitMQ")
+	}
+	s.reconnectMu.RUnlock()
+
 	select {
 	case ch := <-s.channelPool:
+		if ch == nil || ch.IsClosed() {
+			newCh, err := s.rabbitConn.Channel()
+			if err != nil {
+				return nil, status.Error(codes.Internal, "не удалось создать канал RabbitMQ")
+			}
+			return newCh, nil
+		}
 		return ch, nil
 	case <-time.After(5 * time.Second):
 		return nil, status.Error(codes.ResourceExhausted, "таймаут получения канала RabbitMQ")
@@ -114,22 +235,26 @@ func (s *MessagingService) releaseChannel(ch *amqp.Channel) {
 		return
 	}
 
+	if s.isClosed.Load() || ch.IsClosed() {
+		ch.Close()
+		return
+	}
+
 	select {
 	case s.channelPool <- ch:
 	default:
 		ch.Close()
+		log.Println("Пул каналов переполнен, канал закрыт")
 	}
 }
 
 func (s *MessagingService) closeAllChannels() {
-	s.closeOnce.Do(func() {
-		close(s.channelPool)
-		for ch := range s.channelPool {
-			if ch != nil {
-				ch.Close()
-			}
+	close(s.channelPool)
+	for ch := range s.channelPool {
+		if ch != nil {
+			ch.Close()
 		}
-	})
+	}
 }
 
 func (s *MessagingService) userHasAccessToChat(username, chatID string) bool {
@@ -200,7 +325,13 @@ func (s *MessagingService) createUserQueue(username string) error {
 		return err
 	}
 
-	err = ch.QueueBind(queueName, "user."+username, "chat_exchange", false, nil)
+	err = ch.QueueBind(
+		queueName,
+		"user."+username,
+		s.exchange,
+		false,
+		nil,
+	)
 	if err != nil {
 		return err
 	}
@@ -214,6 +345,14 @@ func (s *MessagingService) SendChunks(stream pb.MessagingService_SendChunksServe
 	authctx, err := GetAuthContext(stream.Context())
 	if err != nil {
 		return err
+	}
+
+	s.reconnectMu.RLock()
+	reconnecting := s.reconnecting
+	s.reconnectMu.RUnlock()
+
+	if reconnecting {
+		return status.Error(codes.Unavailable, "Сервис переподключается к RabbitMQ, попробуйте позже")
 	}
 
 	username := authctx.Username
@@ -306,7 +445,7 @@ func (s *MessagingService) SendChunks(stream pb.MessagingService_SendChunksServe
 					defer wg.Done()
 
 					err := ch.PublishWithContext(ctx,
-						"chat_exchange",
+						s.exchange,
 						"user."+recipient,
 						true,
 						false,
@@ -379,6 +518,14 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 	username := authctx.Username
 	chatId := req.ChatId
 
+	s.reconnectMu.RLock()
+	reconnecting := s.reconnecting
+	s.reconnectMu.RUnlock()
+
+	if reconnecting {
+		return status.Error(codes.Unavailable, "Сервис переподключается к RabbitMQ, попробуйте позже")
+	}
+
 	log.Printf("Пользователь %s подписывается на сообщения чата %s", username, chatId)
 
 	if err := s.createUserQueue(username); err != nil {
@@ -407,7 +554,7 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 		return status.Errorf(codes.Internal, "не удалось подписаться на сообщения: %v", err)
 	}
 
-	log.Printf("Пользователь %s подписался на получение сообщений из очереди %s", username, queueName)
+	log.Printf("Пользователь %s подписался на получение сообщений из очереди %s для чата %s", username, queueName, chatId)
 
 	ctx := stream.Context()
 
@@ -420,14 +567,29 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 	s.activeSubscriptions[consumerTag] = cancel
 	s.subscriptionsMu.Unlock()
 
+	consumerState := &ConsumerState{
+		ch:          ch,
+		consumerTag: consumerTag,
+	}
+	s.consumersMu.Lock()
+	s.activeConsumers[consumerTag] = consumerState
+	s.consumersMu.Unlock()
+
 	defer func() {
 		s.subscriptionsMu.Lock()
 		delete(s.activeSubscriptions, consumerTag)
 		s.subscriptionsMu.Unlock()
 
-		ch.Cancel(consumerTag, false)
+		s.consumersMu.Lock()
+		delete(s.activeConsumers, consumerTag)
+		s.consumersMu.Unlock()
+
+		if err := ch.Cancel(consumerTag, false); err != nil {
+			log.Printf("Ошибка при отмене %s: %v", consumerTag, err)
+		}
+
 		s.releaseChannel(ch)
-		log.Printf("Пользователь %s отписался от получения сообщений", username)
+		log.Printf("Пользователь %s отписался от получения сообщений. ChatID: %s", username, chatId)
 	}()
 
 	for {
@@ -436,6 +598,7 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 			return nil
 		case msg, ok := <-msgs:
 			if !ok {
+				log.Printf("Канал сообщений закрыт для %s", username)
 				return status.Error(codes.Internal, "соединение с RabbitMQ потеряно")
 			}
 
@@ -453,7 +616,6 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 
 			if err := stream.Send(&chunk); err != nil {
 				log.Printf("Ошибка отправки сообщения клиенту: %v", err)
-				msg.Nack(false, true)
 				return status.Errorf(codes.Internal, "ошибка отправки сообщения клиенту: %v", err)
 			}
 
@@ -520,7 +682,7 @@ func (s *MessagingService) CancelTransfer(ctx context.Context, req *pb.TransferC
 		}
 
 		err := ch.PublishWithContext(ctx,
-			"chat_exchange",
+			s.exchange,
 			"user."+participant,
 			true,
 			false,
@@ -562,14 +724,24 @@ func (s *MessagingService) CancelTransfer(ctx context.Context, req *pb.TransferC
 
 func (s *MessagingService) Close() {
 	s.closeOnce.Do(func() {
-		log.Println("Закрытие MessagingService...")
+		s.isClosed.Store(true)
+		s.reconnecting = true
 
-		s.subscriptionsMu.Lock()
-		for _, cancel := range s.activeSubscriptions {
-			cancel()
+		log.Println("Закрытие MessagingService...")
+		s.closeAllSubscriptions()
+
+		time.Sleep(500 * time.Millisecond)
+
+		s.consumersMu.Lock()
+		for consumerTag, consumer := range s.activeConsumers {
+			if consumer.ch != nil {
+				if err := consumer.ch.Cancel(consumerTag, false); err != nil {
+					log.Printf("Ошибка при отмене %s: %v", consumerTag, err)
+				}
+			}
 		}
-		s.activeSubscriptions = make(map[string]context.CancelFunc)
-		s.subscriptionsMu.Unlock()
+		s.activeConsumers = make(map[string]*ConsumerState)
+		s.consumersMu.Unlock()
 
 		s.closeAllChannels()
 

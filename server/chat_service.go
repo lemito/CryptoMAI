@@ -5,7 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"log/slog"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,11 +23,46 @@ import (
 type ChatService struct {
 	pb.UnimplementedChatServiceServer
 	db *sql.DB
+
+	waiting map[string]chan struct{}
+	broker  *DHExchangeBroker
+
+	logger       *slog.Logger
+}
+
+type pendingDH struct {
+	firstReq     *pb.DHParametersExchange                   
+	secondReq    *pb.DHParametersExchange                        
+	firstStream  pb.ChatService_ExchangeDHParametersStreamServer
+	secondStream pb.ChatService_ExchangeDHParametersStreamServer 
+	mu           sync.RWMutex
+	isCompleted  bool
+}
+
+type DHExchangeBroker struct {
+	mu      sync.RWMutex
+	pending map[string]*pendingDH
+	timeout time.Duration
+	logger  *slog.Logger
+}
+
+func NewDHExchangeBroker(timeout time.Duration, logger *slog.Logger) *DHExchangeBroker {
+	return &DHExchangeBroker{
+		pending: make(map[string]*pendingDH),
+		timeout: timeout,
+		logger:  logger,
+	}
 }
 
 func NewChatService(db *sql.DB) *ChatService {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	broker := NewDHExchangeBroker(10*time.Minute, logger)
+
 	return &ChatService{
-		db: db,
+		db:      db,
+		waiting: make(map[string]chan struct{}),
+		logger:  logger,
+		broker:  broker,
 	}
 }
 
@@ -146,16 +185,21 @@ func (s *ChatService) createNewChatInDB(ctx context.Context, initiatorUsername s
 		return nil, fmt.Errorf("не удалось вставить чат: %v", err)
 	}
 
-	users := []string{initiatorUsername}
-	for _, username := range users {
-		_, err = tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
             INSERT INTO user_chats (user_id, chat_id, username, is_active, joined_at)
             SELECT u.id, $1, u.username, true, $2
             FROM users u WHERE u.username = $3`,
-			chatID, now, username)
-		if err != nil {
-			return nil, fmt.Errorf("не удалось добавить пользователя %s в чат: %v", username, err)
-		}
+		chatID, now, initiatorUsername)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось добавить пользователя %s в чат: %v", initiatorUsername, err)
+	}
+	_, err = tx.ExecContext(ctx, `
+            INSERT INTO user_chats (user_id, chat_id, username, is_active, joined_at)
+            SELECT u.id, $1, u.username, false, $2
+            FROM users u WHERE u.username = $3`,
+		chatID, now, req.ContactUsername)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось добавить пользователя %s в чат: %v", req.ContactUsername, err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -331,8 +375,6 @@ func (s *ChatService) startChatCleanup() {
 		if err != nil {
 			log.Printf("Ошибка очистки чатов: %v", err)
 		}
-		result, _ = s.db.ExecContext(ctx,
-			"DELETE FROM user_chats WHERE is_active = false")
 		log.Printf("Очищено %d неактивных чатов", cnt)
 	}
 }
@@ -373,7 +415,7 @@ func (s *ChatService) LeaveChat(ctx context.Context, req *pb.CloseChatRequest) (
 	}
 
 	now := time.Now()
-	
+
 	_, err = tx.ExecContext(ctx, `
 		UPDATE user_chats SET is_active = false, left_at = $1 
 		WHERE chat_id = $2 AND username = $3`,
@@ -611,4 +653,327 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 			return ctx.Err()
 		}
 	}
+}
+
+func (s *ChatService) ExchangeDHParametersStream(stream pb.ChatService_ExchangeDHParametersStreamServer) error {
+	ctx := stream.Context()
+
+	authContext, err := GetAuthContext(ctx)
+	if err != nil {
+		s.logger.Error("Отсутствует authContext", "error", err)
+		return status.Error(codes.Unauthenticated, "No authContext")
+	}
+
+	username := authContext.Username
+
+	req, err := stream.Recv()
+	if err == io.EOF {
+		s.logger.Debug("EOF")
+		return nil
+	}
+	if err != nil {
+		s.logger.Error("Ошибка при получении данных из потока", "error", err)
+		return status.Error(codes.Internal, "Failed to receive request")
+	}
+
+	chatId := req.GetChatId()
+	if chatId == "" {
+		return status.Error(codes.InvalidArgument, "chat_id is required")
+	}
+
+	chat, err := s.getChatInfo(ctx, chatId)
+	if err != nil {
+		s.logger.Error("Чат не найден", "chat_id", chatId, "username", username, "error", err)
+		return status.Error(codes.NotFound, "Chat not found")
+	}
+
+	if chat.Initiator != username && chat.Participant != username {
+		s.logger.Warn("Пользователь не принадлежит к комнате", "chat_id", chatId, "username", username)
+		return status.Error(codes.Unauthenticated, "Not belongs to room")
+	}
+
+	s.logger.Debug("Начало обмена параметрами Диффи-Хеллмана", "chat_id", chatId, "username", username)
+
+	exchangeCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
+	var peerExchange *pendingDH
+
+	s.broker.mu.Lock()
+
+	if existing, ok := s.broker.pending[chatId]; ok {
+		peerExchange = existing
+		peerExchange.mu.Lock()
+		peerExchange.secondReq = req
+		peerExchange.secondStream = stream
+		peerExchange.isCompleted = false
+		peerExchange.mu.Unlock()
+		s.broker.mu.Unlock()
+
+		s.logger.Info("Подключился второй участник", "chat_id", chatId, "username", username)
+
+		return s.performDHExchange(exchangeCtx, chatId, username, peerExchange, true)
+	} else {
+		peerExchange = &pendingDH{
+			firstReq:    req,
+			firstStream: stream,
+			isCompleted: false,
+		}
+		s.broker.pending[chatId] = peerExchange
+		s.broker.mu.Unlock()
+
+		s.logger.Info("Первый участник ожидает", "chat_id", chatId, "username", username)
+
+		return s.waitForSecondPeer(exchangeCtx, chatId, username, peerExchange)
+	}
+}
+
+func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username string, exchange *pendingDH) error {
+	defer func() {
+		s.broker.mu.Lock()
+		delete(s.broker.pending, chatId)
+		s.broker.mu.Unlock()
+
+		exchange.mu.Lock()
+		exchange.isCompleted = true
+		exchange.mu.Unlock()
+
+		s.logger.Debug("Очистка ожидающего обмена", "chat_id", chatId)
+	}()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			exchange.mu.RLock()
+			hasSecond := exchange.secondReq != nil && exchange.secondStream != nil
+			exchange.mu.RUnlock()
+
+			if hasSecond {
+				s.logger.Info("Второй участник прибыл, начинаем обмен", "chat_id", chatId)
+				return s.performDHExchange(ctx, chatId, username, exchange, false)
+			}
+
+		case <-ctx.Done():
+			s.logger.Info("Истекло время ожидания второго участника", "chat_id", chatId, "error", ctx.Err())
+			return status.Error(codes.DeadlineExceeded, "Timeout waiting for second peer")
+		}
+	}
+}
+
+func (s *ChatService) performDHExchange(ctx context.Context, chatId, username string, exchange *pendingDH, isSecondPeer bool) error {
+	exchange.mu.Lock()
+	defer exchange.mu.Unlock()
+
+	if exchange.isCompleted {
+		s.logger.Warn("Обмен уже завершён", "chat_id", chatId)
+		return nil
+		// return status.Error(codes.AlreadyExists, "Exchange already completed")
+	}
+
+	if exchange.firstReq == nil || exchange.secondReq == nil {
+		s.logger.Error("Отсутствуют запросы", "chat_id", chatId,
+			"first_req", exchange.firstReq != nil,
+			"second_req", exchange.secondReq != nil)
+		return status.Error(codes.Internal, "Missing DH parameters")
+	}
+
+	s.logger.Info("Обмен параметрами Диффи-Хеллмана", "chat_id", chatId,
+		"is_second_peer", isSecondPeer, "username", username)
+
+	var streamToUse pb.ChatService_ExchangeDHParametersStreamServer
+	var paramsToSend *pb.DHParameters
+
+	if isSecondPeer {
+		streamToUse = exchange.secondStream
+		if exchange.firstReq.GetParameters() == nil {
+			s.logger.Error("Параметры первого участника отсутствуют (nil)", "chat_id", chatId)
+			return status.Error(codes.Internal, "First peer DH parameters missing")
+		}
+		paramsToSend = exchange.firstReq.GetParameters()
+
+		if err := streamToUse.Send(&pb.DHParametersResponse{
+			Response: &pb.DHParametersResponse_PeerParams{
+				PeerParams: paramsToSend,
+			},
+		}); err != nil {
+			s.logger.Error("Не удалось отправить параметры второму участнику", "chat_id", chatId, "error", err)
+			return status.Error(codes.Internal, "Failed to send DH parameters")
+		}
+
+		s.logger.Debug("Параметры первого участника отправлены второму", "chat_id", chatId)
+
+		if exchange.firstStream != nil && exchange.secondReq.GetParameters() != nil {
+			if err := exchange.firstStream.Send(&pb.DHParametersResponse{
+				Response: &pb.DHParametersResponse_PeerParams{
+					PeerParams: exchange.secondReq.GetParameters(),
+				},
+			}); err != nil {
+				s.logger.Error("Не удалось отправить параметры первому участнику", "chat_id", chatId, "error", err)
+			} else {
+				s.logger.Debug("Параметры второго участника отправлены первому", "chat_id", chatId)
+			}
+		}
+	} else {
+		streamToUse = exchange.firstStream
+		if exchange.secondReq.GetParameters() == nil {
+			s.logger.Error("Параметры второго участника отсутствуют (nil)", "chat_id", chatId)
+			return status.Error(codes.Internal, "Second peer DH parameters missing")
+		}
+		paramsToSend = exchange.secondReq.GetParameters()
+
+		if err := streamToUse.Send(&pb.DHParametersResponse{
+			Response: &pb.DHParametersResponse_PeerParams{
+				PeerParams: paramsToSend,
+			},
+		}); err != nil {
+			s.logger.Error("Не удалось отправить параметры первому участнику", "chat_id", chatId, "error", err)
+			return status.Error(codes.Internal, "Failed to send DH parameters")
+		}
+
+		s.logger.Debug("Параметры второго участника отправлены первому", "chat_id", chatId)
+	}
+
+	exchange.isCompleted = true
+	s.logger.Info("Обмен параметрами Диффи-Хеллмана успешно завершён", "chat_id", chatId, "username", username)
+
+	return nil
+}
+
+func (s *ChatService) cleanupOldExchanges() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.broker.mu.Lock()
+		for chatId, exchange := range s.broker.pending {
+			exchange.mu.RLock()
+			isOld := exchange.isCompleted || time.Since(time.Now()) > 5*time.Minute
+			exchange.mu.RUnlock()
+
+			if isOld {
+				delete(s.broker.pending, chatId)
+				s.logger.Debug("Очистка устаревшего обмена", "chat_id", chatId)
+			}
+		}
+		s.broker.mu.Unlock()
+	}
+}
+
+func (s *ChatService) Start() {
+	go s.cleanupOldExchanges()
+}
+
+func (s *ChatService) GetChatDHParams(ctx context.Context, req *pb.GetChatDHParamsRequest) (*pb.GetChatDHParamsResponse, error) {
+	authContext, err := GetAuthContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.ChatId == "" {
+		return nil, status.Error(codes.InvalidArgument, "chat_id пуст")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "ошибка транзакции")
+	}
+	defer tx.Rollback()
+
+	var exists bool
+	err = tx.QueryRowContext(ctx, `
+        SELECT EXISTS(
+            SELECT 1 FROM user_chats 
+            WHERE chat_id = $1 AND username = $2
+        )`, req.ChatId, authContext.Username).Scan(&exists)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ошибка проверки: %v", err)
+	}
+	if !exists {
+		return nil, status.Error(codes.PermissionDenied, "доступ запрещен")
+	}
+
+	var (
+		initiatorDHJSON []byte
+		peerDHJSON      []byte
+	)
+	err = tx.QueryRowContext(ctx, `
+        SELECT initiator_dh_params, 
+               peer_dh_params
+        FROM chats 
+        WHERE id = $1 AND is_active = true`,
+		req.ChatId).Scan(&initiatorDHJSON, &peerDHJSON)
+
+	if err == sql.ErrNoRows {
+		return nil, status.Error(codes.NotFound, "активный чат не найден")
+	} else if err != nil {
+		return nil, status.Errorf(codes.Internal, "ошибка запроса: %v", err)
+	}
+
+	var initiatorDH DHParams
+	if err := json.Unmarshal(initiatorDHJSON, &initiatorDH); err != nil {
+		return nil, status.Errorf(codes.Internal, "ошибка парсинга initiator_dh_params: %v", err)
+	}
+
+	// var peerDH DHParams
+	// if err := json.Unmarshal(peerDHJSON, &peerDH); err != nil {
+	// 	return nil, status.Errorf(codes.Internal, "ошибка парсинга peerDH_dh_params: %v", err)
+	// }
+
+	response := &pb.GetChatDHParamsResponse{
+		Success: true,
+		InitiatorParams: &pb.DHParameters{
+			Prime:     initiatorDH.Prime,
+			Generator: initiatorDH.Generator,
+			PublicKey: initiatorDH.PublicKey,
+		},
+		PeerPublicKey: []byte(""),
+	}
+
+	return response, nil
+}
+
+func (s *ChatService) getChatInfo(ctx context.Context, chatID string) (*Chat, error) {
+	var chat Chat
+	var initiatorDHJSON, peerDHJSON []byte
+	var algorithmStr, modeStr, paddingStr string
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, initiator_username, participant_username, 
+			   algorithm, mode, padding, base_iv,
+			   initiator_dh_params, peer_dh_params, is_active, created_at
+		FROM chats 
+		WHERE id = $1 AND is_active = true`,
+		chatID).Scan(
+		&chat.ID, &chat.Initiator, &chat.Participant,
+		&algorithmStr, &modeStr, &paddingStr, &chat.BaseIV,
+		&initiatorDHJSON, &peerDHJSON, &chat.IsActive, &chat.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("chat not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("database error: %v", err)
+	}
+
+	chat.Algorithm = pb.EncryptionAlgorithm(pb.EncryptionAlgorithm_value[algorithmStr])
+	chat.Mode = pb.EncryptionMode(pb.EncryptionMode_value[modeStr])
+	chat.Padding = pb.PaddingMode(pb.PaddingMode_value[paddingStr])
+
+	if err := json.Unmarshal(initiatorDHJSON, &chat.InitiatorDH); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal initiator DH params: %v", err)
+	}
+
+	if len(peerDHJSON) > 0 {
+		var peerDH DHParams
+		if err := json.Unmarshal(peerDHJSON, &peerDH); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal peer DH params: %v", err)
+		}
+		chat.PeerDH = &peerDH
+	}
+
+	return &chat, nil
 }
