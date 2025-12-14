@@ -8,6 +8,7 @@ import (
 
 	pb "github.com/lemito/CryptoMAI/proto"
 )
+import _ "go.uber.org/automaxprocs"
 
 func main() {
 	logger, _ := zap.NewDevelopment()
