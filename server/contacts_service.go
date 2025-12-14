@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -20,12 +20,14 @@ type contactsService struct {
 	db      *sql.DB
 	streams map[string][]pb.ContactService_SubscribeToContactUpdatesServer
 	mu      sync.RWMutex
+	logger *zap.SugaredLogger
 }
 
-func NewContactsService(db *sql.DB) *contactsService {
+func NewContactsService(log *zap.SugaredLogger, db *sql.DB) *contactsService {
 	return &contactsService{
 		db:      db,
 		streams: make(map[string][]pb.ContactService_SubscribeToContactUpdatesServer),
+		logger:log,
 	}
 }
 
@@ -48,7 +50,7 @@ func (s *contactsService) broadcastToUser(userID string, update *pb.ContactUpdat
 
 	for i, stream := range streams {
 		if err := stream.Send(update); err != nil {
-			log.Printf("Failed to send update to user %s: %v", userID, err)
+			s.logger.Infof("Failed to send update to user %s: %v", userID, err)
 			streams[i] = nil
 		}
 	}

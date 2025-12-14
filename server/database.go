@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"time"
+	"go.uber.org/zap"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func initDB(cfg DatabaseConfig) (*sql.DB, error) {
+func initDB(log *zap.SugaredLogger, cfg DatabaseConfig) (*sql.DB, error) {
+	log.Infof("Начало инициализации БД")
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.DBName, cfg.SSLMode)
 
@@ -28,7 +29,7 @@ func initDB(cfg DatabaseConfig) (*sql.DB, error) {
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("БД готова")
+	log.Infof("БД готова")
 	return db, nil
 }
 

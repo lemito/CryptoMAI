@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
 
 	pb "github.com/lemito/CryptoMAI/proto"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -15,7 +15,7 @@ const (
 	SessionTokenHeader = "x-session-token"
 )
 
-func AuthMiddleware(authService *authService) grpc.UnaryServerInterceptor {
+func AuthMiddleware(log *zap.SugaredLogger, authService *authService) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		publicMethods := map[string]bool{
 			"/chat.AuthService/Register":      true,
@@ -23,9 +23,13 @@ func AuthMiddleware(authService *authService) grpc.UnaryServerInterceptor {
 			"/chat.AuthService/ValidateToken": true,
 		}
 
+		log.Infof("Метод %s вызван", info.FullMethod)
+
 		if publicMethods[info.FullMethod] {
 			return handler(ctx, req)
 		}
+
+		log.Infof("Метод %s вызван, но нуждается в авторизации", info.FullMethod)
 
 		if info.FullMethod == "/chat.AuthService/Logout" {
 			if logoutReq, ok := req.(*pb.LogoutRequest); ok {
@@ -66,6 +70,7 @@ func AuthMiddleware(authService *authService) grpc.UnaryServerInterceptor {
 			return nil, err
 		}
 
+		log.Infof("Контекст для %s создан", user.Username)
 		authContext := &AuthContext{
 			UserID:       user.ID.String(),
 			Username:     user.Username,
@@ -77,11 +82,10 @@ func AuthMiddleware(authService *authService) grpc.UnaryServerInterceptor {
 	}
 }
 
-func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor {
+func AuthStreamMiddleware(log *zap.SugaredLogger, authService *authService) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		publicMethods := map[string]bool{
-		}
-		log.Printf("Stream method called: %s", info.FullMethod)
+		publicMethods := map[string]bool{}
+		log.Infof("Stream method called: %s", info.FullMethod)
 
 		if publicMethods[info.FullMethod] {
 			return handler(srv, stream)
@@ -104,7 +108,7 @@ func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor
 
 		user, err := authService.ValidateSession(stream.Context(), sessionToken)
 		if err != nil {
-			log.Printf("ошибка %s: %v", info.FullMethod, err)
+			log.Errorf("ошибка %s: %v", info.FullMethod, err)
 			return err
 		}
 
@@ -121,7 +125,7 @@ func AuthStreamMiddleware(authService *authService) grpc.StreamServerInterceptor
 			ctx:          ctx,
 		}
 
-		log.Printf("Авторизация для потока %s, user: %s", info.FullMethod, authContext.Username)
+		log.Infof("Авторизация для потока %s, user: %s", info.FullMethod, authContext.Username)
 
 		return handler(srv, wrappedStream)
 	}

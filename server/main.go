@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"go.uber.org/zap"
 	"net"
 
 	"google.golang.org/grpc"
@@ -10,7 +11,11 @@ import (
 )
 
 func main() {
-	log.Println("Starting...")
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync()
+	var sugar *zap.SugaredLogger = logger.Sugar()
+
+	sugar.Info("Starting...")
 
 	dbConfig := DatabaseConfig{
 		Host:     "db",
@@ -21,22 +26,22 @@ func main() {
 		SSLMode:  "disable",
 	}
 
-	db, err := initDB(dbConfig)
+	db, err := initDB(sugar, dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
-	authService := NewAuthService(db)
-	contactsService := NewContactsService(db)
-	chatService := NewChatService(db)
+	authService := NewAuthService(sugar, db)
+	contactsService := NewContactsService(sugar, db)
+	chatService := NewChatService(sugar, db)
 	chatService.Start()
 
 	conf := RabbitMQConfig{
 		URL:      "amqp://guest:guest@rabbitmq:5672/",
 		Exchange: "chat_exchange",
 	}
-	msgService, err := NewMessagingService(conf, db, authService)
+	msgService, err := NewMessagingService(sugar, conf, db, authService)
 	if err != nil {
 		log.Fatalf("Failed: %v", err)
 	}
@@ -46,8 +51,8 @@ func main() {
 	go chatService.startChatCleanup()
 
 	server := grpc.NewServer(
-		grpc.UnaryInterceptor(AuthMiddleware(authService)),
-		grpc.StreamInterceptor(AuthStreamMiddleware(authService)),
+		grpc.UnaryInterceptor(AuthMiddleware(sugar, authService)),
+		grpc.StreamInterceptor(AuthStreamMiddleware(sugar, authService)),
 	)
 
 	pb.RegisterAuthServiceServer(server, authService)
@@ -57,11 +62,11 @@ func main() {
 
 	lis, err := net.Listen("tcp", "0.0.0.0:50051")
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		sugar.Errorf("Failed to listen: %v", err)
 	}
 
 	log.Println("port 50051")
 	if err := server.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		sugar.Errorf("Failed to serve: %v", err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/lemito/CryptoMAI/proto"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -43,6 +44,8 @@ type MessagingService struct {
 	reconnecting bool
 	exchange     string
 	rabbitURL    string
+
+	logger *zap.SugaredLogger
 }
 
 type ConsumerState struct {
@@ -68,7 +71,7 @@ func (s *MessagingService) setupRabbit(exchange string) error {
 	)
 }
 
-func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) (*MessagingService, error) {
+func NewMessagingService(log *zap.SugaredLogger, conf RabbitMQConfig, db *sql.DB, service *authService) (*MessagingService, error) {
 	conn, err := amqp.DialConfig(conf.URL, amqp.Config{
 		Heartbeat: 60 * time.Second,
 		Dial:      amqp.DefaultDial(time.Minute),
@@ -92,6 +95,7 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 		activeConsumers:     make(map[string]*ConsumerState),
 		exchange:            conf.Exchange,
 		rabbitURL:           conf.URL,
+		logger: log,
 	}
 
 	for i := 0; i < conf.PoolSize; i++ {
@@ -112,7 +116,7 @@ func NewMessagingService(conf RabbitMQConfig, db *sql.DB, service *authService) 
 		return nil, fmt.Errorf("не удалось настроить RabbitMQ: %v", err)
 	}
 
-	log.Printf("MessagingService запущен с RabbitMQ (пул каналов: %d)", conf.PoolSize)
+	serv.logger.Infof("MessagingService запущен с RabbitMQ (пул каналов: %d)", conf.PoolSize)
 
 	go serv.monitorConnection()
 
@@ -123,7 +127,7 @@ func (s *MessagingService) monitorConnection() {
 	closeChan := s.rabbitConn.NotifyClose(make(chan *amqp.Error, 1))
 	for err := range closeChan {
 		if err != nil {
-			log.Printf("Соединение с RabbitMQ разорвано: %v", err)
+			s.logger.Infof("Соединение с RabbitMQ разорвано: %v", err)
 			s.reconnectMu.Lock()
 			s.reconnecting = true
 			s.reconnectMu.Unlock()
@@ -144,12 +148,12 @@ func (s *MessagingService) reconnectWithBackoff() {
 	maxRetries := 10
 
 	for i := 0; i < maxRetries; i++ {
-		log.Printf("Попытка переподключения #%d к RabbitMQ через %v", i+1, backoff)
+		s.logger.Infof("Попытка переподключения #%d к RabbitMQ через %v", i+1, backoff)
 		time.Sleep(backoff)
 
 		conn, err := amqp.Dial(s.rabbitURL)
 		if err != nil {
-			log.Printf("Не удалось переподключиться: %v", err)
+			s.logger.Infof("Не удалось переподключиться: %v", err)
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff
@@ -163,7 +167,7 @@ func (s *MessagingService) reconnectWithBackoff() {
 		s.recreateChannelPool()
 
 		if err := s.setupRabbit(s.exchange); err != nil {
-			log.Printf("Не удалось восстановить exchange: %v", err)
+			s.logger.Infof("Не удалось восстановить exchange: %v", err)
 			conn.Close()
 			continue
 		}
@@ -174,7 +178,7 @@ func (s *MessagingService) reconnectWithBackoff() {
 		return
 	}
 
-	log.Fatal("Не удалось переподключиться к RabbitMQ после нескольких попыток")
+	s.logger.Error("Не удалось переподключиться к RabbitMQ после нескольких попыток")
 }
 
 func (s *MessagingService) recreateChannelPool() {
@@ -184,7 +188,7 @@ func (s *MessagingService) recreateChannelPool() {
 	for i := 0; i < s.poolSize; i++ {
 		ch, err := s.rabbitConn.Channel()
 		if err != nil {
-			log.Printf("Не удалось создать канал при переподключении: %v", err)
+			s.logger.Infof("Не удалось создать канал при переподключении: %v", err)
 			continue
 		}
 		s.channelPool <- ch
@@ -267,7 +271,7 @@ func (s *MessagingService) userHasAccessToChat(username, chatID string) bool {
 
 	err := s.db.QueryRow(query, chatID, username).Scan(&cnt)
 	if err != nil {
-		log.Printf("Ошибка: %v", err)
+		s.logger.Infof("Ошибка: %v", err)
 		return false
 	}
 	return cnt > 0
@@ -284,7 +288,7 @@ func (s *MessagingService) getChatParticipants(chatID string) ([]string, error) 
 	var initiator, participant string
 	err := s.db.QueryRow(query, chatID).Scan(&initiator, &participant)
 	if err != nil {
-		log.Printf("Ошибка проверки чата: %v", err)
+		s.logger.Infof("Ошибка проверки чата: %v", err)
 		return nil, err
 	}
 	return []string{initiator, participant}, nil
@@ -337,7 +341,7 @@ func (s *MessagingService) createUserQueue(username string) error {
 	}
 
 	s.queues[queueName] = true
-	log.Printf("Создана очередь для пользователя: %s", queueName)
+	s.logger.Infof("Создана очередь для пользователя: %s", queueName)
 	return nil
 }
 
@@ -427,7 +431,7 @@ func (s *MessagingService) SendChunks(stream pb.MessagingService_SendChunksServe
 			for _, participant := range participants {
 				if participant != username {
 					if err := s.createUserQueue(participant); err != nil {
-						log.Printf("Предупреждение: не удалось создать очередь для %s: %v", participant, err)
+						s.logger.Infof("Предупреждение: не удалось создать очередь для %s: %v", participant, err)
 					}
 				}
 			}
@@ -463,7 +467,7 @@ func (s *MessagingService) SendChunks(stream pb.MessagingService_SendChunksServe
 						},
 					)
 					if err != nil {
-						log.Printf("Не удалось опубликовать для пользователя %s: %v", recipient, err)
+						s.logger.Infof("Не удалось опубликовать для пользователя %s: %v", recipient, err)
 					} else {
 						successCount++
 					}
@@ -526,7 +530,7 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 		return status.Error(codes.Unavailable, "Сервис переподключается к RabbitMQ, попробуйте позже")
 	}
 
-	log.Printf("Пользователь %s подписывается на сообщения чата %s", username, chatId)
+	s.logger.Infof("Пользователь %s подписывается на сообщения чата %s", username, chatId)
 
 	if err := s.createUserQueue(username); err != nil {
 		return status.Error(codes.Internal, "не удалось создать очередь пользователя: "+err.Error())
@@ -554,7 +558,7 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 		return status.Errorf(codes.Internal, "не удалось подписаться на сообщения: %v", err)
 	}
 
-	log.Printf("Пользователь %s подписался на получение сообщений из очереди %s для чата %s", username, queueName, chatId)
+	s.logger.Infof("Пользователь %s подписался на получение сообщений из очереди %s для чата %s", username, queueName, chatId)
 
 	ctx := stream.Context()
 
@@ -585,11 +589,11 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 		s.consumersMu.Unlock()
 
 		if err := ch.Cancel(consumerTag, false); err != nil {
-			log.Printf("Ошибка при отмене %s: %v", consumerTag, err)
+			s.logger.Infof("Ошибка при отмене %s: %v", consumerTag, err)
 		}
 
 		s.releaseChannel(ch)
-		log.Printf("Пользователь %s отписался от получения сообщений. ChatID: %s", username, chatId)
+		s.logger.Infof("Пользователь %s отписался от получения сообщений. ChatID: %s", username, chatId)
 	}()
 
 	for {
@@ -598,13 +602,13 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 			return nil
 		case msg, ok := <-msgs:
 			if !ok {
-				log.Printf("Канал сообщений закрыт для %s", username)
+				s.logger.Infof("Канал сообщений закрыт для %s", username)
 				return status.Error(codes.Internal, "соединение с RabbitMQ потеряно")
 			}
 
 			var chunk pb.EncryptedChunk
 			if err := proto.Unmarshal(msg.Body, &chunk); err != nil {
-				log.Printf("Не удалось демаршализовать сообщение: %v", err)
+				s.logger.Infof("Не удалось демаршализовать сообщение: %v", err)
 				msg.Nack(false, false)
 				continue
 			}
@@ -615,12 +619,12 @@ func (s *MessagingService) SubscribeToChunks(req *pb.SubscribeToChunksRequest, s
 			}
 
 			if err := stream.Send(&chunk); err != nil {
-				log.Printf("Ошибка отправки сообщения клиенту: %v", err)
+				s.logger.Infof("Ошибка отправки сообщения клиенту: %v", err)
 				return status.Errorf(codes.Internal, "ошибка отправки сообщения клиенту: %v", err)
 			}
 
 			msg.Ack(false)
-			log.Printf("Сообщение доставлено пользователю %s из чата %s", username, chunk.Metadata.ChatId)
+			s.logger.Infof("Сообщение доставлено пользователю %s из чата %s", username, chunk.Metadata.ChatId)
 		}
 	}
 }
@@ -702,10 +706,10 @@ func (s *MessagingService) CancelTransfer(ctx context.Context, req *pb.TransferC
 		)
 
 		if err != nil {
-			log.Printf("Ошибка отправки отмены для %s: %v", participant, err)
+			s.logger.Infof("Ошибка отправки отмены для %s: %v", participant, err)
 		} else {
 			successCount++
-			log.Printf("Отмена передачи %s отправлена участнику %s", req.MessageId, participant)
+			s.logger.Infof("Отмена передачи %s отправлена участнику %s", req.MessageId, participant)
 		}
 	}
 
@@ -736,7 +740,7 @@ func (s *MessagingService) Close() {
 		for consumerTag, consumer := range s.activeConsumers {
 			if consumer.ch != nil {
 				if err := consumer.ch.Cancel(consumerTag, false); err != nil {
-					log.Printf("Ошибка при отмене %s: %v", consumerTag, err)
+					s.logger.Infof("Ошибка при отмене %s: %v", consumerTag, err)
 				}
 			}
 		}

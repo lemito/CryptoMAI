@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
-	"log/slog"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -27,7 +25,7 @@ type ChatService struct {
 	waiting map[string]chan struct{}
 	broker  *DHExchangeBroker
 
-	logger       *slog.Logger
+	logger       *zap.SugaredLogger
 }
 
 type pendingDH struct {
@@ -43,10 +41,10 @@ type DHExchangeBroker struct {
 	mu      sync.RWMutex
 	pending map[string]*pendingDH
 	timeout time.Duration
-	logger  *slog.Logger
+	logger  *zap.SugaredLogger
 }
 
-func NewDHExchangeBroker(timeout time.Duration, logger *slog.Logger) *DHExchangeBroker {
+func NewDHExchangeBroker(timeout time.Duration, logger *zap.SugaredLogger) *DHExchangeBroker {
 	return &DHExchangeBroker{
 		pending: make(map[string]*pendingDH),
 		timeout: timeout,
@@ -54,14 +52,14 @@ func NewDHExchangeBroker(timeout time.Duration, logger *slog.Logger) *DHExchange
 	}
 }
 
-func NewChatService(db *sql.DB) *ChatService {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	broker := NewDHExchangeBroker(10*time.Minute, logger)
+func NewChatService(log *zap.SugaredLogger, db *sql.DB) *ChatService {
+	// logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	broker := NewDHExchangeBroker(10*time.Minute, log)
 
 	return &ChatService{
 		db:      db,
 		waiting: make(map[string]chan struct{}),
-		logger:  logger,
+		logger:  log,
 		broker:  broker,
 	}
 }
@@ -373,9 +371,9 @@ func (s *ChatService) startChatCleanup() {
 		cancel()
 		cnt, err := result.RowsAffected()
 		if err != nil {
-			log.Printf("Ошибка очистки чатов: %v", err)
+			s.logger.Infof("Ошибка очистки чатов: %v", err)
 		}
-		log.Printf("Очищено %d неактивных чатов", cnt)
+		s.logger.Infof("Очищено %d неактивных чатов", cnt)
 	}
 }
 
@@ -473,7 +471,7 @@ func (s *ChatService) GetActiveChats(empty *emptypb.Empty, stream pb.ChatService
 		return err
 	}
 
-	log.Printf("GetActiveChats stream started for user: %s", authContext.Username)
+	s.logger.Infof("GetActiveChats stream started for user: %s", authContext.Username)
 
 	chats, err := s.getcurActiveChats(ctx, authContext.Username)
 	if err != nil {
@@ -488,7 +486,7 @@ func (s *ChatService) GetActiveChats(empty *emptypb.Empty, stream pb.ChatService
 	}
 
 	<-ctx.Done()
-	log.Printf("Поток завершен для: %s", authContext.Username)
+	s.logger.Infof("Поток завершен для: %s", authContext.Username)
 	return ctx.Err()
 }
 
@@ -512,7 +510,7 @@ func (s *ChatService) getcurActiveChats(ctx context.Context, username string) (m
 	for rows.Next() {
 		chat, err := s.scanChatFromRow(rows)
 		if err != nil {
-			log.Printf("ошибка: %v", err)
+			s.logger.Infof("ошибка: %v", err)
 			continue
 		}
 		chats[chat.ID] = chat
@@ -593,7 +591,7 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 		return err
 	}
 
-	log.Printf("SubscribeToChatUpdates stream started for user: %s", authContext.Username)
+	s.logger.Infof("SubscribeToChatUpdates stream started for user: %s", authContext.Username)
 
 	curChats, err := s.getcurActiveChats(ctx, authContext.Username)
 	if err != nil {
@@ -620,7 +618,7 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 		case <-ticker.C:
 			curChats, err := s.getcurActiveChats(ctx, authContext.Username)
 			if err != nil {
-				log.Printf("Ошибка получения обновлений чата для %s: %v", authContext.Username, err)
+				s.logger.Infof("Ошибка получения обновлений чата для %s: %v", authContext.Username, err)
 				continue
 			}
 
@@ -649,7 +647,7 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 			prevChats = curChats
 
 		case <-ctx.Done():
-			log.Printf("SubscribeToChatUpdates окончен: %s, причина: %v", authContext.Username, ctx.Err())
+			s.logger.Infof("SubscribeToChatUpdates окончен: %s, причина: %v", authContext.Username, ctx.Err())
 			return ctx.Err()
 		}
 	}

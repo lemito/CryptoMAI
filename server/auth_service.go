@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,11 +18,13 @@ import (
 type authService struct {
 	pb.UnimplementedAuthServiceServer
 	db *sql.DB
+	logger *zap.SugaredLogger
 }
 
-func NewAuthService(db *sql.DB) *authService {
+func NewAuthService(log *zap.SugaredLogger, db *sql.DB) *authService {
 	return &authService{
 		db: db,
+		logger: log,
 	}
 }
 
@@ -93,9 +95,9 @@ func (s *authService) startSessionCleanup() {
 		cancel()
 		cnt, err := result.RowsAffected()
 		if err != nil {
-			log.Printf("Error cleaning sessions: %v", err)
+			s.logger.Infof("Error cleaning sessions: %v", err)
 		}
-		log.Printf("Cleaned %d expired sessions", cnt)
+		s.logger.Infof("Cleaned %d expired sessions", cnt)
 	}
 }
 
