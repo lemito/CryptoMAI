@@ -65,7 +65,7 @@
 </string>
       </property>
       <property name="frameShape">
-       <enum>QFrame::NoFrame</enum>
+       <enum>QFrame::Shape::NoFrame</enum>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="spacing">
@@ -94,7 +94,7 @@
          <property name="font">
           <font>
            <pointsize>14</pointsize>
-           <bold>true</bold>
+           <fontweight>DemiBold</fontweight>
           </font>
          </property>
          <property name="styleSheet">
@@ -110,7 +110,7 @@
           <string>🐾 MeowChat 🐾</string>
          </property>
          <property name="alignment">
-          <set>Qt::AlignCenter</set>
+          <set>Qt::AlignmentFlag::AlignCenter</set>
          </property>
         </widget>
        </item>
@@ -125,7 +125,7 @@
          <property name="font">
           <font>
            <pointsize>10</pointsize>
-           <bold>false</bold>
+           <fontweight>Medium</fontweight>
           </font>
          </property>
          <property name="cursor">
@@ -192,19 +192,19 @@ QListWidget::item:selected:hover {
 </string>
          </property>
          <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
+          <enum>QFrame::Shape::NoFrame</enum>
          </property>
          <property name="verticalScrollBarPolicy">
-          <enum>Qt::ScrollBarAsNeeded</enum>
+          <enum>Qt::ScrollBarPolicy::ScrollBarAsNeeded</enum>
          </property>
          <property name="horizontalScrollBarPolicy">
-          <enum>Qt::ScrollBarAlwaysOff</enum>
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
          </property>
          <property name="selectionMode">
-          <enum>QAbstractItemView::SingleSelection</enum>
+          <enum>QAbstractItemView::SelectionMode::SingleSelection</enum>
          </property>
          <property name="selectionBehavior">
-          <enum>QAbstractItemView::SelectRows</enum>
+          <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
          </property>
          <property name="iconSize">
           <size>
@@ -217,15 +217,22 @@ QListWidget::item:selected:hover {
        <item>
         <spacer name="verticalSpacer">
          <property name="orientation">
-          <enum>Qt::Vertical</enum>
+          <enum>Qt::Orientation::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
            <width>20</width>
-           <height>40</height>
+           <height>20</height>
           </size>
          </property>
         </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="updateChatsButton">
+         <property name="text">
+          <string>Обновить</string>
+         </property>
+        </widget>
        </item>
        <item>
         <widget class="QFrame" name="userInfoFrame">
@@ -249,7 +256,7 @@ QListWidget::item:selected:hover {
 </string>
          </property>
          <property name="frameShape">
-          <enum>QFrame::NoFrame</enum>
+          <enum>QFrame::Shape::NoFrame</enum>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <property name="spacing">
@@ -301,7 +308,7 @@ QListWidget::item:selected:hover {
                <string>😺</string>
               </property>
               <property name="alignment">
-               <set>Qt::AlignCenter</set>
+               <set>Qt::AlignmentFlag::AlignCenter</set>
               </property>
              </widget>
             </item>
@@ -310,7 +317,7 @@ QListWidget::item:selected:hover {
               <property name="font">
                <font>
                 <pointsize>10</pointsize>
-                <bold>true</bold>
+                <fontweight>DemiBold</fontweight>
                </font>
               </property>
               <property name="styleSheet">
@@ -324,14 +331,14 @@ QListWidget::item:selected:hover {
                <string>MeowUser</string>
               </property>
               <property name="alignment">
-               <set>Qt::AlignVCenter</set>
+               <set>Qt::AlignmentFlag::AlignVCenter</set>
               </property>
              </widget>
             </item>
             <item>
              <spacer name="horizontalSpacer_2">
               <property name="orientation">
-               <enum>Qt::Horizontal</enum>
+               <enum>Qt::Orientation::Horizontal</enum>
               </property>
               <property name="sizeHint" stdset="0">
                <size>
@@ -461,7 +468,7 @@ QPushButton:pressed {
 </string>
         </property>
         <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
+         <enum>QFrame::Shape::NoFrame</enum>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <property name="leftMargin">
@@ -490,14 +497,14 @@ QPushButton:pressed {
 </string>
            </property>
            <property name="text">
-            <string>🐱 Новый чат</string>
+            <string>Новый чат</string>
            </property>
           </widget>
          </item>
          <item>
           <spacer name="horizontalSpacer">
            <property name="orientation">
-            <enum>Qt::Horizontal</enum>
+            <enum>Qt::Orientation::Horizontal</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -552,84 +559,10 @@ QPushButton:pressed {
        </widget>
       </item>
       <item>
-       <widget class="QScrollArea" name="scrollArea">
-        <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
+       <widget class="QQuickWidget" name="chat">
+        <property name="resizeMode">
+         <enum>QQuickWidget::ResizeMode::SizeRootObjectToView</enum>
         </property>
-        <property name="verticalScrollBarPolicy">
-         <enum>Qt::ScrollBarAsNeeded</enum>
-        </property>
-        <property name="widgetResizable">
-         <bool>true</bool>
-        </property>
-        <widget class="QWidget" name="scrollAreaWidgetContents">
-         <property name="geometry">
-          <rect>
-           <x>0</x>
-           <y>0</y>
-           <width>738</width>
-           <height>514</height>
-          </rect>
-         </property>
-         <layout class="QVBoxLayout" name="messagesLayout">
-          <property name="spacing">
-           <number>10</number>
-          </property>
-          <property name="leftMargin">
-           <number>16</number>
-          </property>
-          <property name="topMargin">
-           <number>10</number>
-          </property>
-          <property name="rightMargin">
-           <number>16</number>
-          </property>
-          <property name="bottomMargin">
-           <number>10</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="welcomeLabel">
-            <property name="styleSheet">
-             <string notr="true">QLabel {
-    background-color: #f8fafc;
-    border-radius: 12px;
-    padding: 16px;
-    color: #475569;
-    font-size: 11pt;
-    border: 1px solid #e2e8f0;
-}
-</string>
-            </property>
-            <property name="text">
-             <string>Пока тут пусто :(
-
-Создай чат или вступи в существующий
-
-💬</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-            <property name="wordWrap">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer_2">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
-        </widget>
        </widget>
       </item>
       <item>
@@ -649,7 +582,7 @@ QPushButton:pressed {
 </string>
         </property>
         <property name="frameShape">
-         <enum>QFrame::NoFrame</enum>
+         <enum>QFrame::Shape::NoFrame</enum>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <property name="spacing">
@@ -673,7 +606,7 @@ QPushButton:pressed {
             <number>8</number>
            </property>
            <item>
-            <widget class="QTextEdit" name="messageTextEdit">
+            <widget class="QTextEdit" name="messageInput">
              <property name="minimumSize">
               <size>
                <width>0</width>
@@ -872,7 +805,7 @@ QPushButton:disabled {
      <x>0</x>
      <y>0</y>
      <width>1000</width>
-     <height>38</height>
+     <height>30</height>
     </rect>
    </property>
    <property name="styleSheet">
@@ -908,18 +841,12 @@ QMenu::item:selected {
    </property>
    <widget class="QMenu" name="menuFile">
     <property name="title">
-     <string>🐱 Файл</string>
+     <string>Файл</string>
     </property>
     <addaction name="actionNewChat"/>
     <addaction name="actionConnectChat"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
-   </widget>
-   <widget class="QMenu" name="menuSettings">
-    <property name="title">
-     <string>🐾 Настройки</string>
-    </property>
-    <addaction name="actionPreferences"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -928,7 +855,6 @@ QMenu::item:selected {
     <addaction name="actionAbout"/>
    </widget>
    <addaction name="menuFile"/>
-   <addaction name="menuSettings"/>
    <addaction name="menuHelp"/>
   </widget>
   <action name="actionNewChat">
@@ -956,8 +882,11 @@ QMenu::item:selected {
    </property>
   </action>
   <action name="actionPreferences">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
-    <string>⚙️ Настройки</string>
+    <string>Настройки</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+,</string>
@@ -996,6 +925,13 @@ QMenu::item:selected {
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QQuickWidget</class>
+   <extends>QWidget</extends>
+   <header location="global">QtQuickWidgets/QQuickWidget</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

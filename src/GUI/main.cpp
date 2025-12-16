@@ -11,7 +11,7 @@
 
 auto main(int argc, char* argv[]) -> int {
   QApplication app(argc, argv);
-  app.setQuitOnLastWindowClosed(false);
+  app.setQuitOnLastWindowClosed(true);
 
   QTranslator translator;
   const QStringList uiLanguages = QLocale::system().uiLanguages();
@@ -23,44 +23,84 @@ auto main(int argc, char* argv[]) -> int {
     }
   }
 
-  std::unique_ptr<MainWindow> mainWindow;
-  std::unique_ptr<LoginDialog> loginDialog;
+  std::unique_ptr<MainWindow> mainWindow = nullptr;
+  std::unique_ptr<LoginDialog> loginDialog = nullptr;
+  bool isShuttingDown = false;
 
-  auto showMainWindow = [&]() {
-    if (!mainWindow) {
+  auto showMainWindow = [&]() -> void {
+    if (isShuttingDown) {
+      return;
+    }
+
+    try {
+      if (mainWindow) {
+        qDebug() << "Уничтожение старого MainWindow...";
+        mainWindow.reset();
+      }
+
+      qDebug() << "Создание нового MainWindow...";
       mainWindow = std::make_unique<MainWindow>();
+
+      if (loginDialog) {
+        loginDialog->hide();
+      }
+
+      mainWindow->show();
+      mainWindow->raise();
+      mainWindow->activateWindow();
+
+      qDebug() << "Главное окно показано";
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка при показе главного окна:" << e.what();
     }
-    if (loginDialog) {
-      loginDialog->hide();
-    }
-    mainWindow->show();
-    mainWindow->raise();
-    mainWindow->activateWindow();
   };
 
-  auto showLoginDialog = [&]() {
-    if (!loginDialog) {
-      loginDialog = std::make_unique<LoginDialog>();
-      QObject::connect(loginDialog.get(), &LoginDialog::loginSuccess,
-                       [&]() { showMainWindow(); });
+  auto showLoginDialog = [&]() -> void {
+    if (isShuttingDown) {
+      return;
     }
-    if (mainWindow) {
-      mainWindow->hide();
-      QTimer::singleShot(100, [&]() { mainWindow.reset(); });
+
+    try {
+      if (mainWindow) {
+        qDebug() << "Выход: уничтожение MainWindow...";
+        mainWindow.reset();
+      }
+
+      if (!loginDialog) {
+        qDebug() << "Создание диалога входа...";
+        loginDialog = std::make_unique<LoginDialog>();
+        QObject::connect(
+            loginDialog.get(), &LoginDialog::loginSuccess, &app,
+            [&]() -> void { showMainWindow(); }, Qt::QueuedConnection);
+      }
+
+      loginDialog->show();
+      loginDialog->raise();
+      loginDialog->activateWindow();
+
+      qDebug() << "Окно входа показано";
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка при показе окна входа:" << e.what();
     }
-    loginDialog->show();
-    loginDialog->raise();
-    loginDialog->activateWindow();
   };
 
-  QObject::connect(&SessionManager::instance(), &SessionManager::sessionChanged,
-                   [&](bool loggedIn) {
-                     if (loggedIn) {
-                       showMainWindow();
-                     } else {
-                       showLoginDialog();
-                     }
-                   });
+  QObject::connect(
+      &SessionManager::instance(), &SessionManager::sessionChanged, &app,
+      [&](bool loggedIn) -> void {
+        if (isShuttingDown) {
+          return;
+        }
+
+        qDebug() << "Изменение сессии, loggedIn =" << loggedIn;
+        if (loggedIn) {
+          if (mainWindow != nullptr) {
+            showMainWindow();
+          }
+        } else {
+          showLoginDialog();
+        }
+      },
+      Qt::QueuedConnection);
 
   if (SessionManager::instance().isLoggedIn()) {
     showMainWindow();
@@ -69,6 +109,17 @@ auto main(int argc, char* argv[]) -> int {
   }
 
   const auto res = app.exec();
+
+  isShuttingDown = true;
+
+  if (mainWindow) {
+    mainWindow->hide();
+    mainWindow.reset();
+  }
+  if (loginDialog) {
+    loginDialog->hide();
+    loginDialog.reset();
+  }
 
   DatabaseManager::destroyInstance();
 

@@ -11,18 +11,18 @@ ChoiceDialog::ChoiceDialog(QWidget* parent)
 }
 
 void ChoiceDialog::setupUi() {
-  setWindowTitle("🐱 Новый чат");
+  setWindowTitle("Новый чат");
   setFixedSize(350, 220);
 
   auto* layout = new QVBoxLayout(this);
   layout->setContentsMargins(30, 20, 30, 20);
   layout->setSpacing(25);
 
-  auto* createButton = new QPushButton("➕ Создать новый чат");
+  auto* createButton = new QPushButton("➕Создать новый чат");
   createButton->setStyleSheet("font-size: 12pt; padding: 12px;");
   layout->addWidget(createButton);
 
-  auto* joinButton = new QPushButton("🔎 Присоединиться к чату");
+  auto* joinButton = new QPushButton("🔎Присоединиться к чату");
   joinButton->setStyleSheet("font-size: 12pt; padding: 12px;");
   layout->addWidget(joinButton);
 

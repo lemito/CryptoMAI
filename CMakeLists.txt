@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.29.3...3.32)
+﻿cmake_minimum_required(VERSION 3.29.0)
 
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_CMAKE_API "2182bf5c-ef0d-489a-91da-49dbc3090d2a")
 set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
@@ -6,6 +6,7 @@ set(CMAKE_EXPERIMENTAL_CXX_MODULE_STD ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};$VCPKG_ROOT/installed/x64-linux")
 
 include(FetchContent)
 
@@ -76,7 +77,8 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets LinguistTools Concurrent Sql)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets LinguistTools Concurrent Sql QuickWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Core)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -96,6 +98,8 @@ message(STATUS "gRPC libraries: ${gRPC_LIBRARIES}")
 
 find_package(SQLite3 REQUIRED)
 message(STATUS "SQLite3 version: ${SQLite3_VERSION}")
+
+find_package(miniocpp CONFIG REQUIRED)
 
 set(PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -142,6 +146,22 @@ FetchContent_Declare(
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
+
+FetchContent_Declare(
+                abseil
+                GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+                GIT_TAG        20230802.1
+)
+
+set(ABSL_PROPAGATE_CXX_STD ON)
+set(ABSL_ENABLE_INSTALL OFF)
+set(ABSL_USE_EXTERNAL_GOOGLETEST OFF)
+set(ABSL_FIND_GOOGLETEST OFF)
+
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    CACHE STRING "Vcpkg toolchain")
+set(VCPKG_ROOT $ENV{VCPKG_ROOT})
+set(MINIO_ROOT ${VCPKG_ROOT}/installed/x64-linux)
 
 add_library(CryptoMath STATIC)
 add_library(CryptoRSA STATIC)
@@ -278,7 +298,7 @@ target_include_directories(CryptoRC6H PUBLIC
 )
 
 target_sources(CryptoDiffieHelmanH PUBLIC
-        src/cypher/DiffieHelman/DiffieHelman.hpp
+        src/cypher/DiffieHelman/DiffieHelman.hpp src/cypher/DiffieHelman/rfc3526.hpp
 )
 target_link_libraries(CryptoDiffieHelmanH PUBLIC CryptoMathH)
 target_include_directories(CryptoDiffieHelmanH PUBLIC
@@ -333,6 +353,17 @@ qt_add_executable(CryptoGUI
         src/GUI/chatstreamclient.h
         src/GUI/databasemanager.cpp
         src/GUI/databasemanager.h
+        src/GUI/messagestreamclient.h src/GUI/messagestreamclient.cpp
+        src/GUI/messagesender.h src/GUI/messagesender.cpp
+        src/GUI/messageassembler.h src/GUI/messageassembler.cpp
+        src/GUI/test.qml
+        src/GUI/resource.qrc
+        src/GUI/ChatView.qml
+        src/GUI/chatmanager.h src/GUI/chatmanager.cpp
+        src/GUI/chat_structs.h
+        src/GUI/chatstate.h src/GUI/chatstate.cpp
+        src/GUI/AboutDialog.qml
+        src/GUI/fileuploadmanager.h src/GUI/fileuploadmanager.cpp
 )
 
 target_compile_features(CryptoGUI PUBLIC cxx_std_23)
@@ -350,16 +381,28 @@ target_include_directories(CryptoGUI PRIVATE
 
 set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
 qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
-
+# Заголовки
+target_include_directories(CryptoGUI PRIVATE
+    ${VCPKG_ROOT}/installed/x64-linux/include
+    ${VCPKG_ROOT}/installed/x64-linux/include/minio-cpp
+)
 target_link_libraries(CryptoGUI PRIVATE
+        # "${VCPKG_ROOT}/installed/x64-linux/lib/libminio.a"
+        # "${VCPKG_ROOT}/installed/x64-linux/lib/libcurl.a"
+        miniocpp::miniocpp
+        absl::synchronization
+        absl::flat_hash_map
         gRPC::grpc++
         protobuf::libprotobuf
         ChatProto
         CryptoSymmetricH CryptoRC6H CryptoLOKI97H CryptoDiffieHelmanH
-        Qt6::Widgets Qt6::Concurrent Qt6::Sql
+        Qt6::Core Qt6::Widgets Qt6::Concurrent Qt6::Sql Qt6::QuickWidgets
 )
 target_link_libraries(CryptoGUI PRIVATE ${GMP_LIBRARY})
 target_link_libraries(CryptoGUI PRIVATE SQLite::SQLite3)
+target_link_libraries(CryptoGUI PRIVATE Qt6::Core)
+target_compile_options(CryptoGUI PRIVATE -fPIC)
+target_link_options(CryptoGUI PRIVATE -Wl,-rpath=${VCPKG_ROOT}/installed/x64-linux/lib)
 
 qt_finalize_executable(CryptoGUI)
 

@@ -11,47 +11,39 @@
 #include <QString>
 #include <memory>
 
-struct Chat {
-  qint64 id;
-  QString chatId;
-  QString name;
-  QDateTime createdAt;
-};
+#include "absl/container/flat_hash_map.h"
+#include "chat_structs.h"
 
-enum class MessageStatus : std::uint8_t { SENT = 0, DELIVERED = 1, READ = 2 };
-
-struct Message {
-  qint64 id;
-  QString chatId;
-  QString messageId;
-  QString sender;
-  QByteArray content;
-  QDateTime timestamp;
-  bool isEncrypted;
-  bool isOutgoing;       // true - исходящее, false - входящее
-  MessageStatus status;  // sent, delivered, read
-};
-
-class DatabaseManager : public QObject {
+class DatabaseManager final : public QObject {
   Q_OBJECT
  public:
-  static DatabaseManager* instance();
+  static auto instance() -> DatabaseManager*;
   static void destroyInstance();
 
   auto init() -> bool;
   void close();
 
   // ========= ОПЕРАЦИИ НАД ЧАТОМ ==============
-  auto addChat(const QString& chatId, const QString& name) -> bool;
+  auto addChat(const QString& chatId, const QString& name,
+               const QString& createdName, const QString& algorithm,
+               const QString& mode, const QString& padding, const QString& iv,
+               const QString& initiator, const QString& prime,
+               const QString& generator, const QString& publicKey,
+               const QString& peerPublicKey, bool dhExchangeComplete) -> bool;
   auto removeChat(const QString& chatId) -> bool;
-  auto getAllChats() -> QVector<Chat>;
-  auto getChat(const QString& chatId) -> Chat;
+  auto getAllChats(const QString& username) -> QVector<Chat>;
+  auto getChat(const QString& chatId, const QString& username) -> Chat;
+  auto updateChatParams(const QString& chatId, const QString& prime,
+                        const QString& generator, const QString& peerPublicKey,
+                        const QString& iv) -> bool;
 
   // =========  ОПЕРАЦИИ НАД СОО  ==============
   auto addMessage(const QString& chatId, const QString& messageId,
                   const QString& sender, const QByteArray& content,
-                  bool isEncrypted = false, bool isOutgoing = false,
-                  MessageStatus status = MessageStatus::SENT) -> bool;
+                  bool isEncrypted, bool isOutgoing, MessageStatus status,
+                  bool isFile, const QString& fileName, const QString& mimeType,
+                  qint64 fileSize, const QString& createdName,
+                  const QString& originalFilename = QString()) -> bool;
   auto updateMessageStatus(const QString& messageId, MessageStatus status)
       -> bool;
   auto updateMessageContent(const QString& messageId, const QByteArray& content)
@@ -64,12 +56,31 @@ class DatabaseManager : public QObject {
   auto clearChatHistory(const QString& chatId) -> bool;
   auto getUnreadCount(const QString& chatId) -> int;
 
+  auto addFileMessage(const QString& chatId, const QString& messageId,
+                      const QString& sender, const QByteArray& fileData,
+                      const QString& fileName, const QString& mimeType,
+                      bool isOutgoing, MessageStatus status) -> bool;
+
+  auto getChatFiles(const QString& chatId) -> QVector<Message>;
+
+  auto getFileStats(const QString& chatId)
+      -> absl::flat_hash_map<QString, qint64>;
+
+  auto updateFileInfo(const QString& messageId, const QString& fileName,
+                      const QString& mimeType, qint64 fileSize) -> bool;
+
+  auto clearFileContent(const QString& messageId) -> bool;
+
+  auto getFileMessageByFileId(const QString& fileId) -> Message;
+  auto updateMessageFilePath(const QString& messageId, const QString& filePath)
+      -> bool;
+
   explicit DatabaseManager(QObject* parent = nullptr);
   ~DatabaseManager();
 
  private:
   auto createTables() -> bool;
-  auto getDBPath() -> QString;
+  static auto getDBPath() -> QString;
   QSqlDatabase m_database;
 
   static std::unique_ptr<DatabaseManager> m_instance;

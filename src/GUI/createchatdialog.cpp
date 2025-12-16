@@ -10,22 +10,29 @@
 #include <QRandomGenerator>
 #include <QVBoxLayout>
 
-CreateChatDialog::CreateChatDialog(QWidget* parent) : BaseChatDialog(parent) {
+CreateChatDialog::CreateChatDialog(QWidget* parent)
+    : BaseChatDialog(parent),
+      contactUsernameEdit(nullptr),
+      algorithmCombo(nullptr),
+      modeCombo(nullptr),
+      paddingCombo(nullptr),
+      ivEdit(nullptr),
+      generateIVButton(nullptr) {
   setupUi();
   connectSignals();
-  setupDHGeneration();
+  setupDHGeneration(512);
   generateRandomIV();
 }
 
 void CreateChatDialog::setupUi() {
-  setWindowTitle("🐱 Создание нового чата");
+  setWindowTitle("Создание нового чата");
   setFixedSize(500, 450);
 
   auto* mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(20, 15, 20, 15);
   mainLayout->setSpacing(15);
 
-  auto* contactGroup = new QGroupBox("😺 Контакт для чата");
+  auto* contactGroup = new QGroupBox("Контакт для чата");
   auto* contactLayout = new QVBoxLayout(contactGroup);
 
   contactUsernameEdit = new QLineEdit();
@@ -33,7 +40,7 @@ void CreateChatDialog::setupUi() {
   contactLayout->addWidget(contactUsernameEdit);
   mainLayout->addWidget(contactGroup);
 
-  auto* encryptionGroup = new QGroupBox("🔐 Параметры шифрования");
+  auto* encryptionGroup = new QGroupBox("Параметры шифрования");
   auto* encryptionLayout = new QGridLayout(encryptionGroup);
   encryptionLayout->setVerticalSpacing(12);
 
@@ -63,11 +70,11 @@ void CreateChatDialog::setupUi() {
   encryptionLayout->addWidget(paddingCombo, 2, 1);
 
   encryptionLayout->addWidget(new QLabel("Вектор инициализации:"), 3, 0);
-  auto ivLayout = new QHBoxLayout();
+  auto* ivLayout = new QHBoxLayout();
   ivEdit = new QLineEdit();
   ivEdit->setReadOnly(true);
   ivEdit->setPlaceholderText("Случайно сгенерированный IV...");
-  generateIVButton = new QPushButton("🎲 Сгенерировать");
+  generateIVButton = new QPushButton("Сгенерировать");
   generateIVButton->setFixedWidth(120);
   ivLayout->addWidget(ivEdit, 4);
   ivLayout->addWidget(generateIVButton, 1);
@@ -113,8 +120,7 @@ void CreateChatDialog::generateRandomIV() {
 
 void CreateChatDialog::validateForm() {
   bool valid = !getContactUsername().isEmpty() && !ivEdit->text().isEmpty() &&
-               !dhPrime.isEmpty() && !dhGenerator.isEmpty() &&
-               !dhPublicKey.isEmpty();
+               dhPrime > 0 && dhGenerator > 0 && dhPublicKey > 0;
 
   buttonBox->button(QDialogButtonBox::Ok)->setEnabled(valid);
 }

@@ -1,15 +1,17 @@
 #include "logindialog.h"
-#include "src/GUI/ui_logindialog.h"
+
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QLineEdit>
 #include <thread>
+
+#include "src/GUI/ui_logindialog.h"
 
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
 
-LoginDialog::LoginDialog(QWidget *parent)
+LoginDialog::LoginDialog(QWidget* parent)
     : QDialog(parent), ui(new Ui::LoginDialog) {
   ui->setupUi(this);
 
@@ -36,9 +38,7 @@ LoginDialog::LoginDialog(QWidget *parent)
   ui->usernameEdit->setFocus();
 }
 
-LoginDialog::~LoginDialog() {
-  delete ui;
-}
+LoginDialog::~LoginDialog() { safe_delete(ui); }
 
 void LoginDialog::onLoginButton_clicked() {
   if (ui->loginButton->isEnabled()) {
@@ -63,7 +63,7 @@ void LoginDialog::onRegisterButton_clicked() {
   ui->loginButton->setEnabled(false);
   ui->registerButton->setEnabled(false);
 
-  std::thread([this, username, password](){
+  std::thread([this, username, password]() {
     chat::RegisterRequest req;
     req.set_username(username.toStdString());
     req.set_password(password.toStdString());
@@ -73,11 +73,14 @@ void LoginDialog::onRegisterButton_clicked() {
 
     Status status = auth_stub_->Register(&context, req, &response);
 
-    QMetaObject::invokeMethod(this, [this, status, response](){
-      ui->loginButton->setEnabled(true);
-      ui->registerButton->setEnabled(true);
-      handleRegisterResponse(response);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        this,
+        [this, status, response]() {
+          ui->loginButton->setEnabled(true);
+          ui->registerButton->setEnabled(true);
+          handleRegisterResponse(response);
+        },
+        Qt::QueuedConnection);
   }).detach();
 }
 
@@ -104,23 +107,27 @@ void LoginDialog::checkCredentials() {
 
     Status status = auth_stub_->Login(&context, request, &response);
 
-    QMetaObject::invokeMethod(this, [this, status, response]() {
-      ui->loginButton->setEnabled(true);
-      ui->registerButton->setEnabled(true);
+    QMetaObject::invokeMethod(
+        this,
+        [this, status, response]() {
+          ui->loginButton->setEnabled(true);
+          ui->registerButton->setEnabled(true);
 
-      if (status.ok()) {
-        handleLoginResponse(response);
-      } else {
-        showError("Ошибка соединения",
-                  QString("Не удалось подключиться к серверу: %1")
-                      .arg(QString::fromStdString(status.error_message())));
-      }
-    }, Qt::QueuedConnection);
+          if (status.ok()) {
+            handleLoginResponse(response);
+          } else {
+            showError("Ошибка соединения",
+                      QString("Не удалось подключиться к серверу: %1")
+                          .arg(QString::fromStdString(status.error_message())));
+          }
+        },
+        Qt::QueuedConnection);
   }).detach();
 }
 
-void LoginDialog::setupGRPCChannel(){
-  auto channel = grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
+void LoginDialog::setupGRPCChannel() {
+  auto channel = grpc::CreateChannel("localhost:50051",
+                                     grpc::InsecureChannelCredentials());
   this->auth_stub_ = chat::AuthService::NewStub(channel);
 }
 
@@ -134,8 +141,7 @@ void LoginDialog::handleLoginResponse(const chat::AuthResponse& response) {
     emit loginSuccess(m_username, m_sessionToken);
     accept();
   } else {
-    showError("Ошибка входа",
-              QString::fromStdString(response.message()));
+    showError("Ошибка входа", QString::fromStdString(response.message()));
 
     ui->passwordEdit->clear();
     ui->passwordEdit->setFocus();
@@ -144,14 +150,12 @@ void LoginDialog::handleLoginResponse(const chat::AuthResponse& response) {
 
 void LoginDialog::handleRegisterResponse(const chat::CommonResponse& response) {
   if (response.success()) {
-    showSuccess("Успех",
-                QString::fromStdString(response.message()));
+    showSuccess("Успех", QString::fromStdString(response.message()));
 
     ui->passwordEdit->clear();
     ui->passwordEdit->setFocus();
   } else {
-    showError("Ошибка регистрации",
-              QString::fromStdString(response.message()));
+    showError("Ошибка регистрации", QString::fromStdString(response.message()));
 
     ui->passwordEdit->clear();
     ui->passwordEdit->setFocus();

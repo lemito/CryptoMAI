@@ -8,38 +8,38 @@
 #include <QProgressBar>
 
 #include "cypher/DiffieHelman/DiffieHelman.hpp"
+#include "utils.hpp"
 #include "utils_math.h"
 
 auto bigIntToQByteArray(const BI& number) -> QByteArray;
 auto qByteArrayToBigInt(const QByteArray& data) -> BI;
-auto generateDHParameters(int bitLength, double probability)
-    -> QList<QByteArray>;
+auto generateDHParameters(int bitLength, double probability) -> QList<BI>;
 
 class BaseChatDialog : public QDialog {
   Q_OBJECT
 
+ public:
+  explicit BaseChatDialog(QWidget* parent = nullptr);
+  ~BaseChatDialog();
+
+  // DH параметры
+  BI dhPrime;
+  BI dhGenerator;
+  BI dhPublicKey;
+  BI dhPrivateKey;
+  void clearDHParameters();
+
+ public slots:
+  virtual void validateForm() = 0;
+  virtual void handleDHGenerationFinished();
+
  protected:
-  QFutureWatcher<QList<QByteArray>>* dhWatcher;
+  void setupCommonStyles();
+  void setupDHGeneration(int bitLength);
+
+  QFutureWatcher<QList<BI>>* dhWatcher;
   QProgressBar* progressBar;
   QDialogButtonBox* buttonBox;
-
-  QByteArray dhPrime;
-  QByteArray dhGenerator;
-  QByteArray dhPublicKey;
-
-  explicit BaseChatDialog(QWidget* parent = nullptr);
-  ~BaseChatDialog() override;
-
-  void setupCommonStyles();
-  void setupDHGeneration(int bitLength = 1024);
-  virtual void handleDHGenerationFinished();
-  void clearDHParameters();
-  virtual void validateForm() = 0;
-
- public:
-  [[nodiscard]] auto getPrime() const -> QByteArray { return dhPrime; }
-  [[nodiscard]] auto getGenerator() const -> QByteArray { return dhGenerator; }
-  [[nodiscard]] auto getPublicKey() const -> QByteArray { return dhPublicKey; }
 };
 
 #endif  // DIALOGUTILS_H

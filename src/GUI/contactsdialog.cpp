@@ -34,7 +34,7 @@ ContactsDialog::ContactsDialog(QWidget* parent)
 
 ContactsDialog::~ContactsDialog() {
   stopAllThreads();
-  delete ui;
+  safe_delete(ui);
 }
 
 void ContactsDialog::stopAllThreads() {
@@ -47,7 +47,6 @@ void ContactsDialog::stopAllThreads() {
 
 void ContactsDialog::closeEvent(QCloseEvent* event) {
   qDebug() << "close";
-  stopAllThreads();
   QDialog::closeEvent(event);
 }
 
@@ -208,7 +207,7 @@ void ContactsDialog::addContact(const QString& username) {
     if (!stopUpdates_) {
       QMetaObject::invokeMethod(
           this,
-          [this, status, response, username]() {
+          [this, status, response, username]() -> void {
             if (status.ok()) {
               if (response.success()) {
                 QMessageBox::information(

@@ -1,8 +1,9 @@
 #ifndef JOINCHATDIALOG_H
 #define JOINCHATDIALOG_H
 
-#include "dialogutils.h"
 #include <QDialog>
+
+#include "dialogutils.h"
 
 class QLineEdit;
 
@@ -11,15 +12,22 @@ class JoinChatDialog : public BaseChatDialog {
 
  public:
   explicit JoinChatDialog(QWidget* parent = nullptr);
-  QString getChatId() const;
+
+  [[nodiscard]] auto getChatId() const -> QString;
+  [[nodiscard]] auto getPrime() const -> const BI&;
+  [[nodiscard]] auto getGenerator() const -> const BI&;
+  [[nodiscard]] auto getPublicKey() const -> const BI&;
+  [[nodiscard]] auto getPrivateKey() const -> const BI&;
+
+ public slots:
+  void validateForm() override;
+  void handleDHGenerationFinished() override;
 
  private:
   void setupUi();
   void connectSignals();
-  void validateForm() override;
-  void handleDHGenerationFinished() override;
 
   QLineEdit* chatIdEdit;
 };
 
-#endif // JOINCHATDIALOG_H
+#endif  // JOINCHATDIALOG_H

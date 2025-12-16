@@ -1,0 +1,27 @@
+<RCC>
+    <qresource prefix="/">
+        <file>test.qml</file>
+    </qresource>
+    <qresource prefix="/chat">
+        <file>ChatView.qml</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file>file-icon.png</file>
+    </qresource>
+    <qresource prefix="/dialogs">
+        <file>AboutDialog.qml</file>
+    </qresource>
+    <qresource prefix="/cats">
+        <file>CatAbout.json</file>
+        <file>Le Petit Chat _Cat_ Noir.json</file>
+        <file>Cat scratches.json</file>
+    </qresource>
+    <qresource prefix="/loaders">
+        <file>Loading animation blue.json</file>
+        <file>Loading 40 _ Paperplane.json</file>
+        <file>Loading 50 _ Among Us.json</file>
+    </qresource>
+    <qresource prefix="/backgrounds">
+        <file>Background sparkles.json</file>
+    </qresource>
+</RCC>

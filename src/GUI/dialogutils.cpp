@@ -11,6 +11,8 @@
 #include <QGroupBox>
 #include <QLabel>
 
+#include "cypher/DiffieHelman/rfc3526.hpp"
+
 QByteArray bigIntToQByteArray(const BI& number) {
   std::ostringstream oss;
   oss << std::hex << number;
@@ -31,16 +33,15 @@ BI qByteArrayToBigInt(const QByteArray& data) {
   return number;
 }
 
-QList<QByteArray> generateDHParameters(int bitLength, double probability) {
+QList<BI> generateDHParameters(int bitLength, double probability) {
   try {
-    meow::cypher::DiffieHelmanParams params(bitLength, probability);
-    meow::cypher::DiffieHelman dh(params);
+    const auto [prime, generator] = get_dh_params(DH_STANDART_P_str_hex, DH_STANDART_G_str_hex);
+    meow::cypher::DiffieHelman dh(prime, generator);
 
-    QByteArray prime = bigIntToQByteArray(params.getModulus());
-    QByteArray generator = bigIntToQByteArray(params.getGenerator());
-    QByteArray publicKey = bigIntToQByteArray(dh.getPublicKey());
+    const auto publicKey = dh.getPublicKey();
+    const auto privateKey = dh.secret;
 
-    return {prime, generator, publicKey};
+    return {prime, generator, publicKey, privateKey};
   } catch (const std::exception& e) {
     qCritical() << "Ошибка генерации DH параметров:" << e.what();
     return {};
@@ -49,12 +50,12 @@ QList<QByteArray> generateDHParameters(int bitLength, double probability) {
 
 BaseChatDialog::BaseChatDialog(QWidget* parent)
     : QDialog(parent),
-      dhWatcher(new QFutureWatcher<QList<QByteArray>>(this)),
+      dhWatcher(new QFutureWatcher<QList<BI>>(this)),
       progressBar(new QProgressBar(this)),
       buttonBox(nullptr)
 {
   setupCommonStyles();
-  connect(dhWatcher, &QFutureWatcher<QList<QByteArray>>::finished,
+  connect(dhWatcher, &QFutureWatcher<QList<BI>>::finished,
           this, &BaseChatDialog::handleDHGenerationFinished);
 }
 
@@ -63,11 +64,11 @@ BaseChatDialog::~BaseChatDialog() {
     dhWatcher->cancel();
     dhWatcher->waitForFinished();
   }
-  delete dhWatcher;
+  safe_delete(dhWatcher);
 }
 
 void BaseChatDialog::setupCommonStyles() {
-      setStyleSheet(R"(
+  setStyleSheet(R"(
               QDialog {
                   background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                       stop:0 #1a1c1e, stop:1 #242526);
@@ -155,20 +156,22 @@ void BaseChatDialog::setupDHGeneration(int bitLength) {
   progressBar->setRange(0, 0);
   progressBar->setFormat("Генерация ключей Диффи-Хеллмана...");
 
-  QFuture<QList<QByteArray>> future = QtConcurrent::run(generateDHParameters, bitLength, 0.95);
+  QFuture<QList<BI>> future = QtConcurrent::run(generateDHParameters, bitLength, 0.95);
   dhWatcher->setFuture(future);
 }
 
 void BaseChatDialog::handleDHGenerationFinished() {
-  QList<QByteArray> results = dhWatcher->result();
+  QList<BI> results = dhWatcher->result();
 
-  if (results.size() >= 3) {
+  if (results.size() >= 4) {
     dhPrime = results[0];
     dhGenerator = results[1];
     dhPublicKey = results[2];
-    qDebug() << "DH параметры успешно сгенерированы";
+    dhPrivateKey = results[3];
+
+    qDebug() << "DH параметры успешно сгенерированы для диалога";
   } else {
-    qCritical() << "Ошибка генерации DH параметров";
+    qCritical() << "Ошибка генерации DH параметров: недостаточно результатов";
     QMessageBox::critical(this, "Ошибка",
                           "Не удалось сгенерировать параметры Диффи-Хеллмана. Попробуйте еще раз.");
     clearDHParameters();
@@ -179,7 +182,8 @@ void BaseChatDialog::handleDHGenerationFinished() {
 }
 
 void BaseChatDialog::clearDHParameters() {
-  dhPrime.clear();
-  dhGenerator.clear();
-  dhPublicKey.clear();
+  dhPrime = 0;
+  dhGenerator = 0;
+  dhPublicKey = 0;
+  dhPrivateKey = 0;
 }

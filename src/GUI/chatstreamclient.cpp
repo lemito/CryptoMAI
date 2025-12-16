@@ -70,29 +70,59 @@ void ChatStreamClient::runStream() {
     chat::ChatInfo chatInfo;
     emit streamStatusChanged(true);
 
-    while (!stop_requested_) {
+    while (!stop_requested_.load()) {
       bool has_message = reader->Read(&chatInfo);
 
-      if (stop_requested_) {
+      if (stop_requested_.load()) {
         break;
       }
 
-      if (!has_message) {
-        break;
+      // if (!has_message) {
+      //   break;
+      // }
+
+      QString currentUser = SessionManager::instance().username();
+
+      bool isParticipant = false;
+      for (int i = 0; i < chatInfo.participants_size(); ++i) {
+        if (QString::fromStdString(chatInfo.participants(i)) == currentUser) {
+          isParticipant = true;
+          break;
+        }
       }
 
-      auto chatId = QString::fromStdString(chatInfo.chat_id());
+      if (isParticipant) {
+        const QString partiName =
+            QString::fromStdString(chatInfo.participants(0));
+        const QString chatId = QString::fromStdString(chatInfo.chat_id());
+        const ::chat::DHParameters& peerParams = chatInfo.peer_params();
+        const ::chat::EncryptionParameters& algoParams =
+            chatInfo.encryption_params();
 
-      QMetaObject::invokeMethod(
-          this, [this, chatId]() -> void { emit chatReceived(chatId); },
-          Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this,
+            [this, chatId, partiName, peerParams, algoParams]() -> void {
+              emit chatReceived(chatId, partiName, peerParams, algoParams);
+            },
+            Qt::QueuedConnection);
 
-      qDebug() << "Received" << "ID:" << chatId;
+        qDebug() << "Получен " << "ID:" << chatId << "для:" << currentUser;
+      } else {
+        qDebug() << "Чат "
+                 << "ID:" << QString::fromStdString(chatInfo.chat_id())
+                 << "пользователь не в чатике:" << currentUser;
+      }
+
+      if (!stop_requested_.load()) {
+        qDebug()
+            << "Переподключение потока обновлений чатов через 3 секунды...";
+        std::this_thread::sleep_for(std::chrono::seconds(3));
+      }
     }
 
     grpc::Status status = reader->Finish();
 
-    if (!stop_requested_) {
+    if (!stop_requested_.load()) {
       if (!status.ok()) {
         QString error = QString::fromStdString(status.error_message());
         QMetaObject::invokeMethod(
@@ -114,11 +144,11 @@ void ChatStreamClient::runStream() {
     }
 
   } catch (const std::exception& e) {
-    if (!stop_requested_) {
+    if (!stop_requested_.load()) {
       QString error = QString("ОШИБКА: %1").arg(e.what());
       QMetaObject::invokeMethod(
           this,
-          [this, error]() {
+          [this, error]() -> void {
             emit streamError(error);
             emit streamStatusChanged(false);
           },

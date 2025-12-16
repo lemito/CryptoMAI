@@ -1,11 +1,12 @@
 #include "sessionmanager.h"
 
-SessionManager& SessionManager::instance() {
+auto SessionManager::instance() -> SessionManager& {
   static SessionManager instance;
   return instance;
 }
 
 SessionManager::SessionManager() {
+  qDebug() << "SessionManager инициализирован";
   m_instanceId = QUuid::createUuid().toString();
   m_settings =
       std::make_unique<QSettings>("lemito", "MeowChat_" + m_instanceId);
@@ -19,25 +20,23 @@ void SessionManager::setSessionData(const QString& token,
   emit sessionChanged(true);
 }
 
-QString SessionManager::sessionToken() const {
+auto SessionManager::sessionToken() const -> QString {
   return m_settings->value("session/token").toString();
 }
 
-QString SessionManager::username() const {
+auto SessionManager::username() const -> QString {
   return m_settings->value("session/username").toString();
 }
 
-bool SessionManager::isLoggedIn() const { return !sessionToken().isEmpty(); }
+auto SessionManager::isLoggedIn() const -> bool {
+  return !sessionToken().isEmpty();
+}
 
 void SessionManager::clearSession() {
   m_settings->remove("session");
   m_settings->sync();
 
-  // Испускаем сигнал только если действительно изменилось состояние
   emit sessionChanged(false);
-  // m_settings->remove("session");
-  // m_settings->sync();
-  // emit sessionChanged(false);
 }
 
 void SessionManager::setUserData(const QString& key, const QVariant& value) {
@@ -45,6 +44,6 @@ void SessionManager::setUserData(const QString& key, const QVariant& value) {
   m_settings->sync();
 }
 
-QVariant SessionManager::userData(const QString& key) const {
+auto SessionManager::userData(const QString& key) const -> QVariant {
   return m_settings->value("userdata/" + key);
 }

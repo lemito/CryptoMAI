@@ -24,7 +24,9 @@ class ChatStreamClient : public QObject {
   [[nodiscard]] auto isStreaming() const -> bool { return streaming_; }
 
  signals:
-  void chatReceived(const QString& chatId);
+  void chatReceived(const QString& chatId, const QString& partiName,
+                    const ::chat::DHParameters& peerParams,
+                    const ::chat::EncryptionParameters& algoParams);
   void streamError(const QString& error);
   void streamStatusChanged(bool connected);
 
@@ -35,8 +37,6 @@ class ChatStreamClient : public QObject {
   std::atomic<bool> streaming_{false};
   std::atomic<bool> stop_requested_{false};
   std::thread stream_thread_;
-  std::mutex stream_mutex_;
-  std::condition_variable stream_cv_;
   std::unique_ptr<grpc::ClientContext> context_;
   QString session_token_;
 };

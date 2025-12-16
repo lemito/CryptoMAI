@@ -1,68 +1,277 @@
 #include "mainwindow.h"
 
+#include <QByteArray>
 #include <QCloseEvent>
+#include <QFileDialog>
+#include <QQmlContext>
 #include <QTimer>
-
-#include "cypher/SymmetricAlgorithms/cypher.hpp"
-#include "src/GUI/ui_mainwindow.h"
-#include "utils.hpp"
+#include <QVariant>
+#include <cstddef>
+#include <vector>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
       ui(new Ui::MainWindow),
+      m_userLabel(nullptr),
+      m_logoutButton(nullptr),
       choiceDialog(nullptr),
       createChatDialog(nullptr),
       joinChatDialog(nullptr),
+      messagesModel(nullptr),
+      m_sessionManager(nullptr),
       m_dbManager(DatabaseManager::instance()),
-      contactsDialog(new ContactsDialog(this)) {
+      m_fileManager(FileUploadManager::instance()),
+      contactsDialog(new ContactsDialog(this)),
+      m_chatManager(std::make_unique<ChatManager>(this)),
+      chatThreadPool(nullptr) {
   ui->setupUi(this);
   setAttribute(Qt::WA_DeleteOnClose, false);
 
-  qApp->setStyleSheet(
-      "QMessageBox QLabel { color: black; } QText { color: black; }");
+  this->chat = ui->chat;
 
-  auto channel = grpc::CreateChannel("localhost:50051",
-                                     grpc::InsecureChannelCredentials());
-  authStub_ = chat::AuthService::NewStub(channel);
-  chatStub_ = chat::ChatService::NewStub(channel);
+  constexpr auto style_sheet = R"(
+        QMessageBox {
+            background-color: white;
+            border: 1px solid #ccc;
+        }
+        QMessageBox QLabel {
+            color: black;
+            padding: 10px;
+        }
+        QMessageBox QTextEdit {
+            color: black;
+            background-color: #f9f9f9;
+        }
+        QMessageBox QPushButton {
+            background-color: #E0E0E0;
+            color: black;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            padding: 5px 12px;
+            min-width: 80px;
+        }
+        QMessageBox QPushButton:hover {
+            background-color: #D0D0D0;
+        }
+        QMessageBox QPushButton:pressed {
+            background-color: #C0C0C0;
+        }
+    )";
 
-  chat_stream_client_ = std::make_unique<ChatStreamClient>(chatStub_.get());
+  qApp->setStyleSheet(style_sheet);
 
-  connect(ui->newChatButton, &QPushButton::clicked, this,
-          &MainWindow::onNewChatClicked);
+  try {
+    using namespace grpc;
 
-  connect(ui->actionShowContacts, &QAction::triggered, this,
-          &MainWindow::showContactsDialog);
+    auto channel =
+        CreateChannel("localhost:50051", InsecureChannelCredentials());
+    authStub_ = chat::AuthService::NewStub(channel);
+    chatStub_ = chat::ChatService::NewStub(channel);
+    messagingStub_ = chat::MessagingService::NewStub(channel);
 
-  connect(ui->contactsButton, &QPushButton::clicked, this,
-          &MainWindow::onContactsButton_clicked);
+    chat_stream_client_ = std::make_unique<ChatStreamClient>(chatStub_.get());
 
-  connect(ui->userStatusButton, &QPushButton::clicked, this,
-          &MainWindow::onUserStatusButton_clicked);
+    message_stream_client_ = std::make_unique<MessageStreamClient>(
+        messagingStub_.get(), m_dbManager);
 
-  connect(chat_stream_client_.get(), &ChatStreamClient::chatReceived, this,
-          &MainWindow::onChatReceived);
-  connect(chat_stream_client_.get(), &ChatStreamClient::streamError, this,
-          &MainWindow::onStreamError);
-  // connect(chat_stream_client_.get(), &ChatStreamClient::streamStatusChanged,
-  //         this, &MainWindow::onStreamStatusChanged);
+    message_sender_ =
+        std::make_unique<MessageSender>(messagingStub_.get(), m_dbManager);
 
-  if ((m_dbManager != nullptr) && !m_dbManager->init()) {
-    qDebug() << "запрос инициализации бд";
-    QMessageBox::critical(this, "Ошибка БД", "Не удалось создать БД");
-  } else {
-    // TODO
-    qDebug() << "чёт загрузилось";
+    message_sender_->setEncryptCallback(
+        [this](const QString& chatId, const QByteArray& data) -> QByteArray {
+          return encryptMessage(chatId, data);
+        });
+
+    message_stream_client_->setDecryptCallback(
+        [this](const QString& chatId, const QByteArray& data) -> QByteArray {
+          return decryptMessage(chatId, data);
+        });
+
+    m_chatManager->setDatabaseManager(m_dbManager);
+    m_chatManager->setQmlContext(chat->rootContext());
+
+    m_fileManager.initialize("127.0.0.1:9000", "minioadmin", "minioadmin",
+                             false, "us-east-1");
+
+    auto setup_connections = [this]() -> void {
+      connect(&m_fileManager, &FileUploadManager::downloadProgress, this,
+              &MainWindow::onDownloadProgress);
+
+      connect(&m_fileManager, &FileUploadManager::downloadFinished, this,
+              &MainWindow::onDownloadFinished);
+
+      connect(&m_fileManager, &FileUploadManager::downloadFailed, this,
+              &MainWindow::onDownloadFailed);
+
+      connect(ui->newChatButton, &QPushButton::clicked, this,
+              &MainWindow::onNewChatClicked);
+
+      connect(ui->actionShowContacts, &QAction::triggered, this,
+              &MainWindow::showContactsDialog);
+
+      connect(ui->contactsButton, &QPushButton::clicked, this,
+              &MainWindow::onContactsButton_clicked);
+
+      connect(ui->userStatusButton, &QPushButton::clicked, this,
+              &MainWindow::onUserStatusButton_clicked);
+
+      connect(ui->settingsButton, &QPushButton::clicked, this,
+              &MainWindow::onChatSettingsButton_clicked);
+
+      connect(ui->fileButton, &QPushButton::clicked, this,
+              &MainWindow::onSendFileClicked);
+
+      connect(ui->updateChatsButton, &QPushButton::clicked, this,
+              [this] { refreshChatsList(); });
+
+      connect(chat_stream_client_.get(), &ChatStreamClient::chatReceived, this,
+              &MainWindow::onChatReceived);
+
+      connect(chat_stream_client_.get(), &ChatStreamClient::streamError, this,
+              &MainWindow::onStreamError);
+
+      connect(message_stream_client_.get(),
+              &MessageStreamClient::messageReceived, this,
+              &MainWindow::onMessageReceived);
+
+      connect(message_stream_client_.get(), &MessageStreamClient::streamError,
+              this, &MainWindow::onMessageStreamError);
+
+      connect(ui->sendButton, &QPushButton::clicked, this,
+              &MainWindow::onSendMessageClicked);
+
+      connect(message_stream_client_.get(), &MessageStreamClient::messageSaved,
+              m_chatManager.get(), &ChatManager::onMessageSaved);
+
+      connect(m_chatManager.get(), &ChatManager::autoDownloadImage, this,
+              &MainWindow::downloadFile);
+
+      connect(ui->chatsList, &QListWidget::itemClicked, this,
+              [this](QListWidgetItem* item) {
+                if (auto chatId = item->data(Qt::UserRole); chatId.isValid()) {
+                  const QString chatName = chatId.toString();
+                  if (!chatContexts.contains(chatName)) {
+                    qCritical() << "чат выбирался, но контекста такого нет";
+                    return;
+                  }
+                  m_chatManager->onChatSelected(chatName);
+                  qDebug() << "Чат выбран:" << chatName;
+                }
+              });
+    };
+
+    setup_connections();
+
+    ui->messageInput->installEventFilter(this);
+
+    chatThreadPool = new QThreadPool(this);
+    chatThreadPool->setMaxThreadCount(4);
+
+    connect(ui->actionAbout, &QAction::triggered, this, [this] {
+      auto* aboutDialog = new QDialog(this);
+      aboutDialog->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+      aboutDialog->setAttribute(Qt::WA_DeleteOnClose);
+      aboutDialog->setModal(true);
+      aboutDialog->resize(500, 400);
+      aboutDialog->setObjectName("aboutDialog");
+
+      auto* quickWidget = new QQuickWidget(aboutDialog);
+      quickWidget->setResizeMode(QQuickWidget::SizeRootObjectToView);
+      quickWidget->setSource(QUrl("qrc:/dialogs/AboutDialog.qml"));
+      quickWidget->setStyleSheet("background: transparent; border: none;");
+
+      auto* mainLayout = new QVBoxLayout(aboutDialog);
+      mainLayout->setContentsMargins(0, 0, 0, 0);
+      mainLayout->addWidget(quickWidget);
+
+      auto* closeButton = new QPushButton("✕", aboutDialog);
+      closeButton->setFixedSize(30, 30);
+      closeButton->setStyleSheet(R"(
+        QPushButton {
+            background-color: rgba(255, 255, 255, 150);
+            border-radius: 15px;
+            font-size: 16px;
+            font-weight: bold;
+            color: black;
+        }
+        QPushButton:hover {
+            background-color: rgba(255, 255, 255, 200);
+        }
+    )");
+
+      auto* topLayout = new QHBoxLayout();
+      topLayout->setContentsMargins(5, 5, 5, 0);
+      topLayout->addStretch();
+      topLayout->addWidget(closeButton);
+
+      safe_delete(mainLayout);
+      mainLayout = new QVBoxLayout(aboutDialog);
+      mainLayout->setContentsMargins(0, 0, 0, 0);
+      mainLayout->addLayout(topLayout);
+      mainLayout->addWidget(quickWidget);
+
+      connect(closeButton, &QPushButton::clicked, aboutDialog, &QDialog::close);
+
+      aboutDialog->show();
+    });
+
+    if ((m_dbManager != nullptr) && !m_dbManager->init()) {
+      qDebug() << "Запрос инициализации БД";
+      QMessageBox::critical(this, "Ошибка БД", "Не удалось создать БД");
+    } else {
+      qDebug() << "БД загружена успешно";
+    }
+
+    const auto& session = SessionManager::instance();
+    if (session.isLoggedIn()) {
+      updateUserInfo();
+      startChatStream();
+      refreshChatsList();
+
+      QTimer::singleShot(1000, this, [this]() -> void {
+        if (message_stream_client_) {
+          message_stream_client_->startStream();
+        }
+      });
+
+      QTimer::singleShot(2000, this,
+                         [this]() -> void { initializeExistingChats(); });
+    }
+
+    chat->setSource(QUrl("qrc:/chat/ChatView.qml"));
+    chat->rootContext()->setContextProperty("mainWindow", this);
+
+    auto* ctx = chat->rootContext();
+    ctx->setContextProperty("hasSelectedChat", false);
+    ctx->setContextProperty("messageCount", 0);
+    ctx->setContextProperty("messageList", QVariantList());
+
+    m_chatManager->setQmlContext(ctx);
+    m_chatManager->setDatabaseManager(m_dbManager);
+
+    if (chat->rootContext()->contextObject()) {
+      connect(chat->rootContext()->contextObject(),
+              SIGNAL(fileDownloadRequested(QString)), this,
+              SLOT(downloadFile(QString)));
+    }
+
+  } catch (const std::exception& e) {
+    qCritical() << std::format("Ошибка в конструкторе MainWindow: {}", e.what())
+                       .c_str();
   }
+}
 
-  auto ctx = meow::cypher::symm::SymmetricCypherContext(
-      {}, meow::cypher::symm::encryptionMode::ECB,
-      meow::cypher::symm::paddingMode::PKCS7, std::nullopt);
-
-  if (SessionManager::instance().isLoggedIn()) {
-    updateUserInfo();
-    startChatStream();
+auto MainWindow::eventFilter(QObject* obj, QEvent* event) -> bool {
+  if (obj == ui->messageInput && event->type() == QEvent::KeyPress) {
+    auto* keyEvent = dynamic_cast<QKeyEvent*>(event);
+    if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+      if (keyEvent->modifiers() == Qt::NoModifier) {
+        onSendMessageClicked();
+        return true;
+      }
+    }
   }
+  return QMainWindow::eventFilter(obj, event);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -72,28 +281,63 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     contactsDialog->stopAllThreads();
     contactsDialog->close();
   }
-  if (SessionManager::instance().isLoggedIn()) {
-    int result = QMessageBox::question(
-        this, "Выход", "Закрыть приложение или остаться в системе?", "Закрыть",
-        "Свернуть");
-    if (result == 0) {
-      qApp->quit();
-    } else {
-      event->ignore();
-      this->hide();
-      return;
-    }
-  }
 
   event->accept();
+  qApp->quit();
 }
 
 MainWindow::~MainWindow() {
+  m_isDestroying = true;
+
+  if (chatThreadPool != nullptr) {
+    chatThreadPool->waitForDone();
+    safe_delete(chatThreadPool);
+  }
+
   if (chat_stream_client_) {
     chat_stream_client_->stopStream();
   }
 
-  delete ui;
+  {
+    stopChatStream();
+
+    if (contactsDialog) {
+      contactsDialog->stopAllThreads();
+      contactsDialog->close();
+      contactsDialog.reset();
+    }
+
+    chatKeys.clear();
+
+    QString token = SessionManager::instance().sessionToken();
+    if (!token.isEmpty()) {
+      try {
+        chat::LogoutRequest request;
+        request.set_session_token(token.toStdString());
+
+        grpc::ClientContext ctx;
+        chat::CommonResponse response;
+
+        grpc::Status status = authStub_->Logout(&ctx, request, &response);
+
+        if (status.ok() && response.success()) {
+          qDebug() << "Выход выполнен на сервере";
+        } else {
+          qCritical() << "Ошибка при выходе(grpc): "
+                      << (status.ok() ? response.message().c_str()
+                                      : status.error_message().c_str());
+        }
+      } catch (const std::exception& e) {
+        qCritical() << "Ошибка при выходе: " << e.what();
+      }
+    }
+
+    SessionManager::instance().clearSession();
+
+    qDebug() << "выход";
+  }
+
+  safe_delete(ui);
 }
 
 void MainWindow::onContactsButton_clicked() { showContactsDialog(); }
@@ -107,9 +351,140 @@ void MainWindow::showContactsDialog() {
   contactsDialog->activateWindow();
 }
 
-void MainWindow::onChatReceived(const QString& chatId) {
-  qDebug() << "Новый чат - ID:" << chatId;
-  ui->chatsList->addItem(" (" + chatId + ")");
+void MainWindow::onChatReceived(
+    const QString& chatId, const QString& partiName,
+    const ::chat::DHParameters& peerParams,
+    const ::chat::EncryptionParameters& algoParams) {
+  qDebug() << "Получены параметры чата, запуск фоновой обработки:" << chatId;
+
+  QtConcurrent::run(
+      chatThreadPool,
+      [this, chatId, partiName, peerParams, algoParams]() -> void {
+        processChatInBackground(chatId, partiName, peerParams, algoParams);
+      });
+}
+
+void MainWindow::processChatInBackground(
+    const QString& chatId, const QString& partiName,
+    const ::chat::DHParameters& peerParams,
+    const ::chat::EncryptionParameters& algoParams) {
+  if (m_isDestroying) {
+    qDebug() << "MainWindow разрушается, пропускаем обработку чата:" << chatId;
+    return;
+  }
+
+  qDebug() << "Обработка чата в фоновом потоке, ID:" << chatId;
+
+  Chat chat =
+      m_dbManager->getChat(chatId, SessionManager::instance().username());
+
+  if (chat.chatId.isEmpty()) {
+    qWarning() << "Чат не найден в БД, создаём новый:" << chatId;
+
+    const QString curName = SessionManager::instance().username();
+    const QString chatName = curName + " | " + partiName;
+    const QString algoName = QString::fromStdString(
+        ::chat::EncryptionAlgorithm_Name(algoParams.algorithm()));
+    const QString modeName =
+        QString::fromStdString(::chat::EncryptionMode_Name(algoParams.mode()));
+    const QString padName =
+        QString::fromStdString(::chat::PaddingMode_Name(algoParams.padding()));
+    const QString IV = QString::fromStdString(algoParams.chat_iv());
+
+    const QString prime = QString::fromStdString(peerParams.prime());
+    const QString generator = QString::fromStdString(peerParams.generator());
+    const QString pkPeer = QString::fromStdString(peerParams.public_key());
+
+    if (!m_dbManager->addChat(chatId, chatName, curName, algoName, modeName,
+                              padName, IV, "", prime, generator, "", pkPeer,
+                              false)) {
+      QMetaObject::invokeMethod(this, [this]() {
+        QMessageBox::critical(this, "ошибка", "чат не смог сохраниться в БД");
+      });
+      return;
+    }
+
+    QMetaObject::invokeMethod(this, [this, chatId, prime, generator, pkPeer]() {
+      absl::MutexLock lock(&chatKeysMutex);
+
+      ChatKeys keys;
+      keys.prime = BI(prime.toStdString());
+      keys.generator = BI(generator.toStdString());
+      keys.peerPublicKey = BI(pkPeer.toStdString());
+      keys.myPrivateKey = BI(0);
+      keys.myPublicKey = BI(0);
+      keys.isInitialized = false;
+
+      auto [it, inserted] = chatKeys.insert({chatId, std::move(keys)});
+      if (inserted) {
+        qDebug() << "Ключи чата добавлены для новой записи:" << chatId;
+      }
+    });
+
+    QMetaObject::invokeMethod(this, [this, chatId]() {
+      qDebug() << "Запуск обмена DH параметрами для нового чата:" << chatId;
+      exchangeDHParameters(chatId);
+    });
+
+    return;
+  }
+
+  qDebug() << "Чат уже существует в БД:" << chatId;
+
+  QString primeStr = QString::fromStdString(peerParams.prime());
+  QString genStr = QString::fromStdString(peerParams.generator());
+  QString peerPubKeyStr = QString::fromStdString(peerParams.public_key());
+  QString ivStr = QString::fromStdString(algoParams.chat_iv());
+
+  m_dbManager->updateChatParams(chatId, primeStr, genStr, peerPubKeyStr, ivStr);
+
+  QMetaObject::invokeMethod(this, [this, chatId, peerPubKeyStr]() {
+    bool needComputeSecret = false;
+
+    {
+      absl::MutexLock lock(&chatKeysMutex);
+      auto it = chatKeys.find(chatId);
+
+      if (it == chatKeys.end()) {
+        ChatKeys keys;
+        const auto dh = get_dh();
+        keys.peerPublicKey = BI(peerPubKeyStr.toStdString());
+        keys.myPrivateKey = dh.secret;
+        keys.myPublicKey = dh.getPublicKey();
+        keys.isInitialized = false;
+        chatKeys.insert({chatId, keys});
+        qDebug() << "Ключи чата созданы для существующего чата:" << chatId;
+      } else {
+        it->second.peerPublicKey = BI(peerPubKeyStr.toStdString());
+        qDebug() << "Публичный ключ собеседника обновлён для:" << chatId;
+
+        if (!it->second.myPrivateKey.str().empty()) {
+          needComputeSecret = true;
+        }
+      }
+    }
+
+    if (needComputeSecret) {
+      computeSharedSecretAndInitializeContext(chatId);
+    } else {
+      bool needExchange = false;
+      {
+        absl::MutexLock lock(&chatKeysMutex);
+        auto it = chatKeys.find(chatId);
+        if (it != chatKeys.end() && it->second.myPublicKey.str().empty()) {
+          needExchange = true;
+        }
+      }
+
+      if (needExchange) {
+        qDebug() << "Запуск обмена DH параметрами для существующего чата:"
+                 << chatId;
+        exchangeDHParameters(chatId);
+      }
+    }
+  });
+
+  qDebug() << "Обработка чата завершена:" << chatId;
 }
 
 void MainWindow::onStreamError(const QString& error) {
@@ -121,10 +496,6 @@ void MainWindow::onStreamError(const QString& error) {
 
   QTimer::singleShot(5000, this, &MainWindow::startChatStream);
 }
-
-// void MainWindow::onStreamStatusChanged(bool connected) {
-//   qDebug() << "статус:" << (connected ? "connected" : "disconnected");
-// }
 
 void MainWindow::startChatStream() {
   if (SessionManager::instance().sessionToken().isEmpty()) {
@@ -140,7 +511,7 @@ void MainWindow::startChatStream() {
 }
 
 void MainWindow::stopChatStream() {
-  static bool stopping = false;
+  static std::atomic<bool> stopping = false;
   if (stopping) {
     return;
   }
@@ -184,10 +555,10 @@ void MainWindow::onLogout() {
       chat::LogoutRequest request;
       request.set_session_token(token.toStdString());
 
-      grpc::ClientContext context;
+      grpc::ClientContext ctx;
       chat::CommonResponse response;
 
-      grpc::Status status = authStub_->Logout(&context, request, &response);
+      grpc::Status status = authStub_->Logout(&ctx, request, &response);
 
       if (status.ok() && response.success()) {
         qDebug() << "Выход выполнен на сервере";
@@ -323,12 +694,15 @@ void MainWindow::onCreateChatRequested() {
   }
 
   if (createChatDialog->exec() == QDialog::Accepted) {
-    handleCreateChat(
-        createChatDialog->getContactUsername(),
-        createChatDialog->getAlgorithm(), createChatDialog->getMode(),
-        createChatDialog->getPadding(), createChatDialog->getIV(),
-        createChatDialog->getPrime(), createChatDialog->getGenerator(),
-        createChatDialog->getPublicKey());
+    const BaseChatDialog* asBaseChat =
+        dynamic_cast<BaseChatDialog*>(createChatDialog);
+    handleCreateChat(createChatDialog->getContactUsername(),
+                     createChatDialog->getAlgorithm(),
+                     createChatDialog->getMode(),
+                     createChatDialog->getPadding(), createChatDialog->getIV(),
+                     asBaseChat->dhPrime, asBaseChat->dhGenerator,
+                     asBaseChat->dhPublicKey, asBaseChat->dhPrivateKey);
+    refreshChatsList();
   }
 }
 
@@ -338,17 +712,45 @@ void MainWindow::onJoinChatRequested() {
   }
 
   if (joinChatDialog->exec() == QDialog::Accepted) {
-    handleJoinChat(joinChatDialog->getChatId(), joinChatDialog->getPrime(),
-                   joinChatDialog->getGenerator(),
-                   joinChatDialog->getPublicKey());
+    chat::GetChatDHParamsRequest request;
+    QString chatId = joinChatDialog->getChatId();
+    request.set_chat_id(chatId.toStdString());
+
+    grpc::ClientContext ctx;
+    QString token = SessionManager::instance().sessionToken();
+    if (!token.isEmpty()) {
+      ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+    } else {
+      QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
+      return;
+    }
+    chat::GetChatDHParamsResponse response;
+
+    grpc::Status status = chatStub_->GetChatDHParams(&ctx, request, &response);
+
+    if (status.ok() && response.success()) {
+      const BI prime(response.initiator_params().prime());
+      const BI generator(response.initiator_params().generator());
+
+      const BaseChatDialog* asBaseChat =
+          dynamic_cast<BaseChatDialog*>(joinChatDialog);
+      handleJoinChat(chatId, prime, generator, asBaseChat->dhPublicKey,
+                     asBaseChat->dhPrivateKey);
+      refreshChatsList();
+    } else {
+      qCritical() << "Ошибка: " << status.error_message().c_str();
+      QMessageBox::critical(
+          this, "Ошибка",
+          QString("Не удалось подключиться к чату: %1")
+              .arg(QString::fromStdString(status.error_message())));
+    }
   }
 }
 
 void MainWindow::handleCreateChat(const QString& contact, int algorithm,
                                   int mode, int padding, const QByteArray& iv,
-                                  const QByteArray& prime,
-                                  const QByteArray& generator,
-                                  const QByteArray& publicKey) {
+                                  const BI& prime, const BI& generator,
+                                  const BI& publicKey, const BI& privateKey) {
   QString algorithmStr;
   switch (algorithm) {
     case 0:
@@ -434,35 +836,55 @@ void MainWindow::handleCreateChat(const QString& contact, int algorithm,
     encryptionParams->set_chat_iv(iv.toStdString());
     request.set_allocated_encryption_params(encryptionParams);
 
-    dhParams->set_prime(prime.toStdString());
-    dhParams->set_generator(generator.toStdString());
-    dhParams->set_public_key(publicKey.toStdString());
+    dhParams->set_prime(prime.str());
+    dhParams->set_generator(generator.str());
+    dhParams->set_public_key(publicKey.str());
     request.set_allocated_initiator_params(dhParams);
 
-    grpc::ClientContext context;
+    grpc::ClientContext ctx;
     QString token = SessionManager::instance().sessionToken();
     if (!token.isEmpty()) {
-      context.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+      ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
     } else {
       QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
       return;
     }
     chat::ChatInfo response;
 
-    grpc::Status status = chatStub_->CreateChat(&context, request, &response);
+    grpc::Status status = chatStub_->CreateChat(&ctx, request, &response);
 
     if (status.ok()) {
       QString chatId = QString::fromStdString(response.chat_id());
+      QString username = SessionManager::instance().username();
+      QString chatName = username + " | " + contact;
+      auto stat = m_dbManager->addChat(
+          chatId, chatName, username, algorithmStr, modeStr, paddingStr,
+          QString(iv.toHex().toUpper()), username,
+          QString::fromStdString(prime.str()),
+          QString::fromStdString(generator.str()),
+          QString::fromStdString(publicKey.str()), QString(), false);
+      if (!stat) {
+        QMessageBox::critical(this, "Ошибка", "Не удалось добавить чат в БД");
+        return;
+      }
       qDebug() << "Чат создан: " << chatId;
 
       ChatKeys keys;
-      keys.sharedSecret = publicKey;
-      keys.isInitialized = true;
-      chatKeys[chatId] = keys;
+      keys.prime = prime;
+      keys.generator = generator;
+      keys.myPrivateKey = privateKey;
+      keys.myPublicKey = publicKey;
+      keys.peerPublicKey = BI(0);
+      keys.isInitialized = false;
+      chatKeys.emplace(chatId, keys);
+
+      exchangeDHParameters(chatId);
 
       QMessageBox::information(
           this, "Успех",
-          QString("Чат создан успешно!\nID чата: %1").arg(chatId));
+          QString("Чат создан успешно!\nID чата: %1\nДождитесь подключения "
+                  "второго участника и обмена ключами")
+              .arg(chatId));
 
     } else {
       qCritical() << "Ошибка: " << status.error_message().c_str();
@@ -480,47 +902,50 @@ void MainWindow::handleCreateChat(const QString& contact, int algorithm,
   }
 }
 
-void MainWindow::handleJoinChat(const QString& chatId, const QByteArray& prime,
-                                const QByteArray& generator,
-                                const QByteArray& publicKey) {
+void MainWindow::handleJoinChat(const QString& chatId, const BI& prime,
+                                const BI& generator, const BI& publicKey,
+                                const BI& privateKey) {
   QString message =
       QString("Присоединение к чату %1\nDH параметры сгенерированы")
           .arg(chatId);
 
   QMessageBox::information(this, "🔗 Присоединение к чату", message);
 
-  // TODO: grpc
   try {
     chat::JoinChatRequest request;
     request.set_chat_id(chatId.toStdString());
 
     auto* params = new chat::DHParameters();
-    params->set_prime(prime.toStdString());
-    params->set_generator(generator.toStdString());
-    params->set_public_key(publicKey.toStdString());
+    params->set_prime(prime.str());
+    params->set_generator(generator.str());
+    params->set_public_key(publicKey.str());
     request.set_allocated_peer_params(params);
 
-    grpc::ClientContext context;
+    grpc::ClientContext ctx;
     QString token = SessionManager::instance().sessionToken();
     if (!token.isEmpty()) {
-      context.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+      ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
     } else {
       QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
       return;
     }
     chat::CommonResponse response;
-    grpc::Status status = chatStub_->JoinChat(&context, request, &response);
+    grpc::Status status = chatStub_->JoinChat(&ctx, request, &response);
 
     if (status.ok() && response.success()) {
       qDebug() << "Чел вошел в чат";
 
-      ChatKeys keys;
-      keys.sharedSecret = publicKey;
-      keys.isInitialized = true;
-      chatKeys[chatId] = keys;
+      auto it = chatKeys.find(chatId);
+      if (it != chatKeys.end()) {
+        it->second.myPrivateKey = privateKey;
+        it->second.myPublicKey = publicKey;
+      }
 
-      QMessageBox::information(this, "Успех",
-                               "Вы успешно присоединились к чату!");
+      QMessageBox::information(
+          this, "Успех",
+          "Вы успешно присоединились к чату!\nВыполняется обмен ключами...");
+
+      exchangeDHParameters(chatId);
 
     } else {
       std::string errorMsg =
@@ -537,4 +962,957 @@ void MainWindow::handleJoinChat(const QString& chatId, const QByteArray& prime,
         this, "Ошибка",
         QString("Исключение при присоединении к чату: %1").arg(e.what()));
   }
+}
+
+void MainWindow::onMessageReceived(const chat::EncryptedChunk& chunk) {
+  auto chunkCopy = std::make_shared<chat::EncryptedChunk>(chunk);
+
+  QtConcurrent::run(chatThreadPool, [this, chunkCopy]() -> void {
+    if (m_isDestroying) {
+      return;
+    }
+
+    const auto& metadata = chunkCopy->metadata();
+    QString messageId = QString::fromStdString(metadata.message_id());
+    QString chatId = QString::fromStdString(metadata.chat_id());
+    QString fileId = QString::fromStdString(metadata.file_id());
+    QByteArray content =
+        QByteArray::fromStdString(chunkCopy->encrypted_content());
+
+    int chunkIndex = metadata.chunk_index();
+    int totalChunks = metadata.total_chunks();
+    bool isFile = metadata.is_file();
+
+    if (m_chatManager && chunkIndex == totalChunks - 1) {
+      QMetaObject::invokeMethod(this, [this, chatId]() -> void {
+        if (getCurrentChatId() == chatId) {
+          m_chatManager->loadChatHistory(chatId);
+        }
+      });
+    }
+  });
+}
+
+void MainWindow::onMessageStreamError(const QString& error) {
+  qCritical() << "MainWindow: onMessageStreamError:" << error;
+
+  QMessageBox::warning(
+      this, "Ошибка потока сообщений",
+      QString("Ошибка получения сообщений: %1\nПопытка переподключения...")
+          .arg(error));
+
+  QTimer::singleShot(5000, this, [this]() {
+    if (message_stream_client_ && SessionManager::instance().isLoggedIn()) {
+      message_stream_client_->startStream();
+    }
+  });
+}
+
+void MainWindow::onSendMessageClicked() {
+  const QString currentChatId = getCurrentChatId();
+  const QByteArray originalData = ui->messageInput->toPlainText().toUtf8();
+
+  if (originalData.size() > 0 && !currentChatId.isEmpty()) {
+    message_sender_->sendMessage(currentChatId, originalData, false);
+    ui->messageInput->clear();
+
+  } else {
+    QMessageBox::warning(this, "Ошибка", "Введите сообщение и выберите чат");
+  }
+
+  if (m_chatManager) {
+    m_chatManager->loadChatHistory(currentChatId);
+  }
+}
+
+void MainWindow::onSendFileClicked() {
+  qDebug() << "[FILE] onSendFileClicked начало";
+  QString currentChatId = getCurrentChatId();
+  qDebug() << "[FILE] currentChatId:" << currentChatId;
+  if (currentChatId.isEmpty()) {
+    QMessageBox::warning(this, "Ошибка", "Выберите чат для отправки файла.");
+    return;
+  }
+  QString filePath =
+      QFileDialog::getOpenFileName(this, "Выберите файл для отправки");
+  qDebug() << "[FILE] Выбран файл:" << filePath;
+  if (filePath.isEmpty()) {
+    return;
+  }
+  QFileInfo fileInfo(filePath);
+  QString originalFileName = fileInfo.fileName();
+  qint64 originalFileSize = fileInfo.size();
+  qDebug() << "[FILE] Имя:" << originalFileName
+           << "Размер:" << originalFileSize;
+
+  QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+  qDebug() << "[FILE] fileId:" << fileId;
+  QString tempEncryptedFilePath = QDir::temp().filePath(fileId + "_encrypted");
+  qDebug() << "[FILE] tempEncryptedFilePath:" << tempEncryptedFilePath;
+
+  QtConcurrent::run(chatThreadPool, [this, currentChatId, filePath, fileId,
+                                     tempEncryptedFilePath, originalFileName,
+                                     originalFileSize]() {
+    qDebug() << "[FILE] Фоновое шифрование началось";
+    {
+      absl::MutexLock lock(&chatContextMutex_);
+      auto it = chatContexts.find(currentChatId);
+      if (it != chatContexts.end()) {
+        try {
+          qDebug() << "[FILE] Начало шифрования";
+          it->second.encrypt(tempEncryptedFilePath.toStdString(),
+                             filePath.toStdString());
+          qDebug() << "[FILE] Файл зашифрован:" << tempEncryptedFilePath;
+        } catch (const std::exception& e) {
+          qCritical() << "[FILE] Ошибка шифрования:" << e.what();
+          QMetaObject::invokeMethod(this, [this, e, tempEncryptedFilePath]() {
+            QMessageBox::critical(
+                this, "Ошибка",
+                QString("Ошибка шифрования файла: %1").arg(e.what()));
+          });
+          QFile::remove(tempEncryptedFilePath);
+          return;
+        }
+      } else {
+        qCritical() << "[FILE] Контекст шифрования не найден для чата:"
+                    << currentChatId;
+        QMetaObject::invokeMethod(this, [this]() {
+          QMessageBox::critical(
+              this, "Ошибка",
+              "Контекст шифрования не найден для выбранного чата.");
+        });
+        return;
+      }
+    }
+
+    QMetaObject::invokeMethod(this, [this, currentChatId, fileId,
+                                     originalFileName, originalFileSize,
+                                     tempEncryptedFilePath]() {
+      qDebug() << "[FILE] Подключение сигналов uploadFinished и uploadFailed";
+      auto* conn = new QMetaObject::Connection();
+      *conn = connect(
+          &m_fileManager, &FileUploadManager::uploadFinished, this,
+          [this, currentChatId, fileId, originalFileName, originalFileSize,
+           tempEncryptedFilePath, conn](const QString& objectName) {
+            qDebug() << "[FILE] uploadFinished сигнал получен для:"
+                     << objectName;
+            if (objectName == fileId) {
+              qDebug() << "[FILE] Отправка метаданных файла";
+              message_sender_->sendFileInfo(currentChatId, fileId,
+                                            originalFileName, originalFileSize,
+                                            "application/octet-stream", true);
+              QFile::remove(tempEncryptedFilePath);
+              qDebug() << "[FILE] Временный файл удален";
+              QMessageBox::information(this, "Файл отправлен",
+                                       QString("Файл '%1' успешно отправлен.")
+                                           .arg(originalFileName));
+              if (m_chatManager) {
+                m_chatManager->loadChatHistory(currentChatId);
+              }
+              disconnect(*conn);
+              delete conn;
+            }
+          });
+
+      connect(&m_fileManager, &FileUploadManager::uploadFailed, this,
+              [fileId](const QString& objectName, const QString& error) {
+                if (objectName == fileId) {
+                  qCritical() << "[FILE] uploadFailed:" << objectName
+                              << "error:" << error;
+                }
+              });
+
+      qDebug() << "[FILE] Вызов uploadFile для bucket-name-meow-chat";
+      m_fileManager.uploadFile("bucket-name-meow-chat", fileId,
+                               tempEncryptedFilePath);
+      qDebug() << "[FILE] uploadFile вызван для:" << originalFileName;
+    });
+  });
+}
+
+auto MainWindow::getCurrentChatId() const -> QString {
+  return m_chatManager->m_currentChatId;
+}
+
+void MainWindow::refreshChatsList() {
+  ui->chatsList->clear();
+
+  if (m_dbManager == nullptr) {
+    qWarning() << "refreshChatsList: DatabaseManager не инициализирован";
+    return;
+  }
+
+  QVector<Chat> chats =
+      m_dbManager->getAllChats(SessionManager::instance().username());
+  for (const Chat& chat : chats) {
+    QString displayText = QString("💬 %1").arg(chat.name);
+    auto* item = new QListWidgetItem(displayText);
+    item->setData(Qt::UserRole, chat.chatId);
+    ui->chatsList->addItem(item);
+  }
+
+  m_chatManager->clearChat();
+  qDebug() << "Загружено чатов:" << chats.size();
+}
+
+void MainWindow::initializeExistingChats() {
+  if (m_dbManager == nullptr) {
+    qWarning() << "initializeExistingChats: DatabaseManager не инициализирован";
+    return;
+  }
+
+  QVector<Chat> chats =
+      m_dbManager->getAllChats(SessionManager::instance().username());
+  qDebug() << "Инициализация существующих чатов:" << chats.size();
+
+  for (const Chat& chat : chats) {
+    absl::MutexLock lock(&chatKeysMutex);
+
+    if (chatKeys.find(chat.chatId) == chatKeys.end()) {
+      ChatKeys keys;
+
+      const auto dh = get_dh();
+
+      keys.prime = BI(chat.prime.toStdString());
+      keys.generator = BI(chat.generator.toStdString());
+      keys.peerPublicKey = BI(0);
+      keys.myPrivateKey = dh.secret;
+      keys.myPublicKey = dh.getPublicKey();
+      keys.isInitialized = false;
+
+      chatKeys.insert({chat.chatId, keys});
+      qDebug() << "Ключи инициализированы для чата:" << chat.chatId;
+    }
+  }
+
+  for (const Chat& chat : chats) {
+    QTimer::singleShot(500, this, [this, chatId = chat.chatId]() {
+      qDebug() << "Запуск обмена ключами для существующего чата:" << chatId;
+      exchangeDHParameters(chatId);
+    });
+  }
+}
+
+void MainWindow::onChatSettingsButton_clicked() {
+  QString currentChatId = getCurrentChatId();
+
+  if (currentChatId.isEmpty()) {
+    QMessageBox::information(this, "Настройки чата",
+                             "Выберите чат для просмотра настроек.");
+    return;
+  }
+
+  if (m_dbManager == nullptr) {
+    QMessageBox::critical(this, "Ошибка", "База данных недоступна");
+    return;
+  }
+
+  Chat chatInfo = m_dbManager->getChat(currentChatId,
+                                       SessionManager::instance().username());
+
+  if (chatInfo.chatId.isEmpty()) {
+    QMessageBox::warning(this, "Ошибка",
+                         "Не удалось загрузить информацию о чате.");
+    return;
+  }
+
+  QDialog settingsDialog(this);
+  settingsDialog.setWindowTitle("Настройки чата");
+  settingsDialog.setMinimumWidth(400);
+  settingsDialog.setMinimumHeight(350);
+
+  auto* mainLayout = new QVBoxLayout(&settingsDialog);
+
+  auto* chatInfoGroup = new QGroupBox("Информация о чате", &settingsDialog);
+  auto* infoLayout = new QFormLayout(chatInfoGroup);
+
+  auto* chatNameEdit = new QLineEdit(chatInfo.name, chatInfoGroup);
+  chatNameEdit->setReadOnly(true);
+  infoLayout->addRow("Название чата:", chatNameEdit);
+
+  auto* chatIdEdit = new QLineEdit(chatInfo.chatId, chatInfoGroup);
+  chatIdEdit->setReadOnly(true);
+  infoLayout->addRow("ID чата:", chatIdEdit);
+
+  mainLayout->addWidget(chatInfoGroup);
+
+  auto* encryptionGroup =
+      new QGroupBox("Настройки шифрования", &settingsDialog);
+  auto* encryptionLayout = new QFormLayout(encryptionGroup);
+
+  auto* algorithmEdit = new QLineEdit(chatInfo.algorithm, encryptionGroup);
+  algorithmEdit->setReadOnly(true);
+  encryptionLayout->addRow("Алгоритм:", algorithmEdit);
+
+  auto* modeEdit = new QLineEdit(chatInfo.mode, encryptionGroup);
+  modeEdit->setReadOnly(true);
+  encryptionLayout->addRow("Режим:", modeEdit);
+
+  auto* paddingEdit = new QLineEdit(chatInfo.padding, encryptionGroup);
+  paddingEdit->setReadOnly(true);
+  encryptionLayout->addRow("Дополнение:", paddingEdit);
+
+  if (!chatInfo.iv.isEmpty()) {
+    auto* ivEdit = new QLineEdit(chatInfo.iv.left(16) + "...", encryptionGroup);
+    ivEdit->setReadOnly(true);
+    encryptionLayout->addRow("IV (первые 16 символов):", ivEdit);
+  }
+
+  mainLayout->addWidget(encryptionGroup);
+
+  auto* participantsGroup = new QGroupBox("Участники чата", &settingsDialog);
+  auto* participantsLayout = new QVBoxLayout(participantsGroup);
+
+  auto* participantsList = new QListWidget(participantsGroup);
+
+  QString currentUser = SessionManager::instance().username();
+  if (!currentUser.isEmpty()) {
+    auto* currentUserItem = new QListWidgetItem(
+        QString("👤 %1 (Вы)").arg(currentUser), participantsList);
+    currentUserItem->setFlags(currentUserItem->flags() & ~Qt::ItemIsEnabled);
+  }
+
+  QStringList nameParts = chatInfo.name.split(" | ");
+  for (const QString& part : nameParts) {
+    if (part != currentUser) {
+      auto* participantItem =
+          new QListWidgetItem(QString("👤 %1").arg(part), participantsList);
+      participantItem->setData(Qt::UserRole, part);
+    }
+  }
+
+  if (participantsList->count() <= 1) {
+    participantsList->addItem("Участники не загружены");
+  }
+
+  participantsLayout->addWidget(participantsList);
+  mainLayout->addWidget(participantsGroup);
+
+  auto* actionsGroup = new QGroupBox("Действия", &settingsDialog);
+  auto* actionsLayout = new QVBoxLayout(actionsGroup);
+
+  auto* leaveButton = new QPushButton("Покинуть чат", actionsGroup);
+  auto* closeButton = new QPushButton("Закрыть чат", actionsGroup);
+
+  leaveButton->setStyleSheet("background-color: #ff9800; color: white;");
+  closeButton->setStyleSheet("background-color: #f44336; color: white;");
+
+  actionsLayout->addWidget(leaveButton);
+  actionsLayout->addWidget(closeButton);
+  mainLayout->addWidget(actionsGroup);
+
+  QObject::connect(
+      leaveButton, &QPushButton::clicked,
+      [this, currentChatId, &settingsDialog]() {
+        int result =
+            QMessageBox::question(&settingsDialog, "Покинуть чат",
+                                  "Вы уверены, что хотите покинуть этот чат?",
+                                  QMessageBox::Yes | QMessageBox::No);
+
+        if (result == QMessageBox::Yes) {
+          try {
+            ::chat::CloseChatRequest req;
+            req.set_chat_id(currentChatId.toStdString());
+
+            grpc::ClientContext ctx;
+            QString token = SessionManager::instance().sessionToken();
+            if (!token.isEmpty()) {
+              ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+            } else {
+              QMessageBox::critical(this, "Ошибка",
+                                    "Необходимо войти в систему");
+              return;
+            }
+            chat::CommonResponse response;
+            grpc::Status status = chatStub_->LeaveChat(&ctx, req, &response);
+
+            if (status.ok() && response.success()) {
+              qDebug() << SessionManager::instance().username() << " ливнул";
+              auto stat = m_dbManager->removeChat(currentChatId);
+              if (!stat) {
+                std::string errorMsg = "БД";
+                qCritical() << "Ошибка: " << errorMsg.c_str();
+                QMessageBox::critical(
+                    this, "Ошибка",
+                    QString("Не удалось ливнуть к чату: %1")
+                        .arg(QString::fromStdString(errorMsg)));
+                settingsDialog.reject();
+              }
+              qDebug() << "Чел вышел из чата";
+              QMessageBox::information(&settingsDialog, "Успех", "Чат закрыт");
+              settingsDialog.accept();
+              refreshChatsList();
+            } else {
+              std::string errorMsg =
+                  status.ok() ? response.message() : status.error_message();
+              qCritical() << "Ошибка: " << errorMsg.c_str();
+              QMessageBox::critical(this, "Ошибка",
+                                    QString("Не удалось покинуть к чату: %1")
+                                        .arg(QString::fromStdString(errorMsg)));
+              settingsDialog.reject();
+            }
+          } catch (const std::exception& e) {
+            QMessageBox::critical(
+                &settingsDialog, "Ошибка",
+                QString("Ошибка при выходе из чата: %1").arg(e.what()));
+          }
+        }
+      });
+
+  QObject::connect(
+      closeButton, &QPushButton::clicked,
+      [this, currentChatId, &settingsDialog]() {
+        int result =
+            QMessageBox::question(&settingsDialog, "Закрыть чат",
+                                  "Вы уверены, что хотите закрыть этот чат? "
+                                  "Это действие необратимо.",
+                                  QMessageBox::Yes | QMessageBox::No);
+
+        if (result == QMessageBox::Yes) {
+          try {
+            ::chat::CloseChatRequest req;
+            req.set_chat_id(currentChatId.toStdString());
+
+            grpc::ClientContext ctx;
+            QString token = SessionManager::instance().sessionToken();
+            if (!token.isEmpty()) {
+              ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+            } else {
+              QMessageBox::critical(this, "Ошибка",
+                                    "Необходимо войти в систему");
+              return;
+            }
+            chat::CommonResponse response;
+            grpc::Status status = chatStub_->CloseChat(&ctx, req, &response);
+
+            if (status.ok() && response.success()) {
+              auto stat = m_dbManager->removeChat(currentChatId);
+              if (!stat) {
+                std::string errorMsg = "БД";
+                qCritical() << "Ошибка: " << errorMsg.c_str();
+                QMessageBox::critical(
+                    this, "Ошибка",
+                    QString("Не удалось покинуть к чату: %1")
+                        .arg(QString::fromStdString(errorMsg)));
+                settingsDialog.reject();
+              }
+              qDebug() << "Чел вышел успешно в чат";
+              QMessageBox::information(&settingsDialog, "Успех", "Чат закрыт");
+              settingsDialog.accept();
+              refreshChatsList();
+            } else {
+              std::string errorMsg =
+                  status.ok() ? response.message() : status.error_message();
+              qCritical() << "Ошибка: " << errorMsg.c_str();
+              QMessageBox::critical(this, "Ошибка",
+                                    QString("Не удалось покинуть к чату: %1")
+                                        .arg(QString::fromStdString(errorMsg)));
+              settingsDialog.reject();
+            }
+          } catch (const std::exception& e) {
+            QMessageBox::critical(
+                &settingsDialog, "Ошибка",
+                QString("Ошибка при закрытии чата: %1").arg(e.what()));
+          }
+        }
+      });
+
+  auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok, &settingsDialog);
+  mainLayout->addWidget(buttonBox);
+
+  QObject::connect(buttonBox, &QDialogButtonBox::accepted, &settingsDialog,
+                   &QDialog::accept);
+  QObject::connect(buttonBox, &QDialogButtonBox::rejected, &settingsDialog,
+                   &QDialog::reject);
+
+  settingsDialog.exec();
+}
+
+auto MainWindow::createContext(const Chat& chatInfo, const BI& symmetricKey)
+    -> meow::cypher::symm::SymmetricCypherContext {
+  std::shared_ptr<meow::cypher::symm::ISymmetricCypher> algo;
+  if (chatInfo.algorithm == "RC6") {
+    algo = std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+        std::make_shared<meow::cypher::symm::RC6::RC6>());
+  } else if (chatInfo.algorithm == "LOKI97") {
+    algo = std::static_pointer_cast<meow::cypher::symm::ISymmetricCypher>(
+        std::make_shared<meow::cypher::symm::LOKI97::LOKI97>());
+  } else {
+    qCritical() << "нет такого алгоритма " << chatInfo.algorithm;
+    throw std::runtime_error("нет такого алгоритма " +
+                             chatInfo.algorithm.toStdString());
+  }
+
+  meow::cypher::symm::encryptionMode mode;
+  qDebug() << "encryptionMode - " << chatInfo.mode;
+  if (chatInfo.mode == "ECB") {
+    mode = meow::cypher::symm::encryptionMode::ECB;
+  } else if (chatInfo.mode == "CBC") {
+    mode = meow::cypher::symm::encryptionMode::CBC;
+  } else if (chatInfo.mode == "PCBC") {
+    mode = meow::cypher::symm::encryptionMode::PCBC;
+  } else if (chatInfo.mode == "CFB") {
+    mode = meow::cypher::symm::encryptionMode::CFB;
+  } else if (chatInfo.mode == "OFB") {
+    mode = meow::cypher::symm::encryptionMode::OFB;
+  } else if (chatInfo.mode == "CTR") {
+    mode = meow::cypher::symm::encryptionMode::CTR;
+  } else if (chatInfo.mode == "RANDOM_DELTA") {
+    mode = meow::cypher::symm::encryptionMode::RandomDelta;
+  } else {
+    mode = meow::cypher::symm::encryptionMode::CBC;
+  }
+
+  meow::cypher::symm::paddingMode pad;
+  qDebug() << "paddingMode - " << chatInfo.padding;
+  if (chatInfo.padding == "ZEROS") {
+    pad = meow::cypher::symm::paddingMode::Zeros;
+  } else if (chatInfo.padding == "ANSIX923") {
+    pad = meow::cypher::symm::paddingMode::AnsiX923;
+  } else if (chatInfo.padding == "PKCS7") {
+    pad = meow::cypher::symm::paddingMode::PKCS7;
+  } else if (chatInfo.padding == "ISO10126") {
+    pad = meow::cypher::symm::paddingMode::ISO10126;
+  } else {
+    pad = meow::cypher::symm::paddingMode::PKCS7;
+  }
+
+  const auto IV_qbyte = chatInfo.iv.toUtf8();
+  std::vector<std::byte> IV(
+      reinterpret_cast<const std::byte*>(IV_qbyte.constData()),
+      reinterpret_cast<const std::byte*>(IV_qbyte.constData() +
+                                         IV_qbyte.size()));
+
+  // из числа будет делать ключ нужной мне длинны
+  auto keyDerivation = [&]() -> std::vector<std::byte> {
+    std::vector<std::byte> key(32, std::byte{0});
+
+    size_t size = (mpz_sizeinbase(symmetricKey.backend().data(), 2) + 7) / 8;
+
+    if (size == 0) {
+      qCritical() << "Ошибка: ключ нулевой";
+      return key;
+    }
+
+    std::vector<unsigned char> buf(size);
+    mpz_export(buf.data(), &size, 1, 1, 0, 0, symmetricKey.backend().data());
+
+    size_t copySize = std::min(size, size_t(32));
+    size_t offset = 32 - copySize;
+
+    std::memcpy(reinterpret_cast<unsigned char*>(key.data()) + offset,
+                buf.data(), copySize);
+
+    QString hex;
+    for (auto b : key) {
+      hex += QString("%1").arg(static_cast<int>(b), 2, 16, QChar('0'));
+    }
+    qDebug() << "Ключ (hex):" << hex;
+
+    return key;
+  };
+
+  const auto key = keyDerivation();
+
+  try {
+    meow::cypher::symm::SymmetricCypherContext ctx =
+        meow::cypher::symm::SymmetricCypherContext(key, mode, pad, IV);
+    ctx.setAlgo(algo);
+
+    return ctx;
+  } catch (const std::exception& e) {
+    qCritical() << "создание контекста ОШИБКА: " << e.what();
+    throw;
+  }
+}
+
+auto MainWindow::encryptMessage(const QString& chatId,
+                                const QByteArray& plaintext) -> QByteArray {
+  absl::MutexLock lock(&chatKeysMutex);
+  auto it = chatContexts.find(chatId);
+  if (it != chatContexts.end()) {
+    std::vector<std::byte> plaintextVec(
+        reinterpret_cast<const std::byte*>(plaintext.constData()),
+        reinterpret_cast<const std::byte*>(plaintext.constData() +
+                                           plaintext.size()));
+    std::vector<std::byte> encrypted;
+    try {
+      it->second.encrypt(encrypted, plaintextVec);
+      return QByteArray(reinterpret_cast<const char*>(encrypted.data()),
+                        encrypted.size());
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка шифрования:" << e.what();
+    }
+  } else {
+    qCritical() << "Контекст шифрования не найден для чата:" << chatId;
+  }
+  return plaintext;
+}
+
+auto MainWindow::decryptMessage(const QString& chatId,
+                                const QByteArray& ciphertext) -> QByteArray {
+  absl::MutexLock lock(&chatKeysMutex);
+  auto it = chatContexts.find(chatId);
+  if (it != chatContexts.end()) {
+    std::vector<std::byte> ciphertextVec(
+        reinterpret_cast<const std::byte*>(ciphertext.constData()),
+        reinterpret_cast<const std::byte*>(ciphertext.constData() +
+                                           ciphertext.size()));
+    std::vector<std::byte> decrypted;
+    try {
+      it->second.decrypt(decrypted, ciphertextVec);
+      return QByteArray(reinterpret_cast<const char*>(decrypted.data()),
+                        decrypted.size());
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка расшифровки:" << e.what();
+    }
+  } else {
+    qCritical() << "Контекст расшифровки не найден для чата:" << chatId;
+  }
+  return ciphertext;
+}
+
+void MainWindow::computeSharedSecretAndInitializeContext(
+    const QString& chatId) {
+  absl::MutexLock lock(&chatKeysMutex);
+
+  auto it = chatKeys.find(chatId);
+  if (it == chatKeys.end()) {
+    qCritical() << "Ошибка: ключи не найдены для чата:" << chatId;
+    return;
+  }
+
+  ChatKeys& keys = it->second;
+
+  if (keys.myPrivateKey.str().empty()) {
+    qCritical() << "Ошибка: мой приватный ключ пуст для" << chatId;
+    return;
+  }
+
+  if (keys.peerPublicKey.str().empty()) {
+    qCritical() << "Ошибка: публичный ключ собеседника пуст для" << chatId;
+    return;
+  }
+
+  if (keys.isInitialized) {
+    qDebug() << "Контекст уже инициализирован для" << chatId;
+    return;
+  }
+
+  try {
+    BI sharedSecret = meow::math::modPow(keys.peerPublicKey, keys.myPrivateKey,
+                                         BI(DH_STANDART_P_str_hex));
+
+    keys.symmetricKey = sharedSecret;
+    keys.isInitialized = true;
+
+    qDebug() << "Общий секрет вычислен для" << chatId;
+
+    Chat chatInfo =
+        m_dbManager->getChat(chatId, SessionManager::instance().username());
+    if (chatInfo.chatId.isEmpty()) {
+      qCritical() << "Ошибка: чат не найден в БД:" << chatId;
+      return;
+    }
+
+    try {
+      auto context = createContext(chatInfo, sharedSecret);
+      {
+        absl::MutexLock ctx_lock(&chatContextMutex_);
+        chatContexts.emplace(chatId, std::move(context));
+      }
+      qDebug() << "Контекст инициализирован для чата:" << chatId
+               << "Secret key (hex):" << sharedSecret.str().c_str();
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка при создании контекста шифрования:" << e.what();
+      keys.isInitialized = false;
+    }
+
+  } catch (const std::exception& e) {
+    qCritical() << "Ошибка при вычислении DH секрета:" << e.what();
+  }
+}
+
+void MainWindow::exchangeDHParameters(const QString& chatId) {
+  qDebug() << "Начало обмена DH параметрами для чата:" << chatId;
+
+  {
+    absl::MutexLock lock(&activeDHMutex_);
+    if (activeDHExchanges_[chatId.toStdString()]) {
+      qDebug() << "DH обмен уже в процессе для" << chatId;
+      return;
+    }
+    activeDHExchanges_[chatId.toStdString()] = true;
+  }
+
+  QtConcurrent::run(chatThreadPool, [this, chatId]() -> void {
+    if (m_isDestroying) {
+      qDebug() << "MainWindow разрушается, пропускаем DH обмен для:" << chatId;
+      {
+        absl::MutexLock lock(&activeDHMutex_);
+        activeDHExchanges_[chatId.toStdString()] = false;
+      }
+      return;
+    }
+
+    BI prime, generator;
+    BI myPrivateKey, myPublicKey;
+    QString token;
+
+    {
+      absl::MutexLock lock(&chatKeysMutex);
+      auto it = chatKeys.find(chatId);
+
+      if (it == chatKeys.end()) {
+        qCritical() << "Ошибка: ключи для чата не инициализированы:" << chatId;
+        const auto [prime_val, generator_val] =
+            get_dh_params(DH_STANDART_P_str_hex, DH_STANDART_G_str_hex);
+        const auto dh = get_dh();
+
+        ChatKeys key;
+        key.prime = prime_val;
+        key.generator = generator_val;
+        key.myPrivateKey = dh.secret;
+        key.myPublicKey = dh.getPublicKey();
+        key.peerPublicKey = BI(0);
+        key.isInitialized = false;
+
+        it = chatKeys.insert({chatId, std::move(key)}).first;
+      }
+
+      prime = it->second.prime;
+      generator = it->second.generator;
+      myPrivateKey = it->second.myPrivateKey;
+      myPublicKey = it->second.myPublicKey;
+
+      if (myPrivateKey.str().empty() || myPublicKey.str().empty()) {
+        const auto dh = get_dh();
+        it->second.myPrivateKey = dh.secret;
+        it->second.myPublicKey = dh.getPublicKey();
+        myPrivateKey = dh.secret;
+        myPublicKey = dh.getPublicKey();
+      }
+    }
+
+    QMetaObject::invokeMethod(
+        this, [&token]() { token = SessionManager::instance().sessionToken(); },
+        Qt::BlockingQueuedConnection);
+
+    if (token.isEmpty()) {
+      QMetaObject::invokeMethod(this, [this]() {
+        QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
+      });
+      {
+        absl::MutexLock lock(&activeDHMutex_);
+        activeDHExchanges_[chatId.toStdString()] = false;
+      }
+      return;
+    }
+
+    try {
+      chat::DHParametersExchange request;
+      request.set_chat_id(chatId.toStdString());
+
+      auto* dhParametersProto = new chat::DHParameters();
+      dhParametersProto->set_prime(prime.str());
+      dhParametersProto->set_generator(generator.str());
+      dhParametersProto->set_public_key(myPublicKey.str());
+      request.set_allocated_parameters(dhParametersProto);
+
+      auto context = std::make_shared<grpc::ClientContext>();
+      context->AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+
+      std::chrono::system_clock::time_point deadline =
+          std::chrono::system_clock::now() + std::chrono::seconds(30);
+      context->set_deadline(deadline);
+
+      auto stream = chatStub_->ExchangeDHParametersStream(context.get());
+
+      if (!stream->Write(request)) {
+        qCritical() << "Ошибка отправки DH параметров для чата:" << chatId;
+        {
+          absl::MutexLock lock(&activeDHMutex_);
+          activeDHExchanges_[chatId.toStdString()] = false;
+        }
+        return;
+      }
+
+      qDebug() << "DH параметры отправлены, ждем ответа для чата:" << chatId;
+
+      chat::DHParametersResponse response;
+      while (stream->Read(&response)) {
+        if (response.has_peer_params()) {
+          QString peerPubKey =
+              QString::fromStdString(response.peer_params().public_key());
+          qDebug() << "Получен публичный ключ собеседника для" << chatId;
+
+          {
+            absl::MutexLock lock(&chatKeysMutex);
+            auto it = chatKeys.find(chatId);
+            if (it != chatKeys.end()) {
+              it->second.peerPublicKey = BI(peerPubKey.toStdString());
+              if (!it->second.myPrivateKey.str().empty()) {
+                QMetaObject::invokeMethod(this, [this, chatId]() {
+                  computeSharedSecretAndInitializeContext(chatId);
+                });
+              }
+            }
+          }
+        } else if (response.exchange_complete()) {
+          qDebug() << "Обмен DH завершен сервером для чата:" << chatId;
+          break;
+        }
+      }
+
+      stream->Finish();
+
+      {
+        absl::MutexLock lock(&activeDHMutex_);
+        activeDHExchanges_[chatId.toStdString()] = false;
+      }
+
+    } catch (const std::exception& e) {
+      qCritical() << "Исключение при обмене DH параметрами:" << e.what();
+      {
+        absl::MutexLock lock(&activeDHMutex_);
+        activeDHExchanges_[chatId.toStdString()] = false;
+      }
+    }
+  });
+}
+
+void MainWindow::onDownloadProgress(const QString& objectName,
+                                    qint64 bytesReceived, qint64 bytesTotal) {
+  if (bytesTotal > 0) {
+    int percent = (bytesReceived * 100) / bytesTotal;
+    if (m_chatManager) {
+      m_chatManager->updateFileProgress(objectName, percent);
+    }
+  }
+}
+
+void MainWindow::onDownloadFailed(const QString& objectName,
+                                  const QString& errorMessage) {
+  // if (objectName == m_currentDownload) {
+  //   m_currentDownload.clear();
+  // }
+
+  // m_progressBar->setValue(0);
+  // m_statusLabel->setText(QString("Ошибка загрузки: %1").arg(objectName));
+
+  qCritical() << QString("Не удалось загрузить '%1':\n%2")
+                     .arg(objectName)
+                     .arg(errorMessage);
+
+  QMessageBox::critical(this, "Ошибка загрузки",
+                        QString("Не удалось загрузить '%1':\n%2")
+                            .arg(objectName)
+                            .arg(errorMessage));
+
+  // m_logWidget->appendPlainText(
+  //     QString("[ОШИБКА] %1: %2").arg(objectName).arg(errorMessage));
+  // m_logWidget->appendPlainText("");
+}
+
+QString MainWindow::formatBytes(qint64 bytes) {
+  const char* units[] = {"Б", "КБ", "МБ", "ГБ", "ТБ"};
+  int unitIndex = 0;
+  double size = bytes;
+
+  while (size >= 1024 && unitIndex < 4) {
+    size /= 1024;
+    unitIndex++;
+  }
+
+  return QString("%1 %2").arg(size, 0, 'f', 1).arg(units[unitIndex]);
+}
+
+void MainWindow::downloadFile(const QString& fileId) {
+  if (fileId.isEmpty()) {
+    qWarning() << "Попытка скачать файл с пустым ID.";
+    return;
+  }
+
+  Message fileMessage = m_dbManager->getFileMessageByFileId(fileId);
+  if (fileMessage.messageId.isEmpty()) {
+    qWarning() << "Сообщение о файле не найдено в БД для fileId:" << fileId;
+    QMessageBox::critical(this, "Ошибка", "Информация о файле не найдена.");
+    return;
+  }
+
+  if (!fileMessage.content.isEmpty()) {
+    QDesktopServices::openUrl(
+        QUrl::fromLocalFile(QFileInfo(fileMessage.content).path()));
+    return;
+  }
+
+  m_currentDownload = fileId;
+  QString tempEncryptedFilePath = QDir::temp().filePath(fileId + "_encrypted");
+
+  qDebug() << "Начинаем скачивание файла:" << fileId << "в"
+           << tempEncryptedFilePath;
+  m_fileManager.downloadFile("bucket-name-meow-chat", fileId,
+                             tempEncryptedFilePath);
+}
+
+void MainWindow::onDownloadFinished(const QString& objectName,
+                                    const QString& filePath) {
+  if (m_chatManager) {
+    m_chatManager->updateFileProgress(objectName, -1);
+  }
+
+  qDebug() << "Зашифрованный файл скачан в:" << filePath;
+
+  Message fileMessage = m_dbManager->getFileMessageByFileId(objectName);
+  if (fileMessage.messageId.isEmpty()) {
+    qCritical() << "Сообщение о файле не найдено в БД для objectName:"
+                << objectName;
+    QFile::remove(filePath);
+    return;
+  }
+
+  QString defaultName = fileMessage.originalFilename.isEmpty()
+                            ? fileMessage.fileName
+                            : fileMessage.originalFilename;
+  QString savePath =
+      QFileDialog::getSaveFileName(this, "Сохранить файл", defaultName);
+  if (savePath.isEmpty()) {
+    qDebug() << "Сохранение файла отменено пользователем.";
+    QFile::remove(filePath);
+    return;
+  }
+
+  QtConcurrent::run(chatThreadPool, [this, fileMessage, filePath, savePath]() {
+    qDebug() << "Фоновое дешифрование началось";
+    {
+      absl::MutexLock lock(&chatContextMutex_);
+      auto it = chatContexts.find(fileMessage.chatId);
+      if (it != chatContexts.end()) {
+        try {
+          it->second.decrypt(savePath.toStdString(), filePath.toStdString());
+
+          QMetaObject::invokeMethod(this, [this, fileMessage, savePath]() {
+            if (m_dbManager->updateMessageFilePath(fileMessage.messageId,
+                                                   savePath)) {
+              qDebug() << "Путь к расшифрованному файлу обновлен в БД";
+              if (m_chatManager) {
+                m_chatManager->loadChatHistory(fileMessage.chatId);
+              }
+            }
+            QDesktopServices::openUrl(
+                QUrl::fromLocalFile(QFileInfo(savePath).path()));
+          });
+
+          QFile::remove(filePath);
+        } catch (const std::exception& e) {
+          qCritical() << "Ошибка дешифрования файла:" << e.what();
+          QFile::remove(filePath);
+        }
+      } else {
+        qCritical() << "Контекст шифрования не найден для чата:"
+                    << fileMessage.chatId;
+        QFile::remove(filePath);
+      }
+    }
+  });
 }

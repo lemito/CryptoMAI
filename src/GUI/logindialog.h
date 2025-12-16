@@ -10,6 +10,7 @@
 #include "proto/chat.grpc.pb.h"
 #include "proto/chat.pb.h"
 #include "sessionmanager.h"
+#include "utils.hpp"
 
 namespace Ui {
 class LoginDialog;

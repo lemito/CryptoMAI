@@ -6,7 +6,7 @@
 #include <QUuid>
 #include <memory>
 
-class SessionManager : public QObject {
+class SessionManager final : public QObject {
   Q_OBJECT
  public:
   SessionManager(const SessionManager&) = delete;
@@ -31,7 +31,6 @@ class SessionManager : public QObject {
   SessionManager();
   ~SessionManager() = default;
 
-  // QSettings* m_settings;
   std::unique_ptr<QSettings> m_settings;
   QString m_instanceId;
 };

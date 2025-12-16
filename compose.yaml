@@ -1,28 +1,6 @@
 version: '3.8'
 
 services:
-  server:
-    build:
-      context: .
-      dockerfile: ./server/Dockerfile
-      args:
-        - BUILDKIT_INLINE_CACHE=1
-    ports:
-      - "50051:50051"
-    environment:
-      - GRPC_PORT=50051
-      - DATABASE_URL=postgres://meow:meow@db:5432/cryptomai_db?sslmode=disable
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - cryptomai-network
-    image: server:latest
-
   db:
     image: postgres:16
     container_name: postgres
@@ -43,6 +21,25 @@ services:
     networks:
       - cryptomai-network
 
+  minio:
+    image: minio/minio:latest
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-storage:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - cryptomai-network
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -56,17 +53,43 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
       - rabbitmq_logs:/var/log/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 30s
-      timeout: 30s
+      timeout: 60s
       retries: 3
     networks:
       - cryptomai-network
+
+  server:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - DATABASE_URL=postgres://meow:meow@db:5432/cryptomai_db?sslmode=disable
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks:
+      - cryptomai-network
+    image: server:latest
 
 volumes:
   postgres_data: 
   rabbitmq_data:
   rabbitmq_logs:
+  minio-storage:
 
 networks:
   cryptomai-network:
