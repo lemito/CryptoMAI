@@ -1,14 +1,22 @@
 package main
 
 import (
-	"go.uber.org/zap"
+	"context"
+	"errors"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"go.uber.org/zap"
 
 	"google.golang.org/grpc"
 
 	pb "github.com/lemito/CryptoMAI/proto"
+
+	_ "go.uber.org/automaxprocs"
 )
-import _ "go.uber.org/automaxprocs"
 
 func main() {
 	logger, _ := zap.NewDevelopment()
@@ -16,6 +24,9 @@ func main() {
 	var sugar *zap.SugaredLogger = logger.Sugar()
 
 	sugar.Info("Starting...")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	dbConfig := DatabaseConfig{
 		Host:     "db",
@@ -47,8 +58,8 @@ func main() {
 	}
 	defer msgService.Close()
 
-	go authService.startSessionCleanup()
-	go chatService.startChatCleanup()
+	go authService.startSessionCleanup(ctx)
+	go chatService.startChatCleanup(ctx)
 
 	server := grpc.NewServer(
 		grpc.UnaryInterceptor(AuthMiddleware(sugar, authService)),
@@ -65,8 +76,56 @@ func main() {
 		sugar.Errorf("Failed to listen: %v", err)
 	}
 
-	sugar.Infof("port 50051")
-	if err := server.Serve(lis); err != nil {
-		sugar.Errorf("Failed to serve: %v", err)
+	sugar.Infof("Server listening on port 50051")
+
+	serverErr := make(chan error, 1)
+
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			if !errors.Is(err, grpc.ErrServerStopped) {
+				serverErr <- err
+			} else {
+				serverErr <- nil
+			}
+		}
+	}()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
+	sugar.Info("Server is running. Press Ctrl+C to stop.")
+
+	select {
+	case sig := <-sigChan:
+		sugar.Infof("Received signal: %v. Starting graceful shutdown...", sig)
+
+		cancel()
+
+		stopped := make(chan struct{})
+		go func() {
+			server.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+			sugar.Info("Server stopped gracefully")
+		case <-time.After(15 * time.Second):
+			sugar.Warn("Graceful shutdown timed out, forcing stop")
+			server.Stop()
+		}
+
+	case err := <-serverErr:
+		if err != nil {
+			sugar.Errorf("Server error: %v", err)
+			cancel()
+			time.Sleep(2 * time.Second)
+		}
 	}
+
+	sugar.Info("Shutdown completed")
+
 }

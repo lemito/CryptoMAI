@@ -25,16 +25,20 @@ type ChatService struct {
 	waiting map[string]chan struct{}
 	broker  *DHExchangeBroker
 
-	logger       *zap.SugaredLogger
+	logger *zap.SugaredLogger
+
+	cancelFunc context.CancelFunc
+	wg         sync.WaitGroup
 }
 
 type pendingDH struct {
-	firstReq     *pb.DHParametersExchange                   
-	secondReq    *pb.DHParametersExchange                        
+	firstReq     *pb.DHParametersExchange
+	secondReq    *pb.DHParametersExchange
 	firstStream  pb.ChatService_ExchangeDHParametersStreamServer
-	secondStream pb.ChatService_ExchangeDHParametersStreamServer 
+	secondStream pb.ChatService_ExchangeDHParametersStreamServer
 	mu           sync.RWMutex
 	isCompleted  bool
+	createdTime time.Time
 }
 
 type DHExchangeBroker struct {
@@ -55,12 +59,13 @@ func NewDHExchangeBroker(timeout time.Duration, logger *zap.SugaredLogger) *DHEx
 func NewChatService(log *zap.SugaredLogger, db *sql.DB) *ChatService {
 	// logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	broker := NewDHExchangeBroker(10*time.Minute, log)
+	_, cancel := context.WithCancel(context.Background())
 
 	return &ChatService{
 		db:      db,
 		waiting: make(map[string]chan struct{}),
 		logger:  log,
-		broker:  broker,
+		broker:  broker, cancelFunc: cancel,
 	}
 }
 
@@ -362,18 +367,37 @@ func (s *ChatService) CloseChat(ctx context.Context, req *pb.CloseChatRequest) (
 	}, nil
 }
 
-func (s *ChatService) startChatCleanup() {
+func (s *ChatService) startChatCleanup(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Hour)
-	for range ticker.C {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		result, _ := s.db.ExecContext(ctx,
-			"DELETE FROM chats WHERE is_active = false")
-		cancel()
-		cnt, err := result.RowsAffected()
-		if err != nil {
-			s.logger.Infof("Ошибка очистки чатов: %v", err)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			result, err := s.db.ExecContext(cleanupCtx,
+				"DELETE FROM chats WHERE is_active = false")
+			cancel()
+
+			if err != nil {
+				s.logger.Errorf("Ошибка очистки чатов: %v", err)
+				continue
+			}
+
+			cnt, err := result.RowsAffected()
+			if err != nil {
+				s.logger.Errorf("Ошибка получения количества удаленных чатов: %v", err)
+				continue
+			}
+
+			if cnt > 0 {
+				s.logger.Infof("Очищено %d неактивных чатов", cnt)
+			}
+
+		case <-ctx.Done():
+			s.logger.Info("Очистка чатов остановлена")
+			return
 		}
-		s.logger.Infof("Очищено %d неактивных чатов", cnt)
 	}
 }
 
@@ -974,4 +998,10 @@ func (s *ChatService) getChatInfo(ctx context.Context, chatID string) (*Chat, er
 	}
 
 	return &chat, nil
+}
+
+func (cs *ChatService) Stop() {
+	cs.cancelFunc()
+	cs.wg.Wait()
+	cs.logger.Info("ChatService полностью остановлен")
 }

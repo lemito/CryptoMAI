@@ -17,13 +17,13 @@ import (
 
 type authService struct {
 	pb.UnimplementedAuthServiceServer
-	db *sql.DB
+	db     *sql.DB
 	logger *zap.SugaredLogger
 }
 
 func NewAuthService(log *zap.SugaredLogger, db *sql.DB) *authService {
 	return &authService{
-		db: db,
+		db:     db,
 		logger: log,
 	}
 }
@@ -86,18 +86,37 @@ func (s *authService) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	}, nil
 }
 
-func (s *authService) startSessionCleanup() {
+func (s *authService) startSessionCleanup(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Hour)
-	for range ticker.C {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		result, _ := s.db.ExecContext(ctx,
-			"DELETE FROM user_sessions WHERE expires_at < NOW() OR is_active = false")
-		cancel()
-		cnt, err := result.RowsAffected()
-		if err != nil {
-			s.logger.Infof("Error cleaning sessions: %v", err)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			result, err := s.db.ExecContext(cleanupCtx,
+				"DELETE FROM user_sessions WHERE expires_at < NOW() OR is_active = false")
+			cancel()
+
+			if err != nil {
+				s.logger.Errorf("Error cleaning sessions: %v", err)
+				continue
+			}
+
+			cnt, err := result.RowsAffected()
+			if err != nil {
+				s.logger.Errorf("Error getting rows affected: %v", err)
+				continue
+			}
+
+			if cnt > 0 {
+				s.logger.Infof("Cleaned %d expired sessions", cnt)
+			}
+
+		case <-ctx.Done():
+			s.logger.Info("Session cleanup stopped")
+			return
 		}
-		s.logger.Infof("Cleaned %d expired sessions", cnt)
 	}
 }
 
