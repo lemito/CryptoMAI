@@ -149,6 +149,20 @@ func (s *authService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Auth
 		}, nil
 	}
 
+	var existingSessionID string
+	err = s.db.QueryRowContext(ctx,
+		"SELECT id FROM user_sessions WHERE user_id = $1 AND is_active = true AND expires_at > NOW()",
+		user.ID).Scan(&existingSessionID)
+
+	if err == nil {
+		return &pb.AuthResponse{
+			Success: false,
+			Message: "Пользователь уже авторизован. Завершите текущую сессию перед входом или дождитесь её окончания",
+		}, nil
+	} else if err != sql.ErrNoRows {
+		return nil, status.Errorf(codes.Internal, "Ошибка проверки сессии: %v", err)
+	}
+
 	token, err := generateSecureToken()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Ошибка генерации токена: %v", err)

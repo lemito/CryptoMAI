@@ -764,7 +764,7 @@ func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username st
 		s.logger.Debug("Очистка ожидающего обмена", "chat_id", chatId)
 	}()
 
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
