@@ -72,12 +72,12 @@ services:
       - "50051:50051"
     environment:
       - GRPC_PORT=50051
-        - DB_HOST=db
-        - DB_PORT=5432
-        - DB_USER=meow
-        - DB_PASSWORD=meow
-        - DB_NAME=cryptomai_db
-        - DB_SSLMODE=disable
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=meow
+      - DB_PASSWORD=meow
+      - DB_NAME=cryptomai_db
+      - DB_SSLMODE=disable
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       db:
