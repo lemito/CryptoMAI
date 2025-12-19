@@ -740,6 +740,7 @@ func (s *ChatService) ExchangeDHParametersStream(stream pb.ChatService_ExchangeD
 			firstReq:    req,
 			firstStream: stream,
 			isCompleted: false,
+			createdTime: time.Now(),
 		}
 		s.broker.pending[chatId] = peerExchange
 		s.broker.mu.Unlock()
@@ -763,7 +764,7 @@ func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username st
 		s.logger.Debug("Очистка ожидающего обмена", "chat_id", chatId)
 	}()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	for {
