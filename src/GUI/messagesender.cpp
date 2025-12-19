@@ -56,25 +56,50 @@ void MessageSender::sendMessage(const QString& chatId, const QByteArray& data,
 void MessageSender::sendFileInfo(const QString& chatId, const QString& fileId,
                                  const QString& originalFileName,
                                  qint64 originalFileSize,
-                                 const QString& mimeType, bool isFile) {
-  qDebug() << "[SENDER] sendFileInfo вызван chatId:" << chatId
-           << "fileId:" << fileId << "fileName:" << originalFileName;
+                                 const QString& mimeType, bool isFile,
+                                 const QString& preview) {
+  if (!isFile) {
+    qCritical() << "isFile == false (подозрительное)";
+  }
+  qDebug() << "sendFileInfo вызван chatId:" << chatId << "fileId:" << fileId
+           << "fileName:" << originalFileName;
   QString messageId = QUuid::createUuid().toString();
   QString username = SessionManager::instance().username();
-  qDebug() << "[SENDER] messageId:" << messageId << "username:" << username;
+  qDebug() << "messageId:" << messageId << "username:" << username;
+
+  auto setMimeType = [](const QString& originalFileName) -> QString {
+    if (originalFileName.endsWith(".jpg") ||
+        originalFileName.endsWith(".jpeg") ||
+        originalFileName.endsWith(".png") ||
+        originalFileName.endsWith(".gif") ||
+        originalFileName.endsWith(".webp")) {
+      return "image";
+    }
+    if (originalFileName.endsWith(".mp4") ||
+        originalFileName.endsWith(".webm")) {
+      return "video";
+    }
+    if (originalFileName.endsWith(".mp3") ||
+        originalFileName.endsWith(".wav") ||
+        originalFileName.endsWith(".ogg")) {
+      return "audio";
+    }
+    return "document";
+  };
 
   if (dbManager_ != nullptr) {
-    qDebug() << "[SENDER] Сохранение в БД";
-    if (!dbManager_->addMessage(chatId, messageId, username, "", false, true,
-                                MessageStatus::SENT, isFile, fileId, mimeType,
+    qDebug() << "Сохранение в БД";
+    if (!dbManager_->addMessage(chatId, messageId, username, preview.toUtf8(),
+                                false, true, MessageStatus::SENT, isFile,
+                                fileId, setMimeType(originalFileName),
                                 originalFileSize, username, originalFileName)) {
-      qCritical() << "[SENDER] не удалось сохранить информацию о файле в БД";
+      qCritical() << "не удалось сохранить информацию о файле в БД";
       return;
     }
-    qDebug() << "[SENDER] Сохранено в БД";
+    qDebug() << "Сохранено в БД";
   }
 
-  qDebug() << "[SENDER] Создание метаданных";
+  qDebug() << "Создание метаданных";
   chat::EncryptedChunk metadataChunk;
   auto metadata = createMetadata(chatId, messageId, fileId, originalFileName,
                                  originalFileSize, mimeType, isFile, 1, 0);
@@ -84,13 +109,13 @@ void MessageSender::sendFileInfo(const QString& chatId, const QString& fileId,
   std::vector<chat::EncryptedChunk> chunks_to_send;
   chunks_to_send.push_back(metadataChunk);
 
-  qDebug() << "[SENDER] Добавление в очередь";
+  qDebug() << "Добавление в очередь";
   {
     absl::MutexLock lock(&queue_mutex_);
     chunks_queue_.push(std::move(chunks_to_send));
   }
   condition_.Signal();
-  qDebug() << "[SENDER] Метаданные файла отправлены:" << originalFileName;
+  qDebug() << "Метаданные файла отправлены:" << originalFileName;
 }
 
 void MessageSender::sendFile(const QString& chatId, const QString& filePath) {
@@ -210,7 +235,6 @@ auto MessageSender::prepareChunks(const QString& chatId,
     }
   }
 
-  constexpr size_t CHUNK_SIZE = 64 * 1024;
   int totalChunks = (encryptedData.size() + CHUNK_SIZE - 1) / CHUNK_SIZE;
 
   for (int i = 0; i < totalChunks; ++i) {

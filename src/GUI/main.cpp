@@ -3,6 +3,7 @@
 #include <QTimer>
 #include <QTranslator>
 #include <memory>
+#include <QDebug>
 
 #include "databasemanager.h"
 #include "logindialog.h"

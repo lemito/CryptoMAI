@@ -206,8 +206,11 @@ void MessageStreamClient::saveMessageToDatabase(
   QString sender = chat.name;
 
   QByteArray decryptedData;
+  QString fileId;
+
   if (isFile) {
-    decryptedData = QByteArray();
+    fileId = QString::fromStdString(metadata.file_id());
+    decryptedData = fileId.toUtf8();
   } else if (decryptCallback_) {
     decryptedData = decryptCallback_(chatId, assembledData);
   } else {
@@ -216,7 +219,6 @@ void MessageStreamClient::saveMessageToDatabase(
 
   try {
     if (isFile) {
-      QString fileId = QString::fromStdString(metadata.file_id());
       QString originalFilename =
           QString::fromStdString(metadata.original_filename());
 
@@ -248,7 +250,7 @@ void MessageStreamClient::saveMessageToDatabase(
 
       if (success) {
         qDebug() << "MessageStream: Текст сохранен в БД:" << messageId;
-        qDebug() << "  Content (first 100 chars):" << messageText.left(100);
+        qDebug() << "  Content: " << messageText.left(100);
         QMetaObject::invokeMethod(
             this,
             [this, messageId, chatId]() -> void {

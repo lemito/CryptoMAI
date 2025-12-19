@@ -92,8 +92,14 @@ void ChatStreamClient::runStream() {
       }
 
       if (isParticipant) {
-        const QString partiName =
-            QString::fromStdString(chatInfo.participants(0));
+        QString partiName = QString::fromStdString(chatInfo.participants(0));
+        if (partiName == currentUser) {
+          if (chatInfo.participants().size() == 2)
+          {partiName = QString::fromStdString(chatInfo.participants(1));}
+          else {
+            qDebug() << "chatInfo.participants странный";
+          }
+        }
         const QString chatId = QString::fromStdString(chatInfo.chat_id());
         const ::chat::DHParameters& peerParams = chatInfo.peer_params();
         const ::chat::EncryptionParameters& algoParams =

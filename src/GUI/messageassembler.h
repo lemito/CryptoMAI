@@ -8,12 +8,12 @@
 #include <QSet>
 #include <QTimer>
 #include <memory>
-#include "utils.hpp"
 
 #include "absl/container/flat_hash_map.h"
 #include "proto/chat.pb.h"
+#include "utils.hpp"
 
-class MessageAssembler : public QObject {
+class MessageAssembler final : public QObject {
   Q_OBJECT
 
  public:

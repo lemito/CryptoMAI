@@ -63,8 +63,7 @@ MainWindow::MainWindow(QWidget* parent)
   try {
     using namespace grpc;
 
-    auto channel =
-        CreateChannel("localhost:50051", InsecureChannelCredentials());
+    auto channel = CreateChannel(GRPC_URL, InsecureChannelCredentials());
     authStub_ = chat::AuthService::NewStub(channel);
     chatStub_ = chat::ChatService::NewStub(channel);
     messagingStub_ = chat::MessagingService::NewStub(channel);
@@ -90,8 +89,9 @@ MainWindow::MainWindow(QWidget* parent)
     m_chatManager->setDatabaseManager(m_dbManager);
     m_chatManager->setQmlContext(chat->rootContext());
 
-    m_fileManager.initialize("127.0.0.1:9000", "minioadmin", "minioadmin",
-                             false, "us-east-1");
+    m_fileManager.initialize(
+        QString::fromStdString(MINIO_URL), QString::fromStdString(MINIO_USR),
+        QString::fromStdString(MINIO_PASS), false, "us-east-1");
 
     auto setup_connections = [this]() -> void {
       connect(&m_fileManager, &FileUploadManager::downloadProgress, this,
@@ -147,17 +147,26 @@ MainWindow::MainWindow(QWidget* parent)
               &MainWindow::downloadFile);
 
       connect(ui->chatsList, &QListWidget::itemClicked, this,
-              [this](QListWidgetItem* item) {
+              [this](QListWidgetItem* item) -> void {
                 if (auto chatId = item->data(Qt::UserRole); chatId.isValid()) {
-                  const QString chatName = chatId.toString();
-                  if (!chatContexts.contains(chatName)) {
+                  const QString chatid = chatId.toString();
+                  if (!chatContexts.contains(chatid)) {
                     qCritical() << "чат выбирался, но контекста такого нет";
                     return;
                   }
-                  m_chatManager->onChatSelected(chatName);
-                  qDebug() << "Чат выбран:" << chatName;
+
+                  // m_dbManager->markMessagesAsRead(chatid);
+
+                  m_chatManager->onChatSelected(chatid);
+                  const QString nameChat = item->text();
+                  ui->chatNameLabel->setText(nameChat);
+
+                  qDebug() << "Чат выбран:" << chatid;
                 }
               });
+
+      connect(ui->stickersButton, &QPushButton::clicked, this,
+              &MainWindow::onStickersButtonClicked);
     };
 
     setup_connections();
@@ -238,21 +247,33 @@ MainWindow::MainWindow(QWidget* parent)
                          [this]() -> void { initializeExistingChats(); });
     }
 
-    chat->setSource(QUrl("qrc:/chat/ChatView.qml"));
-    chat->rootContext()->setContextProperty("mainWindow", this);
+    {
+      qDebug() << "ChatView.qml";
+      chat->setSource(QUrl("qrc:/chat/ChatView.qml"));
+      chat->rootContext()->setContextProperty("mainWindow", this);
 
-    auto* ctx = chat->rootContext();
-    ctx->setContextProperty("hasSelectedChat", false);
-    ctx->setContextProperty("messageCount", 0);
-    ctx->setContextProperty("messageList", QVariantList());
+      auto* ctx = chat->rootContext();
+      ctx->setContextProperty("hasSelectedChat", false);
+      ctx->setContextProperty("messageCount", 0);
+      ctx->setContextProperty("messageList", QVariantList());
 
-    m_chatManager->setQmlContext(ctx);
-    m_chatManager->setDatabaseManager(m_dbManager);
+      m_chatManager->setQmlContext(ctx);
+      m_chatManager->setDatabaseManager(m_dbManager);
 
-    if (chat->rootContext()->contextObject()) {
-      connect(chat->rootContext()->contextObject(),
-              SIGNAL(fileDownloadRequested(QString)), this,
-              SLOT(downloadFile(QString)));
+      auto* rootObject = qobject_cast<QQuickItem*>(chat->rootObject());
+      if (rootObject != nullptr) {
+        connect(rootObject, SIGNAL(fileDownloadRequested(QString)), this,
+                SLOT(downloadFile(QString)));
+        qDebug() << "fileDownloadRequested <-> downloadFile";
+      }
+      qDebug() << "ChatView.qml done!";
+    }
+
+    {
+      m_syncTimer = new QTimer(this);
+      connect(m_syncTimer, &QTimer::timeout, this,
+              &MainWindow::syncChatsWithServer);
+      m_syncTimer->start(30000);
     }
 
   } catch (const std::exception& e) {
@@ -337,6 +358,7 @@ MainWindow::~MainWindow() {
     qDebug() << "выход";
   }
 
+  safe_delete(m_stickerPicker);
   safe_delete(ui);
 }
 
@@ -530,16 +552,62 @@ void MainWindow::onLoginSuccess(const QString& username, const QString& token) {
   Q_UNUSED(username)
   Q_UNUSED(token)
 
-  updateUserInfo();
-  startChatStream();
+  reinitializeForNewUser();
+  // updateUserInfo();
+  // startChatStream();
+}
+
+void MainWindow::reinitializeForNewUser() {
+  if (SessionManager::instance().isLoggedIn()) {
+    updateUserInfo();
+    startChatStream();
+    refreshChatsList();
+
+    QTimer::singleShot(1000, this, [this]() {
+      if (message_stream_client_) {
+        message_stream_client_->startStream();
+      }
+    });
+
+    QTimer::singleShot(2000, this, [this]() { initializeExistingChats(); });
+
+    if (m_syncTimer != nullptr) {
+      m_syncTimer->start(30000);
+    }
+  }
 }
 
 void MainWindow::onLogout() {
   qDebug() << "выход";
 
-  QMessageBox::information(this, "Выход", "Вы вышли из системы");
-
   stopChatStream();
+  if (message_stream_client_) {
+    message_stream_client_->stopStream();
+  }
+
+  if (chatThreadPool != nullptr) {
+    chatThreadPool->waitForDone();
+  }
+
+  {
+    absl::MutexLock lock(&chatKeysMutex);
+    chatKeys.clear();
+  }
+
+  {
+    absl::MutexLock lock(&chatContextMutex_);
+    chatContexts.clear();
+  }
+
+  {
+    absl::MutexLock lock(&activeDHMutex_);
+    activeDHExchanges_.clear();
+  }
+
+  ui->chatsList->clear();
+  ui->chatNameLabel->clear();
+  ui->messageInput->clear();
+  m_chatManager->clearChat();
 
   if (contactsDialog) {
     contactsDialog->stopAllThreads();
@@ -547,25 +615,21 @@ void MainWindow::onLogout() {
     contactsDialog.reset();
   }
 
-  chatKeys.clear();
+  if (m_syncTimer != nullptr) {
+    m_syncTimer->stop();
+  }
 
   QString token = SessionManager::instance().sessionToken();
   if (!token.isEmpty()) {
     try {
       chat::LogoutRequest request;
       request.set_session_token(token.toStdString());
-
       grpc::ClientContext ctx;
       chat::CommonResponse response;
-
       grpc::Status status = authStub_->Logout(&ctx, request, &response);
 
       if (status.ok() && response.success()) {
         qDebug() << "Выход выполнен на сервере";
-      } else {
-        qCritical() << "Ошибка при выходе(grpc): "
-                    << (status.ok() ? response.message().c_str()
-                                    : status.error_message().c_str());
       }
     } catch (const std::exception& e) {
       qCritical() << "Ошибка при выходе: " << e.what();
@@ -573,7 +637,6 @@ void MainWindow::onLogout() {
   }
 
   SessionManager::instance().clearSession();
-
   this->hide();
 }
 
@@ -985,9 +1048,11 @@ void MainWindow::onMessageReceived(const chat::EncryptedChunk& chunk) {
 
     if (m_chatManager && chunkIndex == totalChunks - 1) {
       QMetaObject::invokeMethod(this, [this, chatId]() -> void {
-        if (getCurrentChatId() == chatId) {
+        if (getcurChatId() == chatId) {
           m_chatManager->loadChatHistory(chatId);
         }
+        // Обновляем список чатов для отображения новых непрочитанных сообщений
+        refreshChatsList();
       });
     }
   });
@@ -1009,11 +1074,11 @@ void MainWindow::onMessageStreamError(const QString& error) {
 }
 
 void MainWindow::onSendMessageClicked() {
-  const QString currentChatId = getCurrentChatId();
+  const QString curChatId = getcurChatId();
   const QByteArray originalData = ui->messageInput->toPlainText().toUtf8();
 
-  if (originalData.size() > 0 && !currentChatId.isEmpty()) {
-    message_sender_->sendMessage(currentChatId, originalData, false);
+  if (originalData.size() > 0 && !curChatId.isEmpty()) {
+    message_sender_->sendMessage(curChatId, originalData, false);
     ui->messageInput->clear();
 
   } else {
@@ -1021,50 +1086,48 @@ void MainWindow::onSendMessageClicked() {
   }
 
   if (m_chatManager) {
-    m_chatManager->loadChatHistory(currentChatId);
+    m_chatManager->loadChatHistory(curChatId);
   }
 }
 
 void MainWindow::onSendFileClicked() {
-  qDebug() << "[FILE] onSendFileClicked начало";
-  QString currentChatId = getCurrentChatId();
-  qDebug() << "[FILE] currentChatId:" << currentChatId;
-  if (currentChatId.isEmpty()) {
+  qDebug() << "onSendFileClicked начало";
+  QString curChatId = getcurChatId();
+  qDebug() << "curChatId:" << curChatId;
+  if (curChatId.isEmpty()) {
     QMessageBox::warning(this, "Ошибка", "Выберите чат для отправки файла.");
     return;
   }
   QString filePath =
       QFileDialog::getOpenFileName(this, "Выберите файл для отправки");
-  qDebug() << "[FILE] Выбран файл:" << filePath;
+  qDebug() << "Выбран файл:" << filePath;
   if (filePath.isEmpty()) {
     return;
   }
   QFileInfo fileInfo(filePath);
   QString originalFileName = fileInfo.fileName();
   qint64 originalFileSize = fileInfo.size();
-  qDebug() << "[FILE] Имя:" << originalFileName
-           << "Размер:" << originalFileSize;
+  qDebug() << "Имя:" << originalFileName << "Размер:" << originalFileSize;
 
   QString fileId = QUuid::createUuid().toString(QUuid::WithoutBraces);
-  qDebug() << "[FILE] fileId:" << fileId;
+  qDebug() << "fileId:" << fileId;
   QString tempEncryptedFilePath = QDir::temp().filePath(fileId + "_encrypted");
-  qDebug() << "[FILE] tempEncryptedFilePath:" << tempEncryptedFilePath;
+  qDebug() << "tempEncryptedFilePath:" << tempEncryptedFilePath;
 
-  QtConcurrent::run(chatThreadPool, [this, currentChatId, filePath, fileId,
+  QtConcurrent::run(chatThreadPool, [this, curChatId, filePath, fileId,
                                      tempEncryptedFilePath, originalFileName,
                                      originalFileSize]() {
-    qDebug() << "[FILE] Фоновое шифрование началось";
     {
       absl::MutexLock lock(&chatContextMutex_);
-      auto it = chatContexts.find(currentChatId);
+      auto it = chatContexts.find(curChatId);
       if (it != chatContexts.end()) {
         try {
-          qDebug() << "[FILE] Начало шифрования";
+          qDebug() << "Начало шифрования";
           it->second.encrypt(tempEncryptedFilePath.toStdString(),
                              filePath.toStdString());
-          qDebug() << "[FILE] Файл зашифрован:" << tempEncryptedFilePath;
+          qDebug() << "Файл зашифрован:" << tempEncryptedFilePath;
         } catch (const std::exception& e) {
-          qCritical() << "[FILE] Ошибка шифрования:" << e.what();
+          qCritical() << "Ошибка шифрования:" << e.what();
           QMetaObject::invokeMethod(this, [this, e, tempEncryptedFilePath]() {
             QMessageBox::critical(
                 this, "Ошибка",
@@ -1074,40 +1137,38 @@ void MainWindow::onSendFileClicked() {
           return;
         }
       } else {
-        qCritical() << "[FILE] Контекст шифрования не найден для чата:"
-                    << currentChatId;
+        qCritical() << "Контекст шифрования не найден для чата:" << curChatId;
         QMetaObject::invokeMethod(this, [this]() {
-          QMessageBox::critical(
-              this, "Ошибка",
-              "Контекст шифрования не найден для выбранного чата.");
+          QMessageBox::critical(this, "Ошибка",
+                                "Контекст шифрования не найден для чата.");
         });
         return;
       }
     }
 
-    QMetaObject::invokeMethod(this, [this, currentChatId, fileId,
-                                     originalFileName, originalFileSize,
-                                     tempEncryptedFilePath]() {
-      qDebug() << "[FILE] Подключение сигналов uploadFinished и uploadFailed";
+    QMetaObject::invokeMethod(this, [this, curChatId, fileId, originalFileName,
+                                     originalFileSize, tempEncryptedFilePath,
+                                     filePath]() {
+      qDebug() << "Подключение сигналов uploadFinished и uploadFailed";
       auto* conn = new QMetaObject::Connection();
       *conn = connect(
           &m_fileManager, &FileUploadManager::uploadFinished, this,
-          [this, currentChatId, fileId, originalFileName, originalFileSize,
-           tempEncryptedFilePath, conn](const QString& objectName) {
-            qDebug() << "[FILE] uploadFinished сигнал получен для:"
-                     << objectName;
+          [this, curChatId, fileId, originalFileName, originalFileSize,
+           tempEncryptedFilePath, filePath, conn](const QString& objectName) {
+            qDebug() << "uploadFinished сигнал получен для:" << objectName;
             if (objectName == fileId) {
-              qDebug() << "[FILE] Отправка метаданных файла";
-              message_sender_->sendFileInfo(currentChatId, fileId,
-                                            originalFileName, originalFileSize,
-                                            "application/octet-stream", true);
+              qDebug() << "Отправка метаданных файла";
+              bool pic = isImageFileByExtension(originalFileName);
+              message_sender_->sendFileInfo(
+                  curChatId, fileId, originalFileName, originalFileSize,
+                  "application/octet-stream", true, pic ? filePath : "");
               QFile::remove(tempEncryptedFilePath);
-              qDebug() << "[FILE] Временный файл удален";
+              qDebug() << "Временный файл удален";
               QMessageBox::information(this, "Файл отправлен",
                                        QString("Файл '%1' успешно отправлен.")
                                            .arg(originalFileName));
               if (m_chatManager) {
-                m_chatManager->loadChatHistory(currentChatId);
+                m_chatManager->loadChatHistory(curChatId);
               }
               disconnect(*conn);
               delete conn;
@@ -1117,20 +1178,21 @@ void MainWindow::onSendFileClicked() {
       connect(&m_fileManager, &FileUploadManager::uploadFailed, this,
               [fileId](const QString& objectName, const QString& error) {
                 if (objectName == fileId) {
-                  qCritical() << "[FILE] uploadFailed:" << objectName
-                              << "error:" << error;
+                  qCritical()
+                      << "uploadFailed:" << objectName << "error:" << error;
                 }
               });
 
-      qDebug() << "[FILE] Вызов uploadFile для bucket-name-meow-chat";
+      qDebug() << "Вызов uploadFile для bucket-name-meow-chat";
       m_fileManager.uploadFile("bucket-name-meow-chat", fileId,
                                tempEncryptedFilePath);
-      qDebug() << "[FILE] uploadFile вызван для:" << originalFileName;
+      qDebug() << "uploadFile вызван для:" << originalFileName;
     });
   });
+  // m_chatManager->loadChatHistory();
 }
 
-auto MainWindow::getCurrentChatId() const -> QString {
+auto MainWindow::getcurChatId() const -> QString {
   return m_chatManager->m_currentChatId;
 }
 
@@ -1145,9 +1207,21 @@ void MainWindow::refreshChatsList() {
   QVector<Chat> chats =
       m_dbManager->getAllChats(SessionManager::instance().username());
   for (const Chat& chat : chats) {
-    QString displayText = QString("💬 %1").arg(chat.name);
+    int unreadCount = m_dbManager->getUnreadCount(chat.chatId);
+    QString displayText;
+    if (unreadCount > 0) {
+      displayText = QString("💬 %1 (%2)").arg(chat.name).arg(unreadCount);
+    } else {
+      displayText = QString("💬 %1").arg(chat.name);
+    }
     auto* item = new QListWidgetItem(displayText);
     item->setData(Qt::UserRole, chat.chatId);
+    if (unreadCount > 0) {
+      QFont font = item->font();
+      font.setBold(true);
+      item->setFont(font);
+    }
+
     ui->chatsList->addItem(item);
   }
 
@@ -1186,7 +1260,7 @@ void MainWindow::initializeExistingChats() {
   }
 
   for (const Chat& chat : chats) {
-    QTimer::singleShot(500, this, [this, chatId = chat.chatId]() {
+    QTimer::singleShot(100, this, [this, chatId = chat.chatId]() {
       qDebug() << "Запуск обмена ключами для существующего чата:" << chatId;
       exchangeDHParameters(chatId);
     });
@@ -1194,9 +1268,9 @@ void MainWindow::initializeExistingChats() {
 }
 
 void MainWindow::onChatSettingsButton_clicked() {
-  QString currentChatId = getCurrentChatId();
+  QString curChatId = getcurChatId();
 
-  if (currentChatId.isEmpty()) {
+  if (curChatId.isEmpty()) {
     QMessageBox::information(this, "Настройки чата",
                              "Выберите чат для просмотра настроек.");
     return;
@@ -1207,8 +1281,8 @@ void MainWindow::onChatSettingsButton_clicked() {
     return;
   }
 
-  Chat chatInfo = m_dbManager->getChat(currentChatId,
-                                       SessionManager::instance().username());
+  Chat chatInfo =
+      m_dbManager->getChat(curChatId, SessionManager::instance().username());
 
   if (chatInfo.chatId.isEmpty()) {
     QMessageBox::warning(this, "Ошибка",
@@ -1302,8 +1376,7 @@ void MainWindow::onChatSettingsButton_clicked() {
   mainLayout->addWidget(actionsGroup);
 
   QObject::connect(
-      leaveButton, &QPushButton::clicked,
-      [this, currentChatId, &settingsDialog]() {
+      leaveButton, &QPushButton::clicked, [this, curChatId, &settingsDialog]() {
         int result =
             QMessageBox::question(&settingsDialog, "Покинуть чат",
                                   "Вы уверены, что хотите покинуть этот чат?",
@@ -1312,7 +1385,7 @@ void MainWindow::onChatSettingsButton_clicked() {
         if (result == QMessageBox::Yes) {
           try {
             ::chat::CloseChatRequest req;
-            req.set_chat_id(currentChatId.toStdString());
+            req.set_chat_id(curChatId.toStdString());
 
             grpc::ClientContext ctx;
             QString token = SessionManager::instance().sessionToken();
@@ -1328,7 +1401,7 @@ void MainWindow::onChatSettingsButton_clicked() {
 
             if (status.ok() && response.success()) {
               qDebug() << SessionManager::instance().username() << " ливнул";
-              auto stat = m_dbManager->removeChat(currentChatId);
+              auto stat = m_dbManager->removeChat(curChatId);
               if (!stat) {
                 std::string errorMsg = "БД";
                 qCritical() << "Ошибка: " << errorMsg.c_str();
@@ -1360,8 +1433,7 @@ void MainWindow::onChatSettingsButton_clicked() {
       });
 
   QObject::connect(
-      closeButton, &QPushButton::clicked,
-      [this, currentChatId, &settingsDialog]() {
+      closeButton, &QPushButton::clicked, [this, curChatId, &settingsDialog]() {
         int result =
             QMessageBox::question(&settingsDialog, "Закрыть чат",
                                   "Вы уверены, что хотите закрыть этот чат? "
@@ -1371,7 +1443,7 @@ void MainWindow::onChatSettingsButton_clicked() {
         if (result == QMessageBox::Yes) {
           try {
             ::chat::CloseChatRequest req;
-            req.set_chat_id(currentChatId.toStdString());
+            req.set_chat_id(curChatId.toStdString());
 
             grpc::ClientContext ctx;
             QString token = SessionManager::instance().sessionToken();
@@ -1386,7 +1458,7 @@ void MainWindow::onChatSettingsButton_clicked() {
             grpc::Status status = chatStub_->CloseChat(&ctx, req, &response);
 
             if (status.ok() && response.success()) {
-              auto stat = m_dbManager->removeChat(currentChatId);
+              auto stat = m_dbManager->removeChat(curChatId);
               if (!stat) {
                 std::string errorMsg = "БД";
                 qCritical() << "Ошибка: " << errorMsg.c_str();
@@ -1622,7 +1694,7 @@ void MainWindow::computeSharedSecretAndInitializeContext(
         chatContexts.emplace(chatId, std::move(context));
       }
       qDebug() << "Контекст инициализирован для чата:" << chatId
-               << "Secret key (hex):" << sharedSecret.str().c_str();
+               << "Secret key:" << sharedSecret.str().c_str();
     } catch (const std::exception& e) {
       qCritical() << "Ошибка при создании контекста шифрования:" << e.what();
       keys.isInitialized = false;
@@ -1781,6 +1853,22 @@ void MainWindow::exchangeDHParameters(const QString& chatId) {
   });
 }
 
+bool MainWindow::isImageFileByExtension(const QString& fileName) {
+  if (fileName.isEmpty()) {
+    return false;
+  }
+
+  QString extension = QFileInfo(fileName).suffix().toLower();
+  static const QStringList imageExtensions = {
+      "png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "ico", "svg"};
+
+  return imageExtensions.contains(extension);
+}
+
+QString MainWindow::getDownloadsPath() {
+  return QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+}
+
 void MainWindow::onDownloadProgress(const QString& objectName,
                                     qint64 bytesReceived, qint64 bytesTotal) {
   if (bytesTotal > 0) {
@@ -1793,13 +1881,6 @@ void MainWindow::onDownloadProgress(const QString& objectName,
 
 void MainWindow::onDownloadFailed(const QString& objectName,
                                   const QString& errorMessage) {
-  // if (objectName == m_currentDownload) {
-  //   m_currentDownload.clear();
-  // }
-
-  // m_progressBar->setValue(0);
-  // m_statusLabel->setText(QString("Ошибка загрузки: %1").arg(objectName));
-
   qCritical() << QString("Не удалось загрузить '%1':\n%2")
                      .arg(objectName)
                      .arg(errorMessage);
@@ -1808,10 +1889,6 @@ void MainWindow::onDownloadFailed(const QString& objectName,
                         QString("Не удалось загрузить '%1':\n%2")
                             .arg(objectName)
                             .arg(errorMessage));
-
-  // m_logWidget->appendPlainText(
-  //     QString("[ОШИБКА] %1: %2").arg(objectName).arg(errorMessage));
-  // m_logWidget->appendPlainText("");
 }
 
 QString MainWindow::formatBytes(qint64 bytes) {
@@ -1829,28 +1906,27 @@ QString MainWindow::formatBytes(qint64 bytes) {
 
 void MainWindow::downloadFile(const QString& fileId) {
   if (fileId.isEmpty()) {
-    qWarning() << "Попытка скачать файл с пустым ID.";
+    qCritical() << "Попытка скачать файл с пустым ID.";
     return;
   }
 
   Message fileMessage = m_dbManager->getFileMessageByFileId(fileId);
   if (fileMessage.messageId.isEmpty()) {
-    qWarning() << "Сообщение о файле не найдено в БД для fileId:" << fileId;
+    qCritical() << "Сообщение о файле не найдено в БД для fileId:" << fileId;
     QMessageBox::critical(this, "Ошибка", "Информация о файле не найдена.");
     return;
   }
 
   if (!fileMessage.content.isEmpty()) {
-    QDesktopServices::openUrl(
-        QUrl::fromLocalFile(QFileInfo(fileMessage.content).path()));
+    // QDesktopServices::openUrl(
+    //     QUrl::fromLocalFile(QFileInfo(fileMessage.content).path()));
     return;
   }
 
   m_currentDownload = fileId;
   QString tempEncryptedFilePath = QDir::temp().filePath(fileId + "_encrypted");
 
-  qDebug() << "Начинаем скачивание файла:" << fileId << "в"
-           << tempEncryptedFilePath;
+  qDebug() << "скачивание файла:" << fileId << "в" << tempEncryptedFilePath;
   m_fileManager.downloadFile("bucket-name-meow-chat", fileId,
                              tempEncryptedFilePath);
 }
@@ -1874,12 +1950,20 @@ void MainWindow::onDownloadFinished(const QString& objectName,
   QString defaultName = fileMessage.originalFilename.isEmpty()
                             ? fileMessage.fileName
                             : fileMessage.originalFilename;
-  QString savePath =
-      QFileDialog::getSaveFileName(this, "Сохранить файл", defaultName);
-  if (savePath.isEmpty()) {
-    qDebug() << "Сохранение файла отменено пользователем.";
-    QFile::remove(filePath);
-    return;
+  QString savePath;
+  if (isImageFileByExtension(fileMessage.originalFilename)) {
+    QDir downloadsDir(getDownloadsPath());
+    savePath = downloadsDir.absoluteFilePath(fileMessage.fileName);
+
+    qDebug() << "Изображение сохранено в:" << savePath;
+  } else {
+    savePath = QFileDialog::getSaveFileName(this, "Сохранить файл",
+                                            fileMessage.originalFilename);
+    if (savePath.isEmpty()) {
+      qDebug() << "Сохранение файла отменено пользователем.";
+      QFile::remove(filePath);
+      return;
+    }
   }
 
   QtConcurrent::run(chatThreadPool, [this, fileMessage, filePath, savePath]() {
@@ -1899,8 +1983,8 @@ void MainWindow::onDownloadFinished(const QString& objectName,
                 m_chatManager->loadChatHistory(fileMessage.chatId);
               }
             }
-            QDesktopServices::openUrl(
-                QUrl::fromLocalFile(QFileInfo(savePath).path()));
+            // QDesktopServices::openUrl(
+            //     QUrl::fromLocalFile(QFileInfo(savePath).path()));
           });
 
           QFile::remove(filePath);
@@ -1915,4 +1999,83 @@ void MainWindow::onDownloadFinished(const QString& objectName,
       }
     }
   });
+}
+
+void MainWindow::onStickersButtonClicked() {
+  if (!m_stickerPicker) {
+    m_stickerPicker = new StickerPickerDialog();
+    connect(m_stickerPicker, &StickerPickerDialog::stickerSelected, this,
+            &MainWindow::onStickerSelected);
+  }
+
+  if (m_stickerPicker->isVisible()) {
+    m_stickerPicker->hide();
+  } else {
+    QPoint buttonPos = ui->stickersButton->mapToGlobal(QPoint(0, 0));
+    m_stickerPicker->showAtPosition(buttonPos);
+  }
+}
+
+void MainWindow::onStickerSelected(const QString& stickerCode) {
+  qDebug() << "Выбран стикер:" << stickerCode;
+
+  QString curChatId = getcurChatId();
+
+  if (curChatId.isEmpty()) {
+    QMessageBox::warning(this, "Ошибка", "Выберите чат для отправки стикера");
+    return;
+  }
+
+  if (!message_sender_) {
+    qCritical() << "Message sender не инициализирован";
+    QMessageBox::critical(this, "Ошибка", "Не удалось отправить стикер");
+    return;
+  }
+
+  QByteArray stickerData = stickerCode.toUtf8();
+  message_sender_->sendMessage(curChatId, stickerData, false);
+
+  if (m_chatManager) {
+    m_chatManager->loadChatHistory(curChatId);
+  }
+
+  qDebug() << "Стикер отправлен:" << stickerCode;
+}
+
+void MainWindow::syncChatsWithServer() {
+  if (!SessionManager::instance().isLoggedIn()) {
+    return;
+  }
+
+  grpc::ClientContext ctx;
+  QString token = SessionManager::instance().sessionToken();
+  if (!token.isEmpty()) {
+    ctx.AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+  } else {
+    QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
+    return;
+  }
+
+  google::protobuf::Empty request;
+  auto reader = chatStub_->GetActiveChats(&ctx, request);
+
+  QSet<QString> serverChatIds;
+  chat::ChatInfo chatInfo;
+
+  while (reader->Read(&chatInfo)) {
+    serverChatIds.insert(QString::fromStdString(chatInfo.chat_id()));
+  }
+
+  auto localChats =
+      m_dbManager->getAllChats(SessionManager::instance().username());
+
+  for (const auto& localChat : localChats) {
+    if (!serverChatIds.contains(localChat.chatId)) {
+      m_dbManager->removeChat(localChat.chatId);
+      chatKeys.erase(localChat.chatId);
+      chatContexts.erase(localChat.chatId);
+    }
+  }
+
+  refreshChatsList();
 }

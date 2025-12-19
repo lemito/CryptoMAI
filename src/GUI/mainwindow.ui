@@ -21,7 +21,7 @@
   </property>
   <property name="styleSheet">
    <string notr="true">QMainWindow {
-    background-color: #f0f2f5;
+    background-color: white;
     font-family: 'Segoe UI', 'Open Sans', sans-serif;
 }
 </string>
@@ -248,6 +248,9 @@ QListWidget::item:selected:hover {
            <height>80</height>
           </size>
          </property>
+         <property name="autoFillBackground">
+          <bool>false</bool>
+         </property>
          <property name="styleSheet">
           <string notr="true">QFrame#userInfoFrame {
     background-color: rgba(32, 35, 38, 0.85);
@@ -387,7 +390,7 @@ QPushButton:pressed {
 </string>
               </property>
               <property name="text">
-               <string>😺 Контакты</string>
+               <string>👥 Контакты</string>
               </property>
              </widget>
             </item>
@@ -551,7 +554,7 @@ QPushButton:pressed {
 </string>
            </property>
            <property name="text">
-            <string>🐾</string>
+            <string>⚙️</string>
            </property>
           </widget>
          </item>
@@ -605,6 +608,48 @@ QPushButton:pressed {
            <property name="spacing">
             <number>8</number>
            </property>
+           <item>
+            <widget class="QPushButton" name="fileButton">
+             <property name="minimumSize">
+              <size>
+               <width>40</width>
+               <height>36</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>40</width>
+               <height>36</height>
+              </size>
+             </property>
+             <property name="cursor">
+              <cursorShape>PointingHandCursor</cursorShape>
+             </property>
+             <property name="toolTip">
+              <string>Прикрепить файл</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QPushButton {
+    background-color: #f1f5f9;
+    border-radius: 10px;
+    color: #475569;
+    font-size: 14pt;
+}
+
+QPushButton:hover {
+    background-color: #e2e8f0;
+}
+
+QPushButton:pressed {
+    background-color: #cbd5e1;
+}
+</string>
+             </property>
+             <property name="text">
+              <string>📎</string>
+             </property>
+            </widget>
+           </item>
            <item>
             <widget class="QTextEdit" name="messageInput">
              <property name="minimumSize">
@@ -686,48 +731,6 @@ QPushButton:pressed {
              </property>
              <property name="text">
               <string>😀</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="fileButton">
-             <property name="minimumSize">
-              <size>
-               <width>40</width>
-               <height>36</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>40</width>
-               <height>36</height>
-              </size>
-             </property>
-             <property name="cursor">
-              <cursorShape>PointingHandCursor</cursorShape>
-             </property>
-             <property name="toolTip">
-              <string>Прикрепить файл</string>
-             </property>
-             <property name="styleSheet">
-              <string notr="true">QPushButton {
-    background-color: #f1f5f9;
-    border-radius: 10px;
-    color: #475569;
-    font-size: 14pt;
-}
-
-QPushButton:hover {
-    background-color: #e2e8f0;
-}
-
-QPushButton:pressed {
-    background-color: #cbd5e1;
-}
-</string>
-             </property>
-             <property name="text">
-              <string>📎</string>
              </property>
             </widget>
            </item>

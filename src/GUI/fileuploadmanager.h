@@ -91,7 +91,7 @@ class FileUploadManager final : public QObject {
   ~FileUploadManager() override;
 
   template <typename Func, typename... Args>
-  void executeAsync(const QString& operationName, Func&& func, Args&&... args);
+  void execAsync(const QString& operationName, Func&& func, Args&&... args);
 
   std::unique_ptr<minio::s3::Client> m_client;
   std::unique_ptr<minio::creds::StaticProvider> m_provider;

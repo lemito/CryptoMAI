@@ -40,6 +40,7 @@
 #include "proto/chat.grpc.pb.h"
 #include "proto/chat.pb.h"
 #include "src/GUI/ui_mainwindow.h"
+#include "stickerpickerdialog.h"
 #include "utils.hpp"
 #include "utils_math.h"
 
@@ -66,8 +67,6 @@ class MainWindow : public QMainWindow {
  public:
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow();
-  // void exchangeDHParameters(const QString& chatId, const BI& prime,
-  //                           const BI& generator);
   void exchangeDHParameters(const QString& chatId);
 
  signals:
@@ -90,6 +89,7 @@ class MainWindow : public QMainWindow {
   JoinChatDialog* joinChatDialog{nullptr};
   QQuickWidget* chat{nullptr};
   QStringListModel* messagesModel{nullptr};
+  StickerPickerDialog* m_stickerPicker{nullptr};
 
   SessionManager* m_sessionManager{nullptr};
   DatabaseManager* m_dbManager{nullptr};
@@ -112,12 +112,6 @@ class MainWindow : public QMainWindow {
   absl::flat_hash_map<QString, meow::cypher::symm::SymmetricCypherContext>
       chatContexts;
 
-  absl::flat_hash_map<
-      std::string,
-      std::pair<std::shared_ptr<grpc::ClientContext>,
-                std::shared_ptr<grpc::ClientReaderWriter<
-                    chat::DHParametersExchange, chat::DHParametersResponse>>>>
-      activeDHStreams_;
   absl::flat_hash_map<std::string, bool> activeDHExchanges_;
 
   absl::Mutex activeDHMutex_;
@@ -126,39 +120,37 @@ class MainWindow : public QMainWindow {
   QThreadPool* chatThreadPool;
   std::atomic<bool> m_isDestroying{false};
 
+  QLabel* m_statusLabel;
+  QProgressBar* m_progressBar;
+  QPlainTextEdit* m_logWidget;
+  QString m_currentDownload;
+
+  QTimer* m_syncTimer;
+
+  void reinitializeForNewUser();
   void refreshChatsList();
   void initializeExistingChats();
-  void setupUserInterface();
   void updateUserInfo();
   void startChatStream();
   void stopChatStream();
-  void startMessageStream();
-  void stopMessageStream();
-  void onMessageSaved(const QString& messageId, const QString& chatId);
   void onChatSettingsButton_clicked();
-  void initializeExistingChat(const QString& chatId);
 
-  auto createContext(const Chat& chatInfo, const BI& symmetricKey)
+  static auto isImageFileByExtension(const QString& fileName) -> bool;
+  static auto getDownloadsPath() -> QString;
+
+  static auto createContext(const Chat& chatInfo, const BI& symmetricKey)
       -> meow::cypher::symm::SymmetricCypherContext;
   auto encryptMessage(const QString& chatId, const QByteArray& plaintext)
       -> QByteArray;
   auto decryptMessage(const QString& chatId, const QByteArray& ciphertext)
       -> QByteArray;
   auto checkAndInitChatKeys(const QString& chatId) -> bool;
-
-  // auto ensureMyDHParameters(const QString& chatId) -> QList<BI>;
-  void startDHExchange(const QString& chatId);
   void computeSharedSecretAndInitializeContext(const QString& chatId);
 
-  void updateDownloadStatus(const QString& message);
-  QString formatBytes(qint64 bytes);
-
-  QLabel* m_statusLabel;
-  QProgressBar* m_progressBar;
-  QPlainTextEdit* m_logWidget;
-  QString m_currentDownload;
+  auto formatBytes(qint64 bytes) -> QString;
 
  private slots:
+  void syncChatsWithServer();
   void onWindowDestroyed() { emit destroyed(); }
   void showContactsDialog();
   void onUserStatusButton_clicked();
@@ -173,7 +165,7 @@ class MainWindow : public QMainWindow {
 
   void onSendMessageClicked();
   void onSendFileClicked();
-  [[nodiscard]] auto getCurrentChatId() const -> QString;
+  [[nodiscard]] auto getcurChatId() const -> QString;
 
   void onNewChatClicked();
   void onCreateChatRequested();
@@ -195,5 +187,8 @@ class MainWindow : public QMainWindow {
   void onDownloadFinished(const QString& objectName, const QString& filePath);
   void onDownloadFailed(const QString& objectName, const QString& errorMessage);
   void downloadFile(const QString& fileId);
+
+  void onStickersButtonClicked();
+  void onStickerSelected(const QString& stickerCode);
 };
 #endif  // MAINWINDOW_H

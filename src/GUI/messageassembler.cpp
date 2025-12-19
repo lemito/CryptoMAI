@@ -2,10 +2,9 @@
 
 #include <QDateTime>
 #include <QDebug>
-#include <cstddef>
 
 MessageAssembler::MessageAssembler(QObject* parent) : QObject(parent) {
-  cleanupTimer_.setInterval(30000);
+  cleanupTimer_.setInterval(CLEANUP_INTERVAL);
   connect(&cleanupTimer_, &QTimer::timeout, this,
           &MessageAssembler::cleanupExpiredMessages);
   cleanupTimer_.start();
@@ -32,12 +31,12 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
   bool isFile = metadata.is_file();
   bool isCancellation = metadata.is_cancellation();
 
-  qDebug() << "Обработка фрагмента:" << chunkIndex << "/" << totalChunks
+  qDebug() << "Обработка чанка:" << chunkIndex << "/" << totalChunks
            << "для сообщения:" << messageId << "последний?:" << isLastChunk;
 
   if (chunkIndex < 0 || totalChunks <= 0 || chunkIndex >= totalChunks) {
     emit assemblyError(messageId,
-                       QString("Некорректные индексы фрагментов: %1/%2")
+                       QString("Некорректные индексы чанков: %1/%2")
                            .arg(chunkIndex)
                            .arg(totalChunks));
     return;
@@ -58,7 +57,7 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
 
     assembly.timeoutTimer = new QTimer(this);
     assembly.timeoutTimer->setSingleShot(true);
-    assembly.timeoutTimer->setInterval(120000);
+    assembly.timeoutTimer->setInterval(ASSEMBLY_INTERVAL);
     connect(assembly.timeoutTimer, &QTimer::timeout, [this, messageId]() {
       qWarning() << "Что-то очень долго :" << messageId;
       emit assemblyError(messageId, "Что-то очень долго ");
@@ -69,7 +68,7 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
     assemblies_[messageId] = assembly;
 
     qDebug() << "Начата сборка сообщения:" << messageId
-             << "всего фрагментов:" << totalChunks << "файл:" << isFile;
+             << "всего чанков:" << totalChunks << "файл:" << isFile;
   }
 
   MessageAssembly& assembly = assemblies_[messageId];
@@ -77,7 +76,7 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
   if (assembly.totalChunks != totalChunks) {
     emit assemblyError(
         messageId,
-        QString("Несовпадение количества фрагментов: ожидалось %1, получено %2")
+        QString("Несовпадение количества чанков: ожидалось %1, получено %2")
             .arg(assembly.totalChunks)
             .arg(totalChunks));
     cleanupMessage(messageId);
@@ -85,13 +84,13 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
   }
 
   if (assembly.chatId != chatId) {
-    emit assemblyError(messageId, "Несовпадение ID чата во фрагментах");
+    emit assemblyError(messageId, "Несовпадение ID чата во чанках");
     cleanupMessage(messageId);
     return;
   }
 
   if (assembly.receivedIndices.contains(chunkIndex)) {
-    qDebug() << "Дубликат фрагмента" << chunkIndex << "для сообщения"
+    qDebug() << "Дубликат чанка" << chunkIndex << "для сообщения"
              << messageId;
     return;
   }
@@ -102,7 +101,7 @@ void MessageAssembler::processChunk(const chat::EncryptedChunk& chunk) {
   assembly.receivedIndices.insert(chunkIndex);
   assembly.receivedChunks++;
 
-  qDebug() << "Фрагмент" << chunkIndex << "получен для" << messageId
+  qDebug() << "чанк" << chunkIndex << "получен для" << messageId
            << "прогресс:" << assembly.receivedChunks << "/"
            << assembly.totalChunks;
 
@@ -115,18 +114,18 @@ void MessageAssembler::checkAssemblyComplete(MessageAssembly& assembly) {
     for (int i = 0; i < assembly.totalChunks; ++i) {
       if (!assembly.receivedIndices.contains(i)) {
         allChunksReceived = false;
-        qWarning() << "Отсутствует фрагмент" << i << "для сообщения"
+        qWarning() << "Отсутствует чанк" << i << "для сообщения"
                    << assembly.messageId;
         break;
       }
     }
 
     if (allChunksReceived) {
-      qDebug() << "Все фрагменты получены для сообщения:" << assembly.messageId;
+      qDebug() << "Все чанкы получены для сообщения:" << assembly.messageId;
       finalizeMessage(assembly);
     } else {
       assembly.receivedChunks = assembly.receivedIndices.size();
-      qDebug() << "Не все фрагменты получены для" << assembly.messageId << "("
+      qDebug() << "Не все чанкы получены для" << assembly.messageId << "("
                << assembly.receivedChunks << "/" << assembly.totalChunks << ")";
     }
   }
@@ -140,14 +139,14 @@ void MessageAssembler::finalizeMessage(MessageAssembly& assembly) {
       assembledData.reserve(assembly.fileSize);
     } else {
       assembledData.reserve(
-          static_cast<qsizetype>(assembly.totalChunks * 64 * 1024));
+          static_cast<qsizetype>(assembly.totalChunks * CHUNK_SIZE));
     }
 
     for (int i = 0; i < assembly.totalChunks; ++i) {
       if (!assembly.chunks.contains(i)) {
         emit assemblyError(
             assembly.messageId,
-            QString("Отсутствует фрагмент %1 при финальной сборке").arg(i));
+            QString("Отсутствует чанк %1 при финальной сборке").arg(i));
         cleanupMessage(assembly.messageId);
         return;
       }
@@ -181,7 +180,7 @@ void MessageAssembler::finalizeMessage(MessageAssembly& assembly) {
 void MessageAssembler::cleanupMessage(const QString& messageId) {
   if (assemblies_.contains(messageId)) {
     MessageAssembly& assembly = assemblies_[messageId];
-    if (assembly.timeoutTimer) {
+    if (assembly.timeoutTimer != nullptr) {
       assembly.timeoutTimer->stop();
       safe_delete(assembly.timeoutTimer);
     }

@@ -79,6 +79,7 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets LinguistTools Concurrent Sql QuickWidgets)
 find_package(Qt6 REQUIRED COMPONENTS Core)
+find_package(Qt6 REQUIRED COMPONENTS Core Quick)
 
 find_package(Boost REQUIRED)
 find_library(GMP_LIBRARY gmp)
@@ -158,8 +159,7 @@ set(ABSL_ENABLE_INSTALL OFF)
 set(ABSL_USE_EXTERNAL_GOOGLETEST OFF)
 set(ABSL_FIND_GOOGLETEST OFF)
 
-set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-    CACHE STRING "Vcpkg toolchain")
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain")
 set(VCPKG_ROOT $ENV{VCPKG_ROOT})
 set(MINIO_ROOT ${VCPKG_ROOT}/installed/x64-linux)
 
@@ -364,6 +364,8 @@ qt_add_executable(CryptoGUI
         src/GUI/chatstate.h src/GUI/chatstate.cpp
         src/GUI/AboutDialog.qml
         src/GUI/fileuploadmanager.h src/GUI/fileuploadmanager.cpp
+        src/GUI/StickerPicker.qml
+        src/GUI/stickerpickerdialog.h src/GUI/stickerpickerdialog.cpp
 )
 
 target_compile_features(CryptoGUI PUBLIC cxx_std_23)
@@ -378,14 +380,13 @@ target_include_directories(CryptoGUI PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
-
 set(TS_FILES src/GUI/CryptoGUI_ru_RU.ts)
 qt_create_translation(QM_FILES ${CMAKE_CURRENT_SOURCE_DIR} ${TS_FILES})
 # Заголовки
-target_include_directories(CryptoGUI PRIVATE
-    ${VCPKG_ROOT}/installed/x64-linux/include
-    ${VCPKG_ROOT}/installed/x64-linux/include/minio-cpp
-)
+# target_include_directories(CryptoGUI PRIVATE
+#     ${VCPKG_ROOT}/installed/x64-linux/include
+#     ${VCPKG_ROOT}/installed/x64-linux/include/minio-cpp
+# )
 target_link_libraries(CryptoGUI PRIVATE
         # "${VCPKG_ROOT}/installed/x64-linux/lib/libminio.a"
         # "${VCPKG_ROOT}/installed/x64-linux/lib/libcurl.a"
@@ -400,9 +401,10 @@ target_link_libraries(CryptoGUI PRIVATE
 )
 target_link_libraries(CryptoGUI PRIVATE ${GMP_LIBRARY})
 target_link_libraries(CryptoGUI PRIVATE SQLite::SQLite3)
-target_link_libraries(CryptoGUI PRIVATE Qt6::Core)
-target_compile_options(CryptoGUI PRIVATE -fPIC)
-target_link_options(CryptoGUI PRIVATE -Wl,-rpath=${VCPKG_ROOT}/installed/x64-linux/lib)
+# target_link_libraries(CryptoGUI PRIVATE Qt6::Core)
+# target_link_libraries(CryptoGUI PRIVATE Qt6::Core Qt6::Quick)
+# target_compile_options(CryptoGUI PRIVATE -fPIC)
+# target_link_options(CryptoGUI PRIVATE -Wl,-rpath=${VCPKG_ROOT}/installed/x64-linux/lib)
 
 qt_finalize_executable(CryptoGUI)
 

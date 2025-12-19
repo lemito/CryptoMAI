@@ -46,30 +46,17 @@ class DatabaseManager final : public QObject {
                   const QString& originalFilename = QString()) -> bool;
   auto updateMessageStatus(const QString& messageId, MessageStatus status)
       -> bool;
-  auto updateMessageContent(const QString& messageId, const QByteArray& content)
-      -> bool;
   auto getChatMessages(const QString& chatId, int limit = 100, int offset = 0)
       -> QVector<Message>;
   auto getUnreadMessages(const QString& chatId) -> QVector<Message>;
-  auto markMessagesAsRead(const QString& chatId) -> bool;
   auto deleteMessage(const QString& messageId) -> bool;
   auto clearChatHistory(const QString& chatId) -> bool;
+  auto markMessagesAsRead(const QString& chatId) -> bool;
   auto getUnreadCount(const QString& chatId) -> int;
-
-  auto addFileMessage(const QString& chatId, const QString& messageId,
-                      const QString& sender, const QByteArray& fileData,
-                      const QString& fileName, const QString& mimeType,
-                      bool isOutgoing, MessageStatus status) -> bool;
-
-  auto getChatFiles(const QString& chatId) -> QVector<Message>;
-
-  auto getFileStats(const QString& chatId)
-      -> absl::flat_hash_map<QString, qint64>;
 
   auto updateFileInfo(const QString& messageId, const QString& fileName,
                       const QString& mimeType, qint64 fileSize) -> bool;
 
-  auto clearFileContent(const QString& messageId) -> bool;
 
   auto getFileMessageByFileId(const QString& fileId) -> Message;
   auto updateMessageFilePath(const QString& messageId, const QString& filePath)

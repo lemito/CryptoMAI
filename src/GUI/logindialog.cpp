@@ -126,7 +126,7 @@ void LoginDialog::checkCredentials() {
 }
 
 void LoginDialog::setupGRPCChannel() {
-  auto channel = grpc::CreateChannel("localhost:50051",
+  auto channel = grpc::CreateChannel(GRPC_URL,
                                      grpc::InsecureChannelCredentials());
   this->auth_stub_ = chat::AuthService::NewStub(channel);
 }

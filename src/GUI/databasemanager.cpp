@@ -97,13 +97,14 @@ auto DatabaseManager::createTables() -> bool {
       "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,"
       "is_encrypted BOOLEAN DEFAULT FALSE,"
       "is_outgoing BOOLEAN DEFAULT FALSE,"
-      "status INTEGER DEFAULT 0," // 0=sent, 1=delivered, 2=read
+      "status INTEGER DEFAULT 0,"  // 0=sent, 1=delivered, 2=read
       "is_file BOOLEAN DEFAULT FALSE,"
       "file_name TEXT,"
       "mime_type TEXT,"
       "file_size INTEGER DEFAULT 0,"
       "original_filename TEXT,"
-      "FOREIGN KEY (chat_id, created_name) REFERENCES chats (chat_id, created_name) ON DELETE CASCADE"
+      "FOREIGN KEY (chat_id, created_name) REFERENCES chats (chat_id, "
+      "created_name) ON DELETE CASCADE"
       ")");
 
   query.exec("ALTER TABLE messages ADD COLUMN original_filename TEXT");
@@ -285,13 +286,15 @@ auto DatabaseManager::getAllChats(const QString& username) -> QVector<Chat> {
   return chats;
 }
 
-auto DatabaseManager::getChat(const QString& chatId, const QString& username) -> Chat {
+auto DatabaseManager::getChat(const QString& chatId, const QString& username)
+    -> Chat {
   Chat chat;
   QSqlQuery query(m_database);
   QString sql;
 
   if (!username.isEmpty() && !username.isNull()) {
-    sql = "SELECT id, chat_id, name, created_name, created_at, "
+    sql =
+        "SELECT id, chat_id, name, created_name, created_at, "
         "algorithm, padding, mode, iv, prime, generator, "
         "public_key, peer_public_key, dh_exchange_complete "
         "FROM chats "
@@ -303,7 +306,8 @@ auto DatabaseManager::getChat(const QString& chatId, const QString& username) ->
     query.bindValue(":chatId", chatId);
     query.bindValue(":username", username);
   } else {
-    sql = "SELECT id, chat_id, name, created_name, created_at, "
+    sql =
+        "SELECT id, chat_id, name, created_name, created_at, "
         "algorithm, padding, mode, iv, prime, generator, "
         "public_key, peer_public_key, dh_exchange_complete "
         "FROM chats "
@@ -317,8 +321,7 @@ auto DatabaseManager::getChat(const QString& chatId, const QString& username) ->
 
   if (!query.exec()) {
     qCritical() << "Ошибка выполнения запроса получения чата:"
-                << query.lastError().text()
-                << "\nЗапрос:" << query.lastQuery();
+                << query.lastError().text() << "\nЗапрос:" << query.lastQuery();
     return chat;
   }
 
@@ -338,8 +341,7 @@ auto DatabaseManager::getChat(const QString& chatId, const QString& username) ->
     chat.peerPublicKey = query.value("peer_public_key").toString();
     chat.dhExchangeComplete = query.value("dh_exchange_complete").toBool();
   } else {
-    qDebug() << "Чат не найден. chatId:" << chatId
-             << "username:" << username;
+    qDebug() << "Чат не найден. chatId:" << chatId << "username:" << username;
     chat.chatId = "";
   }
 
@@ -352,14 +354,14 @@ auto DatabaseManager::addMessage(
     MessageStatus status, bool isFile, const QString& fileName,
     const QString& mimeType, qint64 fileSize, const QString& createdName,
     const QString& originalFilename) -> bool {
-
   if (isEncrypted) {
     qCritical() << "БЫЛО ДОГОВОРЕНИЕ, ЧТО isEncrypted false";
   }
 
   QSqlQuery query(m_database);
   bool prep = query.prepare(
-      "INSERT INTO messages (chat_id, created_name, message_id, sender, content, "
+      "INSERT INTO messages (chat_id, created_name, message_id, sender, "
+      "content, "
       "is_encrypted, is_outgoing, status, is_file, file_name, mime_type, "
       "file_size, original_filename) "
       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -418,8 +420,7 @@ auto DatabaseManager::addMessage(
     qCritical() << "Ошибка сохранения сообщения:" << query.lastError().text();
     qCritical() << "Запрос:" << query.lastQuery();
     qCritical() << "Параметры: chatId=" << chatId
-                << "createdName=" << createdName
-                << "sender=" << sender;
+                << "createdName=" << createdName << "sender=" << sender;
   }
   return success;
 }
@@ -528,100 +529,6 @@ auto DatabaseManager::getUnreadCount(const QString& chatId) -> int {
   return 0;
 }
 
-auto DatabaseManager::addFileMessage(
-    const QString& chatId, const QString& messageId, const QString& sender,
-    const QByteArray& fileData, const QString& fileName,
-    const QString& mimeType, bool isOutgoing, MessageStatus status) -> bool {
-  qint64 fileSize = fileData.size();
-
-  auto setMimeType = [](const QString& fileName,
-                        const QString& mimeType) -> QString {
-    QString actualMimeType = mimeType;
-    if (actualMimeType.isEmpty()) {
-      if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
-        actualMimeType = "image/jpeg";
-      } else if (fileName.endsWith(".png")) {
-        actualMimeType = "image/png";
-      } else if (fileName.endsWith(".mp4")) {
-        actualMimeType = "video/mp4";
-      } else if (fileName.endsWith(".pdf")) {
-        actualMimeType = "application/pdf";
-      } else {
-        actualMimeType = "application/octet-stream";
-      }
-    }
-    return actualMimeType;
-  };
-
-  QString actualMimeType = setMimeType(fileName, mimeType);
-
-  return addMessage(chatId, messageId, sender, fileData, false, isOutgoing,
-                    status, true, fileName, actualMimeType, fileSize, sender);
-}
-
-auto DatabaseManager::getChatFiles(const QString& chatId) -> QVector<Message> {
-  QVector<Message> files;
-  QSqlQuery query(m_database);
-  query.prepare(
-      "SELECT id, chat_id, message_id, sender, content, timestamp, "
-      "is_encrypted, is_outgoing, status, is_file, file_name, mime_type, "
-      "file_size "
-      "FROM messages WHERE chat_id = ? AND is_file = TRUE ORDER BY timestamp "
-      "DESC");
-  query.addBindValue(chatId);
-
-  if (query.exec()) {
-    while (query.next()) {
-      Message msg;
-      msg.id = query.value(0).toLongLong();
-      msg.chatId = query.value(1).toString();
-      msg.messageId = query.value(2).toString();
-      msg.sender = query.value(3).toString();
-      msg.content = query.value(4).toByteArray();
-      msg.timestamp = query.value(5).toDateTime();
-      msg.isEncrypted = query.value(6).toBool();
-      msg.isOutgoing = query.value(7).toBool();
-      msg.status = static_cast<MessageStatus>(query.value(8).toInt());
-      msg.isFile = query.value(9).toBool();
-      msg.fileName = query.value(10).toString();
-      msg.mimeType = query.value(11).toString();
-      msg.fileSize = query.value(12).toLongLong();
-
-      files.append(msg);
-    }
-  }
-  return files;
-}
-
-auto DatabaseManager::getFileStats(const QString& chatId)
-    -> absl::flat_hash_map<QString, qint64> {
-  absl::flat_hash_map<QString, qint64> stats;
-
-  QSqlQuery query(m_database);
-  query.prepare(
-      "SELECT "
-      "COUNT(*) as total_files, "
-      "SUM(file_size) as total_size, "
-      "SUM(CASE WHEN mime_type LIKE 'image/%' THEN 1 ELSE 0 END) as images, "
-      "SUM(CASE WHEN mime_type LIKE 'video/%' THEN 1 ELSE 0 END) as videos, "
-      "SUM(CASE WHEN mime_type LIKE 'audio/%' THEN 1 ELSE 0 END) as audio, "
-      "SUM(CASE WHEN mime_type LIKE 'application/%' THEN 1 ELSE 0 END) as "
-      "documents "
-      "FROM messages WHERE chat_id = ? AND is_file = TRUE");
-  query.addBindValue(chatId);
-
-  if (query.exec() && query.next()) {
-    stats["total_files"] = query.value(0).toLongLong();
-    stats["total_size"] = query.value(1).toLongLong();
-    stats["images"] = query.value(2).toLongLong();
-    stats["videos"] = query.value(3).toLongLong();
-    stats["audio"] = query.value(4).toLongLong();
-    stats["documents"] = query.value(5).toLongLong();
-  }
-
-  return stats;
-}
-
 auto DatabaseManager::updateFileInfo(const QString& messageId,
                                      const QString& fileName,
                                      const QString& mimeType, qint64 fileSize)
@@ -633,15 +540,6 @@ auto DatabaseManager::updateFileInfo(const QString& messageId,
   query.addBindValue(fileName);
   query.addBindValue(mimeType);
   query.addBindValue(fileSize);
-  query.addBindValue(messageId);
-
-  return query.exec();
-}
-
-auto DatabaseManager::clearFileContent(const QString& messageId) -> bool {
-  QSqlQuery query(m_database);
-  query.prepare("UPDATE messages SET content = ? WHERE message_id = ?");
-  query.addBindValue(QByteArray());
   query.addBindValue(messageId);
 
   return query.exec();
@@ -700,7 +598,7 @@ auto DatabaseManager::getFileMessageByFileId(const QString& fileId) -> Message {
 }
 
 auto DatabaseManager::updateMessageFilePath(const QString& messageId,
-                                           const QString& filePath) -> bool {
+                                            const QString& filePath) -> bool {
   QSqlQuery query(m_database);
   query.prepare("UPDATE messages SET content = ? WHERE message_id = ?");
   query.addBindValue(filePath.toUtf8());

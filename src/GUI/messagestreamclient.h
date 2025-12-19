@@ -6,13 +6,14 @@
 #include <functional>
 #include <memory>
 #include <thread>
+#include <utility>
 
 #include "databasemanager.h"
 #include "messageassembler.h"
 #include "proto/chat.grpc.pb.h"
 #include "proto/chat.pb.h"
 
-class MessageStreamClient : public QObject {
+class MessageStreamClient final : public QObject {
   Q_OBJECT
 
  public:
@@ -27,7 +28,7 @@ class MessageStreamClient : public QObject {
   void startStream();
   void stopStream();
   void setDecryptCallback(DecryptCallback callback) {
-    decryptCallback_ = callback;
+    decryptCallback_ = std::move(callback);
   }
   [[nodiscard]] auto isStreaming() const -> bool { return streaming_; }
 

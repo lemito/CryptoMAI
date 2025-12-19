@@ -10,6 +10,7 @@
     </qresource>
     <qresource prefix="/dialogs">
         <file>AboutDialog.qml</file>
+        <file>StickerPicker.qml</file>
     </qresource>
     <qresource prefix="/cats">
         <file>CatAbout.json</file>
@@ -23,5 +24,16 @@
     </qresource>
     <qresource prefix="/backgrounds">
         <file>Background sparkles.json</file>
+    </qresource>
+    <qresource prefix="/stickers">
+        <file>meow_sticker.jpg</file>
+        <file>meow_stickers.jpg</file>
+        <file>hamster_clown_2.jpg</file>
+        <file>hamster_clown.jpg</file>
+        <file>sad2_sticker.gif</file>
+        <file>sad_sticker.gif</file>
+        <file>cat_sticker.gif</file>
+        <file>cat_coffee-ezgif.com-webp-to-gif-converter.gif</file>
+        <file>hamster_coffee-ezgif.com-webp-to-gif-converter.gif</file>
     </qresource>
 </RCC>

@@ -51,7 +51,7 @@ void ContactsDialog::closeEvent(QCloseEvent* event) {
 }
 
 void ContactsDialog::setupGrpcChannel() {
-  auto channel = grpc::CreateChannel("localhost:50051",
+  auto channel = grpc::CreateChannel(GRPC_URL,
                                      grpc::InsecureChannelCredentials());
   contactsStub_ = chat::ContactService::NewStub(channel);
 }

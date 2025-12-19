@@ -7,8 +7,6 @@
 #include <fstream>
 #include <sstream>
 
-constexpr size_t MINIO_BUF_SIZ = 1024;
-
 FileUploadManager::FileUploadManager(QObject* parent)
     : QObject(parent), m_useSSL(false), m_initialized(false) {}
 
@@ -24,7 +22,7 @@ auto FileUploadManager::initialize(const QString& endpoint,
                                    const QString& secretKey, bool useSSL,
                                    const QString& region) -> bool {
   try {
-    qDebug() << "[MINIO] initialize start";
+    qDebug() << "initialize start";
     m_endpoint = endpoint;
     m_accessKey = accessKey;
     m_secretKey = secretKey;
@@ -45,7 +43,7 @@ auto FileUploadManager::initialize(const QString& endpoint,
     minio::s3::BucketExistsResponse result = m_client->BucketExists(args);
     if (!result) {
       m_lastError = QString::fromStdString(result.Error().String());
-      qDebug() << "[MINIO] " << m_lastError;
+      qDebug() << "" << m_lastError;
       emit initialized(false, m_lastError);
       return false;
     }
@@ -53,12 +51,12 @@ auto FileUploadManager::initialize(const QString& endpoint,
     m_initialized = true;
     m_lastError.clear();
     emit initialized(true);
-    qDebug() << "[MINIO] initialize success";
+    qDebug() << "initialize success";
     return true;
 
   } catch (const std::exception& e) {
     m_lastError = QString("Initialization failed: %1").arg(e.what());
-    qDebug() << "[MINIO] " << m_lastError;
+    qDebug() << "" << m_lastError;
     emit initialized(false, m_lastError);
     return false;
   }
@@ -68,24 +66,24 @@ void FileUploadManager::uploadFile(const QString& bucketName,
                                    const QString& objectName,
                                    const QString& filePath,
                                    const QVariantMap& metadata) {
-  qDebug() << "[MINIO] uploadFile вызван bucket:" << bucketName
+  qDebug() << "uploadFile вызван bucket:" << bucketName
            << "object:" << objectName << "file:" << filePath;
   if (!m_initialized) {
-    qCritical() << "[MINIO] Manager not initialized";
+    qCritical() << "Manager not initialized";
     emit uploadFailed(objectName, "Manager not initialized");
     return;
   }
 
-  executeAsync("uploadFile", [this, bucketName, objectName, filePath,
+  execAsync("uploadFile", [this, bucketName, objectName, filePath,
                               metadata]() {
-    qDebug() << "[MINIO] uploadStarted:" << objectName;
+    qDebug() << "uploadStarted:" << objectName;
     emit uploadStarted(objectName, bucketName);
 
     try {
       QFile file(filePath);
-      qDebug() << "[MINIO] Открытие файла:" << filePath;
+      qDebug() << "Открытие файла:" << filePath;
       if (!file.open(QIODevice::ReadOnly)) {
-        qCritical() << "[MINIO] Cannot open file:" << file.errorString();
+        qCritical() << "Cannot open file:" << file.errorString();
         emit uploadFailed(
             objectName,
             QString("Cannot open file: %1").arg(file.errorString()));
@@ -94,7 +92,7 @@ void FileUploadManager::uploadFile(const QString& bucketName,
 
       qint64 fileSize = file.size();
       file.close();
-      qDebug() << "[MINIO] Размер файла:" << fileSize;
+      qDebug() << "Размер файла:" << fileSize;
 
       minio::utils::Multimap metaMap;
       for (auto it = metadata.constBegin(); it != metadata.constEnd(); ++it) {
@@ -102,18 +100,18 @@ void FileUploadManager::uploadFile(const QString& bucketName,
                     it.value().toString().toStdString());
       }
 
-      qDebug() << "[MINIO] Проверка bucket";
+      qDebug() << "Проверка bucket";
       minio::s3::BucketExistsArgs bucketArgs;
       bucketArgs.bucket = bucketName.toStdString();
       auto bucketResp = m_client->BucketExists(bucketArgs);
       if (!bucketResp || !bucketResp.exist) {
-        qDebug() << "[MINIO] Создание bucket";
+        qDebug() << "Создание bucket";
         minio::s3::MakeBucketArgs makeArgs;
         makeArgs.bucket = bucketName.toStdString();
         m_client->MakeBucket(makeArgs);
       }
 
-      qDebug() << "[MINIO] Создание PutObjectArgs из файла";
+      qDebug() << "Создание PutObjectArgs из файла";
       std::ifstream fileStream(filePath.toStdString(), std::ios::binary);
       if (!fileStream.is_open()) {
         emit uploadFailed(objectName, "Cannot open file stream");
@@ -125,12 +123,12 @@ void FileUploadManager::uploadFile(const QString& bucketName,
       args.object = objectName.toStdString();
       args.user_metadata = metaMap;
 
-      qDebug() << "[MINIO] Вызов PutObject bucket:" << bucketName
+      qDebug() << "Вызов PutObject bucket:" << bucketName
                << "object:" << objectName;
       minio::s3::PutObjectResponse result = m_client->PutObject(args);
       fileStream.close();
       if (!result) {
-        qCritical() << "[MINIO] PutObject failed:"
+        qCritical() << "PutObject failed:"
                     << QString::fromStdString(result.Error().String());
         emit uploadFailed(objectName,
                           QString::fromStdString(result.Error().String()));
@@ -143,12 +141,12 @@ void FileUploadManager::uploadFile(const QString& bucketName,
                             .arg(bucketName)
                             .arg(objectName);
 
-      qDebug() << "[MINIO] файл загружен:" << fileUrl;
+      qDebug() << "файл загружен:" << fileUrl;
 
       emit uploadFinished(objectName, fileUrl);
 
     } catch (const std::exception& e) {
-      qCritical() << "[MINIO] Exception:" << e.what();
+      qCritical() << "Exception:" << e.what();
       emit uploadFailed(objectName, QString("Upload failed: %1").arg(e.what()));
     }
   });
@@ -163,7 +161,7 @@ void FileUploadManager::uploadFile(const QString& bucketName,
     return;
   }
 
-  executeAsync("uploadFile", [this, bucketName, objectName, data, metadata]() {
+  execAsync("uploadFile", [this, bucketName, objectName, data, metadata]() {
     emit uploadStarted(objectName, bucketName);
 
     try {
@@ -218,7 +216,7 @@ void FileUploadManager::downloadFile(const QString& bucketName,
     return;
   }
 
-  executeAsync("downloadFile", [this, bucketName, objectName, filePath]() {
+  execAsync("downloadFile", [this, bucketName, objectName, filePath]() {
     emit downloadStarted(objectName, bucketName);
 
     try {
@@ -521,16 +519,18 @@ auto FileUploadManager::generatePresignedUrl(const QString& bucketName,
 }
 
 template <typename Func, typename... Args>
-void FileUploadManager::executeAsync(const QString& operationName, Func&& func,
+void FileUploadManager::execAsync(const QString& operationName, Func&& func,
                                      Args&&... args) {
   auto res =
       QtConcurrent::run([this, operationName, func = std::forward<Func>(func),
                          args...]() mutable -> auto {
         try {
+          qDebug() << "start fileuploadmanager|"<<operationName;
           func();
-          emit operationCompleted(operationName, true);
+          qDebug() << "finished fileuploadmanager|"<<operationName;
         } catch (const std::exception& e) {
-          emit operationCompleted(operationName, false, e.what());
+          qCritical() << "ошибка исполнения в fileuploadmanager|"<<operationName << ": "  << e.what();
+          throw;
         }
       });
 }

@@ -3,19 +3,17 @@
 
 #include <QObject>
 #include <atomic>
-#include <condition_variable>
 #include <functional>
-#include <memory>
-#include <mutex>
 #include <queue>
 #include <thread>
+#include <utility>
 
 #include "absl/synchronization/mutex.h"
 #include "databasemanager.h"
 #include "proto/chat.grpc.pb.h"
 #include "proto/chat.pb.h"
 
-class MessageSender : public QObject {
+class MessageSender final : public QObject {
   Q_OBJECT
 
  public:
@@ -31,9 +29,10 @@ class MessageSender : public QObject {
   void sendFile(const QString& chatId, const QString& filePath);
   void sendFileInfo(const QString& chatId, const QString& fileId,
                     const QString& originalFileName, qint64 originalFileSize,
-                    const QString& mimeType, bool isFile);
+                    const QString& mimeType, bool isFile,
+                    const QString& preview = "");
   void setEncryptCallback(EncryptCallback callback) {
-    encryptCallback_ = callback;
+    encryptCallback_ = std::move(callback);
   }
 
  private:
