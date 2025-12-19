@@ -44,11 +44,11 @@ void StickerPickerDialog::setupQML() {
 }
 
 void StickerPickerDialog::showAtPosition(const QPoint& pos) {
+  setPosition(pos.x(), pos.y() - height() - 5);
   show();
   raise();
   requestActivate();
-
-  setPosition(pos.x(), pos.y() - height() - 5);
+  setVisible(true);
 }
 
 void StickerPickerDialog::onStickerSelected(const QString& stickerCode) {

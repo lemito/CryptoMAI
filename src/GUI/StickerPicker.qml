@@ -85,7 +85,7 @@ Item {
 
                                     onClicked: {
                                         clickAnimation.start()
-                                        stickerPopup.stickerSelected(modelData)
+                                        root.stickerSelected(modelData)
                                         stickerPopup.close()
                                     }
                                 }
@@ -121,6 +121,10 @@ Item {
         }
     }
 
+    Component.onCompleted: {
+        stickerPopup.open()
+    }
+    
     function open() {
         stickerPopup.open()
     }
