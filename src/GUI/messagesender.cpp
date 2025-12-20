@@ -193,6 +193,7 @@ void MessageSender::runSender() {
         if (!ack.success()) {
           qWarning() << "Доставка фрагмента не удалась:"
                      << QString::fromStdString(ack.error());
+          // QMessageBox(parent, "", "Доставка фрагмента не удалась:"+ QString::fromStdString(ack.error()););
         }
       }
     }

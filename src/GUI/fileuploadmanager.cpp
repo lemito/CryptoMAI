@@ -272,9 +272,11 @@ void FileUploadManager::downloadFile(const QString& bucketName,
       if (resp) {
         emit downloadProgress(objectName, totalDownloaded, totalDownloaded);
         emit downloadFinished(objectName, filePath);
+        // deleteFile(bucketName, objectName);
       } else {
         emit downloadFailed(objectName,
                             QString::fromStdString(resp.Error().String()));
+        // deleteFile(bucketName, objectName);
       }
 
     } catch (const std::exception& e) {

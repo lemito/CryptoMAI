@@ -12,6 +12,16 @@ Item {
 
     property int previousMessageCount: 0
 
+    onMessageListChanged: {
+        if (messageList && messageList.length > 0) {
+            Qt.callLater(function() {
+                if (messagesView.visible && listView.count > 0) {
+                    listView.positionViewAtEnd()
+                }
+            })
+        }
+    }
+
     property var stickerMap: ({
                                   ":meow:": "qrc:/stickers/meow_sticker.jpg",
                                   ":UwU:": "qrc:/stickers/meow_stickers.jpg",
@@ -49,8 +59,8 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: "#f8f9fa"
-        opacity: hasSelectedChat && messageCount > 0 ? 1 : 0.3
+        color: "#fffafa"
+        opacity: 1
         z: 0
     }
 
@@ -135,7 +145,9 @@ Item {
             property var newItemsIndices: []
 
             onCountChanged: {
-                positionViewAtEnd()
+                Qt.callLater(function() {
+                    positionViewAtEnd()
+                })
 
                 if (count > previousMessageCount) {
                     for (var i = previousMessageCount; i < count; i++) {
@@ -148,6 +160,9 @@ Item {
             onModelChanged: {
                 newItemsIndices = []
                 previousMessageCount = 0
+                Qt.callLater(function() {
+                    positionViewAtEnd()
+                })
             }
 
             delegate: Rectangle {
@@ -304,7 +319,7 @@ Item {
                             visible: parent.isImageFile(modelData.fileName)
                                      && modelData.content
                                      && modelData.content !== ""
-                            source: visible ? "file:///" + modelData.content : ""
+                            source: visible ? "file://" + modelData.content : ""
                             width: Math.min(
                                        sourceSize.width > 0 ? sourceSize.width : parent.width,
                                        parent.width)

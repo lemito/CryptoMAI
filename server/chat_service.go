@@ -734,7 +734,17 @@ func (s *ChatService) ExchangeDHParametersStream(stream pb.ChatService_ExchangeD
 
 		s.logger.Info("Подключился второй участник", "chat_id", chatId, "username", username)
 
-		return s.performDHExchange(exchangeCtx, chatId, username, peerExchange, true)
+		err := s.performDHExchange(exchangeCtx, chatId, username, peerExchange, true)
+		stat := status.Convert(err)
+		if stat.Code() == codes.AlreadyExists {
+			s.logger.Warn("Обмен уже завершён", "chat_id", chatId)
+			err = nil
+		}
+		s.broker.mu.Lock()
+		delete(s.broker.pending, chatId)
+		s.broker.mu.Unlock()
+		
+		return err
 	} else {
 		peerExchange = &pendingDH{
 			firstReq:    req,
@@ -752,18 +762,6 @@ func (s *ChatService) ExchangeDHParametersStream(stream pb.ChatService_ExchangeD
 }
 
 func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username string, exchange *pendingDH) error {
-	defer func() {
-		s.broker.mu.Lock()
-		delete(s.broker.pending, chatId)
-		s.broker.mu.Unlock()
-
-		exchange.mu.Lock()
-		exchange.isCompleted = true
-		exchange.mu.Unlock()
-
-		s.logger.Debug("Очистка ожидающего обмена", "chat_id", chatId)
-	}()
-
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -776,11 +774,26 @@ func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username st
 
 			if hasSecond {
 				s.logger.Info("Второй участник прибыл, начинаем обмен", "chat_id", chatId)
-				return s.performDHExchange(ctx, chatId, username, exchange, false)
+				err := s.performDHExchange(ctx, chatId, username, exchange, false)
+				
+				s.broker.mu.Lock()
+				delete(s.broker.pending, chatId)
+				s.broker.mu.Unlock()
+				
+				exchange.mu.Lock()
+				exchange.isCompleted = true
+				exchange.mu.Unlock()
+				
+				return err
 			}
 
 		case <-ctx.Done():
 			s.logger.Info("Истекло время ожидания второго участника", "chat_id", chatId, "error", ctx.Err())
+			
+			s.broker.mu.Lock()
+			delete(s.broker.pending, chatId)
+			s.broker.mu.Unlock()
+			
 			return status.Error(codes.DeadlineExceeded, "Timeout waiting for second peer")
 		}
 	}
@@ -792,8 +805,8 @@ func (s *ChatService) performDHExchange(ctx context.Context, chatId, username st
 
 	if exchange.isCompleted {
 		s.logger.Warn("Обмен уже завершён", "chat_id", chatId)
-		return nil
-		// return status.Error(codes.AlreadyExists, "Exchange already completed")
+		// return nil
+		return status.Error(codes.AlreadyExists, "Exchange already completed")
 	}
 
 	if exchange.firstReq == nil || exchange.secondReq == nil {
@@ -803,8 +816,8 @@ func (s *ChatService) performDHExchange(ctx context.Context, chatId, username st
 		return status.Error(codes.Internal, "Missing DH parameters")
 	}
 
-	s.logger.Info("Обмен параметрами Диффи-Хеллмана", "chat_id", chatId,
-		"is_second_peer", isSecondPeer, "username", username)
+	s.logger.Info("Обмен параметрами Диффи-Хеллмана", " chat_id: ", chatId,
+		" is_second_peer: ", isSecondPeer, " username:", username)
 
 	var streamToUse pb.ChatService_ExchangeDHParametersStreamServer
 	var paramsToSend *pb.DHParameters

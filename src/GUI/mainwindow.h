@@ -106,13 +106,13 @@ class MainWindow : public QMainWindow {
   std::unique_ptr<ContactsDialog> contactsDialog;
   std::unique_ptr<ChatManager> m_chatManager;
 
-  absl::flat_hash_map<QString, ChatKeys> chatKeys;
+  absl::flat_hash_map<QString, ChatKeys> chatKeys{};
 
   absl::Mutex chatContextMutex_;
   absl::flat_hash_map<QString, meow::cypher::symm::SymmetricCypherContext>
-      chatContexts;
+      chatContexts{};
 
-  absl::flat_hash_map<std::string, bool> activeDHExchanges_;
+  absl::flat_hash_map<std::string, bool> activeDHExchanges_{};
 
   absl::Mutex activeDHMutex_;
 

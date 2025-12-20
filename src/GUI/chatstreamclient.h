@@ -32,6 +32,7 @@ class ChatStreamClient : public QObject {
 
  private:
   void runStream();
+  void processChat(const chat::ChatInfo& chatInfo);
 
   chat::ChatService::Stub* chatStub_;
   std::atomic<bool> streaming_{false};

@@ -30,7 +30,7 @@ class DatabaseManager final : public QObject {
                const QString& initiator, const QString& prime,
                const QString& generator, const QString& publicKey,
                const QString& peerPublicKey, bool dhExchangeComplete) -> bool;
-  auto removeChat(const QString& chatId) -> bool;
+  auto removeChat(const QString& chatId, const QString& createdName) -> bool;
   auto getAllChats(const QString& username) -> QVector<Chat>;
   auto getChat(const QString& chatId, const QString& username) -> Chat;
   auto updateChatParams(const QString& chatId, const QString& prime,

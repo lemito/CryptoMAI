@@ -3,6 +3,8 @@
 #include <QApplication>
 #include <QFile>
 
+#include "sessionmanager.h"
+
 std::unique_ptr<DatabaseManager> DatabaseManager::m_instance = nullptr;
 
 auto DatabaseManager::instance() -> DatabaseManager* {
@@ -91,9 +93,9 @@ auto DatabaseManager::createTables() -> bool {
       "id INTEGER PRIMARY KEY AUTOINCREMENT,"
       "chat_id TEXT NOT NULL,"
       "created_name TEXT NOT NULL,"
-      "message_id TEXT UNIQUE NOT NULL,"
+      "message_id TEXT NOT NULL,"
       "sender TEXT NOT NULL,"
-      "content BLOB NOT NULL,"
+      "content BLOB,"
       "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,"
       "is_encrypted BOOLEAN DEFAULT FALSE,"
       "is_outgoing BOOLEAN DEFAULT FALSE,"
@@ -104,7 +106,8 @@ auto DatabaseManager::createTables() -> bool {
       "file_size INTEGER DEFAULT 0,"
       "original_filename TEXT,"
       "FOREIGN KEY (chat_id, created_name) REFERENCES chats (chat_id, "
-      "created_name) ON DELETE CASCADE"
+      "created_name) ON DELETE CASCADE,"
+      "UNIQUE (chat_id, created_name, message_id)"
       ")");
 
   query.exec("ALTER TABLE messages ADD COLUMN original_filename TEXT");
@@ -209,12 +212,15 @@ auto DatabaseManager::addChat(
   return success;
 }
 
-auto DatabaseManager::removeChat(const QString& chatId) -> bool {
+auto DatabaseManager::removeChat(const QString& chatId,
+                                 const QString& createdName) -> bool {
   QSqlDatabase::database().transaction();
 
   QSqlQuery deleteMessagesQuery;
-  deleteMessagesQuery.prepare("DELETE FROM messages WHERE chat_id = ?");
+  deleteMessagesQuery.prepare(
+      "DELETE FROM messages WHERE chat_id = ? AND created_name = ?");
   deleteMessagesQuery.addBindValue(chatId);
+  deleteMessagesQuery.addBindValue(createdName);
 
   if (!deleteMessagesQuery.exec()) {
     qCritical() << "Ошибка удаления сообщений чата:"
@@ -224,13 +230,15 @@ auto DatabaseManager::removeChat(const QString& chatId) -> bool {
   }
 
   QSqlQuery deleteChatQuery;
-  deleteChatQuery.prepare("DELETE FROM chats WHERE chat_id = ?");
+  deleteChatQuery.prepare(
+      "DELETE FROM chats WHERE chat_id = ? AND created_name = ?");
   deleteChatQuery.addBindValue(chatId);
+  deleteChatQuery.addBindValue(createdName);
 
   bool success = deleteChatQuery.exec();
   if (success) {
     QSqlDatabase::database().commit();
-    qDebug() << "Чат удален:" << chatId;
+    qDebug() << "Чат удален:" << chatId << "для пользователя:" << createdName;
   } else {
     QSqlDatabase::database().rollback();
     qCritical() << "Ошибка удаления чата:"
@@ -432,27 +440,16 @@ auto DatabaseManager::getChatMessages(const QString& chatId, int limit,
 
   query.prepare(
       "SELECT "
-      "id, "
-      "chat_id, "
-      "created_name, "
-      "message_id, "
-      "sender, "
-      "content, "
-      "timestamp, "
-      "is_encrypted, "
-      "is_outgoing, "
-      "status, "
-      "is_file, "
-      "file_name, "
-      "mime_type, "
-      "file_size, "
-      "original_filename "
+      "id, chat_id, created_name, message_id, sender, content, "
+      "timestamp, is_encrypted, is_outgoing, status, is_file, "
+      "file_name, mime_type, file_size, original_filename "
       "FROM messages "
-      "WHERE chat_id = ? "
+      "WHERE chat_id = ? AND created_name = ? "
       "ORDER BY timestamp ASC "
       "LIMIT ? OFFSET ?");
 
   query.addBindValue(chatId);
+  query.addBindValue(SessionManager::instance().username());
   query.addBindValue(limit);
   query.addBindValue(offset);
 
@@ -461,7 +458,7 @@ auto DatabaseManager::getChatMessages(const QString& chatId, int limit,
       Message msg;
       msg.id = query.value(0).toLongLong();
       msg.chatId = query.value(1).toString();
-      // query.value(2)
+      QVariant createName = query.value(2);
       msg.messageId = query.value(3).toString();
       msg.sender = query.value(4).toString();
       msg.content = query.value(5).toByteArray();
@@ -477,7 +474,6 @@ auto DatabaseManager::getChatMessages(const QString& chatId, int limit,
         msg.fileSize = query.value(13).toLongLong();
         msg.originalFilename = query.value(14).toString();
       }
-
       messages.append(msg);
     }
   } else {
@@ -574,8 +570,9 @@ auto DatabaseManager::getFileMessageByFileId(const QString& fileId) -> Message {
       "SELECT id, chat_id, created_name, message_id, sender, content, "
       "timestamp, is_encrypted, is_outgoing, status, is_file, file_name, "
       "mime_type, file_size, original_filename "
-      "FROM messages WHERE file_name = ? AND is_file = TRUE LIMIT 1");
+      "FROM messages WHERE file_name = ? AND is_file = TRUE AND created_name = ? LIMIT 1");
   query.addBindValue(fileId);
+  query.addBindValue(SessionManager::instance().username());
 
   if (query.exec() && query.next()) {
     msg.id = query.value(0).toLongLong();
@@ -600,9 +597,10 @@ auto DatabaseManager::getFileMessageByFileId(const QString& fileId) -> Message {
 auto DatabaseManager::updateMessageFilePath(const QString& messageId,
                                             const QString& filePath) -> bool {
   QSqlQuery query(m_database);
-  query.prepare("UPDATE messages SET content = ? WHERE message_id = ?");
+  query.prepare("UPDATE messages SET content = ? WHERE message_id = ? AND created_name = ?");
   query.addBindValue(filePath.toUtf8());
   query.addBindValue(messageId);
+  query.addBindValue(SessionManager::instance().username());
 
   return query.exec();
 }

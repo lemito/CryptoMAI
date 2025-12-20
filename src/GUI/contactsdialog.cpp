@@ -18,9 +18,14 @@ using grpc::ClientContext;
 using grpc::Status;
 
 ContactsDialog::ContactsDialog(QWidget* parent)
-    : QDialog(parent), ui(new Ui::ContactsDialog) {
+    : QDialog(parent), ui(new Ui::ContactsDialog), stopUpdates_(false) {
   ui->setupUi(this);
   setupGrpcChannel();
+
+  connect(ui->addContactButton, &QPushButton::clicked, this,
+          &ContactsDialog::onAddContactButton_clicked);
+  connect(ui->searchEdit, &QLineEdit::textChanged, this,
+          &ContactsDialog::onSearchEdit_textChanged);
 
   qDebug() << "старт окошка";
   if (SessionManager::instance().isLoggedIn()) {
@@ -38,6 +43,7 @@ ContactsDialog::~ContactsDialog() {
 }
 
 void ContactsDialog::stopAllThreads() {
+  if (stopUpdates_) {return;}
   stopUpdates_ = true;
 
   if (updatesThread_.joinable()) {
@@ -47,12 +53,13 @@ void ContactsDialog::stopAllThreads() {
 
 void ContactsDialog::closeEvent(QCloseEvent* event) {
   qDebug() << "close";
+  stopAllThreads();
   QDialog::closeEvent(event);
 }
 
 void ContactsDialog::setupGrpcChannel() {
-  auto channel = grpc::CreateChannel(GRPC_URL,
-                                     grpc::InsecureChannelCredentials());
+  auto channel =
+      grpc::CreateChannel(GRPC_URL, grpc::InsecureChannelCredentials());
   contactsStub_ = chat::ContactService::NewStub(channel);
 }
 

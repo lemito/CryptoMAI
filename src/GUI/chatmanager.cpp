@@ -17,6 +17,43 @@ void ChatManager::setDatabaseManager(DatabaseManager* dbManager) {
   m_dbManager = dbManager;
 }
 
+// void ChatManager::loadChatHistory(const QString& fileId) {
+//   m_fileProgressMap[fileId] = progress;
+//   if (m_currentChatId.isEmpty()) {
+//     return;
+//   }
+
+//   auto messages = m_dbManager->getChatMessages(m_currentChatId);
+//   QVariantList messageList;
+//   QString curUser = SessionManager::instance().username();
+
+//   for (const auto& message : messages) {
+//     QVariantMap msgMap;
+//     msgMap["sender"] = message.sender;
+//     msgMap["isOwn"] = (message.sender == curUser) || (message.sender == "me");
+//     msgMap["timestamp"] = message.timestamp.toString("hh:mm");
+//     msgMap["isFile"] = static_cast<bool>(message.isFile);
+//     if (message.isFile) {
+//       msgMap["fileId"] = message.fileName;
+//       msgMap["fileName"] = message.originalFilename.isEmpty()
+//                                ? message.fileName
+//                                : message.originalFilename;
+//       msgMap["mimeType"] = message.mimeType;
+//       msgMap["fileSize"] = message.fileSize;
+//       msgMap["messageId"] = message.messageId;
+      
+//       QString contentPath = QString::fromUtf8(message.content);
+//       msgMap["content"] = contentPath.isEmpty() ? message.fileName : contentPath;
+//       msgMap["downloadProgress"] = m_fileProgressMap.value(message.fileName, -1);
+//     } else {
+//       msgMap["content"] = QString::fromUtf8(message.content);
+//     }
+//     messageList.append(msgMap);
+//   }
+
+//   m_chatState->updateState(true, messages.size(), messageList);
+// }
+
 void ChatManager::loadChatHistory(const QString& chatId) {
   if (m_dbManager == nullptr) {
     qCritical() << "ChatManager: DatabaseManager null";
@@ -25,7 +62,9 @@ void ChatManager::loadChatHistory(const QString& chatId) {
 
   auto messages = m_dbManager->getChatMessages(chatId);
   if (messages.empty()) {
-    qCritical() << "ChatManager: Не удалось получить соо из БД";
+    qDebug() << "ChatManager: Нет сообщений для чата" << chatId;
+    m_currentChatId = chatId;
+    m_chatState->updateState(!chatId.isEmpty(), 0, QVariantList());
     return;
   }
 
@@ -36,7 +75,7 @@ void ChatManager::loadChatHistory(const QString& chatId) {
     QVariantMap msgMap;
     msgMap["sender"] = message.sender;
     msgMap["isOwn"] = (message.sender == curUser) || (message.sender == "me");
-    msgMap["timestamp"] = message.timestamp.toString("hh:mm");
+    msgMap["timestamp"] = message.timestamp.addSecs(3600 * 3).toString("hh:mm");
     msgMap["isFile"] = message.isFile;
     if (message.isFile) {
       msgMap["fileId"] = message.fileName;
@@ -52,6 +91,7 @@ void ChatManager::loadChatHistory(const QString& chatId) {
       QString ext = message.originalFilename.split('.').last().toLower();
       QStringList imageExts = {"jpg", "jpeg", "png", "gif", "bmp", "webp"};
       if (imageExts.contains(ext)) {
+        qDebug() << "picture start autoDownloadImage";
         emit autoDownloadImage(message.fileName);
       }
     } else {

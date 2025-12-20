@@ -403,11 +403,21 @@ QPushButton:pressed {
             </item>
             <item>
              <widget class="QPushButton" name="userStatusButton">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
               <property name="minimumSize">
                <size>
                 <width>0</width>
                 <height>30</height>
                </size>
+              </property>
+              <property name="font">
+               <font>
+                <pointsize>9</pointsize>
+                <bold>true</bold>
+                <kerning>true</kerning>
+               </font>
               </property>
               <property name="cursor">
                <cursorShape>PointingHandCursor</cursorShape>
@@ -888,11 +898,17 @@ QMenu::item:selected {
    </property>
   </action>
   <action name="actionExit">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>🚪 Выход</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
+   </property>
+   <property name="visible">
+    <bool>false</bool>
    </property>
   </action>
   <action name="actionPreferences">

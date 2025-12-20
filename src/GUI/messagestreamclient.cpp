@@ -29,6 +29,10 @@ void MessageStreamClient::startStream() {
 
   qDebug() << "MessageStreamClient::startStream";
 
+    if (stream_thread_.joinable()) {
+    stream_thread_.join();
+  }
+
   streaming_ = true;
   stop_requested_ = false;
 
@@ -203,14 +207,15 @@ void MessageStreamClient::saveMessageToDatabase(
 
   Chat chat =
       dbManager_->getChat(chatId, SessionManager::instance().username());
-  QString sender = chat.name;
+  QString sender = chat.name.split("|")[0];
+  // QString sender = SessionManager::instance().username();
 
   QByteArray decryptedData;
   QString fileId;
 
   if (isFile) {
     fileId = QString::fromStdString(metadata.file_id());
-    decryptedData = fileId.toUtf8();
+    decryptedData = QByteArray();
   } else if (decryptCallback_) {
     decryptedData = decryptCallback_(chatId, assembledData);
   } else {
