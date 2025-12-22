@@ -20,14 +20,14 @@ type contactsService struct {
 	db      *sql.DB
 	streams map[string][]pb.ContactService_SubscribeToContactUpdatesServer
 	mu      sync.RWMutex
-	logger *zap.SugaredLogger
+	logger  *zap.SugaredLogger
 }
 
 func NewContactsService(log *zap.SugaredLogger, db *sql.DB) *contactsService {
 	return &contactsService{
 		db:      db,
 		streams: make(map[string][]pb.ContactService_SubscribeToContactUpdatesServer),
-		logger:log,
+		logger:  log,
 	}
 }
 
@@ -40,20 +40,36 @@ func (s *contactsService) getCurrentUser(ctx context.Context) (string, error) {
 }
 
 func (s *contactsService) broadcastToUser(userID string, update *pb.ContactUpdate) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	streams, exists := s.streams[userID]
 	if !exists {
 		return
 	}
 
-	for i, stream := range streams {
-		if err := stream.Send(update); err != nil {
-			s.logger.Infof("Failed to send update to user %s: %v", userID, err)
-			streams[i] = nil
+	validStreams := make([]pb.ContactService_SubscribeToContactUpdatesServer, 0, len(streams))
+	for _, stream := range streams {
+		if stream != nil {
+			if err := stream.Send(update); err != nil {
+				s.logger.Infof("Failed to send update to user %s: %v", userID, err)
+			} else {
+				validStreams = append(validStreams, stream)
+			}
 		}
 	}
+
+	if len(validStreams) > 0 {
+		s.streams[userID] = validStreams
+	} else {
+		delete(s.streams, userID)
+	}
+	// for i, stream := range streams {
+	// 	if err := stream.Send(update); err != nil {
+	// 		s.logger.Infof("Failed to send update to user %s: %v", userID, err)
+	// 		streams[i] = nil
+	// 	}
+	// }
 }
 
 func (s *contactsService) AddContact(ctx context.Context, req *pb.ContactRequest) (*pb.CommonResponse, error) {
@@ -155,7 +171,7 @@ func (s *contactsService) AddContact(ctx context.Context, req *pb.ContactRequest
 			RequestId: currentUserID,
 		},
 	})
-	
+
 	return &pb.CommonResponse{
 		Success: true,
 		Message: "Запрос на добавление в контакты отправлен успешно",
@@ -236,6 +252,24 @@ func (s *contactsService) HandleContactRequest(ctx context.Context, req *pb.Cont
 
 	if err := tx.Commit(); err != nil {
 		return nil, status.Errorf(codes.Internal, "не удалось зафиксировать транзакцию: %v", err)
+	}
+
+	if approve {
+		s.broadcastToUser(fromUserID, &pb.ContactUpdate{
+			Type: "accepted",
+			Contact: &pb.ContactInfo{
+				Username: currentUser,
+				Status:   "accepted",
+			},
+		})
+	} else {
+		s.broadcastToUser(fromUserID, &pb.ContactUpdate{
+			Type: "rejected",
+			Contact: &pb.ContactInfo{
+				Username: currentUser,
+				Status:   "rejected",
+			},
+		})
 	}
 
 	action := "принят"
@@ -452,6 +486,21 @@ func (s *contactsService) RemoveContact(ctx context.Context, req *pb.RemoveConta
 	if err := tx.Commit(); err != nil {
 		return nil, status.Errorf(codes.Internal, "не удалось зафиксировать транзакцию: %v", err)
 	}
+
+	s.broadcastToUser(currentUserID, &pb.ContactUpdate{
+		Type: "removed",
+		Contact: &pb.ContactInfo{
+			Username: contactUsername,
+			Status:   "removed",
+		},
+	})
+	s.broadcastToUser(contactUserID, &pb.ContactUpdate{
+		Type: "removed",
+		Contact: &pb.ContactInfo{
+			Username: currentUser,
+			Status:   "removed",
+		},
+	})
 
 	return &pb.CommonResponse{
 		Success: true,

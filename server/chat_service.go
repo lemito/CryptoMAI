@@ -38,7 +38,7 @@ type pendingDH struct {
 	secondStream pb.ChatService_ExchangeDHParametersStreamServer
 	mu           sync.RWMutex
 	isCompleted  bool
-	createdTime time.Time
+	createdTime  time.Time
 }
 
 type DHExchangeBroker struct {
@@ -648,6 +648,7 @@ func (s *ChatService) SubscribeToChatUpdates(empty *emptypb.Empty, stream pb.Cha
 
 			for id, chat := range curChats {
 				if _, exists := prevChats[id]; !exists {
+					s.logger.Infof("Отправка нового чата %s пользователю %s", id, authContext.Username)
 					if err := stream.Send(&pb.ChatUpdate{
 						Type: "created",
 						Chat: s.convertChatToChatInfo(chat),
@@ -743,7 +744,7 @@ func (s *ChatService) ExchangeDHParametersStream(stream pb.ChatService_ExchangeD
 		s.broker.mu.Lock()
 		delete(s.broker.pending, chatId)
 		s.broker.mu.Unlock()
-		
+
 		return err
 	} else {
 		peerExchange = &pendingDH{
@@ -775,25 +776,25 @@ func (s *ChatService) waitForSecondPeer(ctx context.Context, chatId, username st
 			if hasSecond {
 				s.logger.Info("Второй участник прибыл, начинаем обмен", "chat_id", chatId)
 				err := s.performDHExchange(ctx, chatId, username, exchange, false)
-				
+
 				s.broker.mu.Lock()
 				delete(s.broker.pending, chatId)
 				s.broker.mu.Unlock()
-				
+
 				exchange.mu.Lock()
 				exchange.isCompleted = true
 				exchange.mu.Unlock()
-				
+
 				return err
 			}
 
 		case <-ctx.Done():
 			s.logger.Info("Истекло время ожидания второго участника", "chat_id", chatId, "error", ctx.Err())
-			
+
 			s.broker.mu.Lock()
 			delete(s.broker.pending, chatId)
 			s.broker.mu.Unlock()
-			
+
 			return status.Error(codes.DeadlineExceeded, "Timeout waiting for second peer")
 		}
 	}
@@ -886,7 +887,7 @@ func (s *ChatService) cleanupOldExchanges() {
 		s.broker.mu.Lock()
 		for chatId, exchange := range s.broker.pending {
 			exchange.mu.RLock()
-			isOld := exchange.isCompleted || time.Since(time.Now()) > 5*time.Minute
+			isOld := exchange.isCompleted || time.Since(exchange.createdTime) > 10*time.Minute
 			exchange.mu.RUnlock()
 
 			if isOld {

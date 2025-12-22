@@ -26,7 +26,8 @@ Item {
                 color: "#2c3e50"
             }
 
-            ScrollView {
+            Item {
+                id: mainItem
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.maximumHeight: 200
@@ -45,40 +46,36 @@ Item {
                     textFormat: Text.RichText
                     lineHeight: 1.4
                 }
-            }
 
-            Text {
-                Layout.alignment: Qt.AlignHCenter
-                text: "Версия 0.0.1"
-                font.pixelSize: 12
-                z: 1
-                color: "#7f8c8d"
-            }
-
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumHeight: 150
-
-                LottieAnimation {
-                    id: qtlottie
-                    anchors.fill: parent
-                    anchors.leftMargin: 0
-                    anchors.rightMargin: 0
-                    anchors.topMargin: 22
-                    anchors.bottomMargin: -22
-                    // anchors.margins: 10
-                    scale: 1
-                    source: "qrc:/cats/Le Petit Chat _Cat_ Noir.json"
+                Text {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "Версия 0.0.1"
+                    font.pixelSize: 12
                     z: 1
-                    quality: LottieAnimation.HighQuality
-                    loops: LottieAnimation.Infinite
-                    // fillColor: "#F0F0F0"
-                    // clip: true
+                    color: "#7f8c8d"
+                }
 
-                    onStatusChanged: {
-                        if (status == LottieAnimation.Ready) {
-                            console.log("Анимация загружена, размер:", width, "x", height)
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 150
+
+                    LottieAnimation {
+                        id: qtlottie
+                        anchors.fill: parent
+                        // anchors.margins: 10
+                        scale: 1
+                        source: "qrc:/cats/Le Petit Chat _Cat_ Noir.json"
+                        z: 1
+                        quality: LottieAnimation.HighQuality
+                        loops: LottieAnimation.Infinite
+                        // fillColor: "#F0F0F0"
+                        // clip: true
+
+                        onStatusChanged: {
+                            if (status == LottieAnimation.Ready) {
+                                console.log("Анимация загружена, размер:", width, "x", height)
+                            }
                         }
                     }
                 }

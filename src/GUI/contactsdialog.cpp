@@ -27,6 +27,9 @@ ContactsDialog::ContactsDialog(QWidget* parent)
   connect(ui->searchEdit, &QLineEdit::textChanged, this,
           &ContactsDialog::onSearchEdit_textChanged);
 
+  connect(ui->refreshButton, &QPushButton::clicked, this,
+          &ContactsDialog::manualRefreshContacts);
+
   qDebug() << "старт окошка";
   if (SessionManager::instance().isLoggedIn()) {
     qDebug() << "вход есть и загрузка контактов началась";
@@ -43,7 +46,9 @@ ContactsDialog::~ContactsDialog() {
 }
 
 void ContactsDialog::stopAllThreads() {
-  if (stopUpdates_) {return;}
+  if (stopUpdates_) {
+    return;
+  }
   stopUpdates_ = true;
 
   if (updatesThread_.joinable()) {
@@ -130,7 +135,7 @@ void ContactsDialog::loadContacts() {
     return;
   }
 
-  std::thread([this]() {
+  std::thread([this]() -> void {
     if (stopUpdates_) {
       return;
     }
@@ -542,12 +547,23 @@ void ContactsDialog::onContactUpdateReceived(
 
   qDebug() << "Статус контакта обновлен:" << type << "Юзер:" << username;
 
-  if (type == "request") {
+  if (type == "request" || type == "new_request") {
     QMessageBox::information(
         this, "Новый запрос",
         QString("Пользователь %1 хочет добавить вас в контакты").arg(username));
     loadContacts();
-  } else if (type == "added" || type == "removed" || type == "status_changed") {
+  } else if (type == "added" || type == "removed" || type == "status_changed" ||
+             type == "accepted" || type == "rejected" || type == "removed") {
     loadContacts();
   }
+}
+
+void ContactsDialog::manualRefreshContacts() {
+  if (!SessionManager::instance().isLoggedIn()) {
+    QMessageBox::warning(this, "Ошибка", "Необходимо войти в систему");
+    return;
+  }
+
+  qDebug() << "Ручное обновление контактов...";
+  loadContacts();
 }

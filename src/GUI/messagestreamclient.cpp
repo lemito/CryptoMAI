@@ -93,28 +93,27 @@ void MessageStreamClient::runStream() {
 
     chat::EncryptedChunk chunk;
     emit streamStatusChanged(true);
-    qDebug() << "MessageStream: Поток создан, начинаем чтение...";
+    qDebug() << "MessageStream: поток создан, чтение старт...";
 
     int chunkCount = 0;
-    qDebug() << "MessageStream: Входим в цикл чтения, ожидаем сообщения от "
-                "сервера...";
+    qDebug() << "MessageStream: ожидание чтение...";
 
     while (!stop_requested_) {
       bool has_message = reader->Read(&chunk);
       qDebug() << "MessageStream: read";
 
       if (stop_requested_) {
-        qDebug() << "MessageStream: Остановка запрошена во время чтения";
+        qDebug() << "MessageStream: запрошена остановка во время чтения";
         break;
       }
 
       if (!has_message) {
-        qDebug() << "MessageStream:  поток завершен или ошибка";
+        qDebug() << "MessageStream: поток завершен или ошибка";
         break;
       }
 
       chunkCount++;
-      qDebug() << "MessageStream: Получен чанк #" << chunkCount
+      qDebug() << "MessageStream: Получен чанк " << chunkCount
                << "для сообщения:"
                << QString::fromStdString(chunk.metadata().message_id())
                << "чат:" << QString::fromStdString(chunk.metadata().chat_id())
@@ -181,7 +180,7 @@ void MessageStreamClient::processReceivedChunk(
     const chat::EncryptedChunk& chunk) {
   messageAssembler_->processChunk(chunk);
 
-  qDebug() << "MessageStream: Обрабатываем чанк для сообщения:"
+  qDebug() << "MessageStream: Обработка чанка для сообщения:"
            << QString::fromStdString(chunk.metadata().message_id())
            << "чат:" << QString::fromStdString(chunk.metadata().chat_id())
            << "чанк:" << chunk.metadata().chunk_index() + 1 << "/"

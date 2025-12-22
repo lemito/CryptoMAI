@@ -38,6 +38,7 @@ class ContactsDialog : public QDialog {
   void onRemoveContact(const QString& username);
   void onStartChat(const QString& username);
   void onErrorOccurred(const QString& errorMessage);
+  void manualRefreshContacts();
 
  protected:
   void closeEvent(QCloseEvent* event) override;

@@ -76,7 +76,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: "Пока тут пусто :("
             font.pixelSize: 16
-            color: "#666"
+            color: "#241f31"
             z: 3
         }
 
@@ -84,7 +84,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: "Создай чат или вступи в существующий"
             font.pixelSize: 14
-            color: "#999"
+            color: "#241f31"
             z: 3
         }
 
@@ -353,7 +353,7 @@ Item {
 
                             Component.onCompleted: {
                                 if (visible && source !== "") {
-                                    console.log("Начинаем загрузку изображения: " + source)
+                                    console.log("Загрузка изображения: " + source)
                                 }
                             }
                         }

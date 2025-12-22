@@ -21,11 +21,19 @@ void SessionManager::setSessionData(const QString& token,
 }
 
 auto SessionManager::sessionToken() const -> QString {
-  return m_settings->value("session/token").toString();
+  const auto res = m_settings->value("session/token").toString();
+  if (res.isEmpty()) {
+    qCritical() << "session/token подозрительно пуст!!!!";
+  }
+  return res;
 }
 
 auto SessionManager::username() const -> QString {
-  return m_settings->value("session/username").toString();
+  const auto res = m_settings->value("session/username").toString();
+  if (res.isEmpty()) {
+    qCritical() << "session/username подозрительно пуст!!!!";
+  }
+  return res;
 }
 
 auto SessionManager::isLoggedIn() const -> bool {

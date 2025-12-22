@@ -215,6 +215,7 @@ func (s *authService) ValidateSession(ctx context.Context, sessionToken string) 
 }
 
 func (s *authService) Logout(ctx context.Context, req *pb.LogoutRequest) (*pb.CommonResponse, error) {
+	s.logger.Info("Выход для ", "SessionToken: ", req.SessionToken)
 	result, err := s.db.ExecContext(ctx,
 		"UPDATE user_sessions SET is_active = false WHERE session_token = $1",
 		req.SessionToken)

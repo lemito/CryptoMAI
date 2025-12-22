@@ -123,10 +123,12 @@ MainWindow::MainWindow(QWidget* parent)
       connect(ui->fileButton, &QPushButton::clicked, this,
               &MainWindow::onSendFileClicked);
 
-      connect(ui->updateChatsButton, &QPushButton::clicked, this, [this] {
-        refreshChatsList();
-        initializeExistingChats();
-      });
+      connect(ui->updateChatsButton, &QPushButton::clicked, this,
+              [this] -> void {
+                this->manualSyncChats();
+                // refreshChatsList();
+                // initializeExistingChats();
+              });
 
       connect(chat_stream_client_.get(), &ChatStreamClient::chatReceived, this,
               &MainWindow::onChatReceived);
@@ -306,18 +308,17 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 MainWindow::~MainWindow() {
   m_isDestroying = true;
 
+  stopChatStream();
+  if (message_stream_client_) {
+    message_stream_client_->stopStream();
+  }
+
   if (chatThreadPool != nullptr) {
-    // chatThreadPool->waitForDone();
+    chatThreadPool->waitForDone(5000);
     safe_delete(chatThreadPool);
   }
 
-  if (chat_stream_client_) {
-    chat_stream_client_->stopStream();
-  }
-
   {
-    stopChatStream();
-
     if (contactsDialog) {
       contactsDialog->stopAllThreads();
       contactsDialog->close();
@@ -411,7 +412,8 @@ void MainWindow::processChatInBackground(
           ::chat::EncryptionMode_Name(algoParams.mode()));
       const QString padName = QString::fromStdString(
           ::chat::PaddingMode_Name(algoParams.padding()));
-      const QString IV = QString::fromStdString(algoParams.chat_iv());
+      const QString IV =
+          QByteArray::fromStdString(algoParams.chat_iv()).toHex().toUpper();
 
       const QString prime = QString::fromStdString(peerParams.prime());
       const QString generator = QString::fromStdString(peerParams.generator());
@@ -452,7 +454,9 @@ void MainWindow::processChatInBackground(
     QString primeStr = QString::fromStdString(peerParams.prime());
     QString genStr = QString::fromStdString(peerParams.generator());
     QString peerPubKeyStr = QString::fromStdString(peerParams.public_key());
-    QString ivStr = QString::fromStdString(algoParams.chat_iv());
+    QString ivStr =
+        QByteArray::fromStdString(algoParams.chat_iv()).toHex().toUpper();
+    // QString ivStr = QString::fromStdString(algoParams.chat_iv());
 
     m_dbManager->updateChatParams(chatId, primeStr, genStr, peerPubKeyStr,
                                   ivStr);
@@ -619,8 +623,7 @@ void MainWindow::onLogout() {
   QString token = SessionManager::instance().sessionToken();
   if (!token.isEmpty()) {
     try {
-      // Очищаем публичные ключи в БД перед выходом
-      if (m_dbManager) {
+      if (m_dbManager != nullptr) {
         QVector<Chat> chats =
             m_dbManager->getAllChats(SessionManager::instance().username());
         for (const Chat& chat : chats) {
@@ -929,8 +932,7 @@ void MainWindow::handleCreateChat(const QString& contact, int algorithm,
       QString chatName = username + " | " + contact;
       auto stat = m_dbManager->addChat(
           chatId, chatName, username, algorithmStr, modeStr, paddingStr,
-          QString(iv.toHex().toUpper()), username,
-          QString::fromStdString(prime.str()),
+          iv.toHex().toUpper(), username, QString::fromStdString(prime.str()),
           QString::fromStdString(generator.str()),
           QString::fromStdString(publicKey.str()), QString(), false);
       if (!stat) {
@@ -1053,12 +1055,12 @@ void MainWindow::onMessageReceived(const chat::EncryptedChunk& chunk) {
         bool isFile = metadata.is_file();
 
         if (m_chatManager) {
-      QMetaObject::invokeMethod(this, [this, chatId]() -> void {
-        if (getcurChatId() == chatId) {
-          m_chatManager->loadChatHistory(chatId);
+          QMetaObject::invokeMethod(this, [this, chatId]() -> void {
+            if (getcurChatId() == chatId) {
+              m_chatManager->loadChatHistory(chatId);
+            }
+          });
         }
-      });
-    }
 
       } catch (const std::exception& e) {
         qCritical() << "Ошибка обработки сообщения:" << e.what();
@@ -1130,6 +1132,7 @@ void MainWindow::onSendFileClicked() {
       QFileDialog::getOpenFileName(this, "Выберите файл для отправки");
   qDebug() << "Выбран файл:" << filePath;
   if (filePath.isEmpty()) {
+    qDebug() << "пустой путь == отмена";
     return;
   }
   QFileInfo fileInfo(filePath);
@@ -1183,6 +1186,13 @@ void MainWindow::onSendFileClicked() {
           &m_fileManager, &FileUploadManager::uploadFinished, this,
           [this, curChatId, fileId, originalFileName, originalFileSize,
            tempEncryptedFilePath, filePath, conn](const QString& objectName) {
+            if (m_isDestroying) {
+                disconnect(*conn);
+              if (conn != nullptr){
+                  delete conn;
+              }
+                return;
+            }
             qDebug() << "uploadFinished сигнал получен для:" << objectName;
             if (objectName == fileId) {
               qDebug() << "Отправка метаданных файла";
@@ -1199,7 +1209,9 @@ void MainWindow::onSendFileClicked() {
                 m_chatManager->loadChatHistory(curChatId);
               }
               disconnect(*conn);
-              delete conn;
+              if (conn != nullptr){
+                delete conn;
+              }
             }
           });
 
@@ -1474,6 +1486,18 @@ void MainWindow::onChatSettingsButton_clicked() {
                         .arg(QString::fromStdString(errorMsg)));
                 settingsDialog.reject();
               }
+              {
+                absl::MutexLock lock(&chatKeysMutex);
+                chatKeys.erase(curChatId);
+              }
+              {
+                absl::MutexLock lock(&chatContextMutex_);
+                chatContexts.erase(curChatId);
+              }
+              {
+                absl::MutexLock lock(&activeDHMutex_);
+                activeDHExchanges_.erase(curChatId.toStdString());
+              }
               qDebug() << "Чел вышел из чата";
               QMessageBox::information(&settingsDialog, "Успех", "Чат закрыт");
               settingsDialog.accept();
@@ -1531,6 +1555,18 @@ void MainWindow::onChatSettingsButton_clicked() {
                     QString("Не удалось покинуть к чату: %1")
                         .arg(QString::fromStdString(errorMsg)));
                 settingsDialog.reject();
+              }
+              {
+                absl::MutexLock lock(&chatKeysMutex);
+                chatKeys.erase(curChatId);
+              }
+              {
+                absl::MutexLock lock(&chatContextMutex_);
+                chatContexts.erase(curChatId);
+              }
+              {
+                absl::MutexLock lock(&activeDHMutex_);
+                activeDHExchanges_.erase(curChatId.toStdString());
               }
               qDebug() << "Чел вышел успешно в чат";
               QMessageBox::information(&settingsDialog, "Успех", "Чат закрыт");
@@ -1613,11 +1649,10 @@ auto MainWindow::createContext(const Chat& chatInfo, const BI& symmetricKey)
     pad = meow::cypher::symm::paddingMode::PKCS7;
   }
 
-  const auto IV_qbyte = chatInfo.iv.toUtf8();
+  const auto IV_hex = QByteArray::fromHex(chatInfo.iv.toUtf8());
   std::vector<std::byte> IV(
-      reinterpret_cast<const std::byte*>(IV_qbyte.constData()),
-      reinterpret_cast<const std::byte*>(IV_qbyte.constData() +
-                                         IV_qbyte.size()));
+      reinterpret_cast<const std::byte*>(IV_hex.constData()),
+      reinterpret_cast<const std::byte*>(IV_hex.constData() + IV_hex.size()));
 
   // из числа будет делать ключ нужной мне длинны
   auto keyDerivation = [&]() -> std::vector<std::byte> {
@@ -1664,7 +1699,7 @@ auto MainWindow::createContext(const Chat& chatInfo, const BI& symmetricKey)
 
 auto MainWindow::encryptMessage(const QString& chatId,
                                 const QByteArray& plaintext) -> QByteArray {
-  absl::MutexLock lock(&chatKeysMutex);
+  absl::MutexLock lock(&chatContextMutex_);
   auto it = chatContexts.find(chatId);
   if (it != chatContexts.end()) {
     std::vector<std::byte> plaintextVec(
@@ -1687,7 +1722,7 @@ auto MainWindow::encryptMessage(const QString& chatId,
 
 auto MainWindow::decryptMessage(const QString& chatId,
                                 const QByteArray& ciphertext) -> QByteArray {
-  absl::MutexLock lock(&chatKeysMutex);
+  absl::MutexLock lock(&chatContextMutex_);
   auto it = chatContexts.find(chatId);
   if (it != chatContexts.end()) {
     std::vector<std::byte> ciphertextVec(
@@ -1770,6 +1805,9 @@ void MainWindow::computeSharedSecretAndInitializeContext(
 }
 
 void MainWindow::exchangeDHParameters(const QString& chatId) {
+  if (m_isDestroying) {
+    return;
+  }
   qDebug() << "Начало обмена DH параметрами для чата:" << chatId;
 
   {
@@ -1981,7 +2019,7 @@ void MainWindow::downloadFile(const QString& fileId) {
       return;
     }
 
-    qDebug()<<"downloadFile";
+    qDebug() << "downloadFile";
 
     if (!fileMessage.content.isEmpty()) {
       return;
@@ -2171,4 +2209,70 @@ void MainWindow::syncChatsWithServer() {
   }
 
   refreshChatsList();
+}
+
+void MainWindow::manualSyncChats() {
+  if (m_isDestroying) {
+    return;
+  }
+  if (!SessionManager::instance().isLoggedIn()) {
+    QMessageBox::warning(this, "Ошибка", "Необходимо войти в систему");
+    return;
+  }
+
+  qDebug() << "Ручная синхронизация чатов...";
+  QtConcurrent::run(chatThreadPool, [this]() -> void {
+    try {
+      auto ctx = std::make_unique<grpc::ClientContext>();
+      QString token = SessionManager::instance().sessionToken();
+      if (!token.isEmpty()) {
+        ctx->AddMetadata(SESSION_TOKEN_HEADER, token.toStdString());
+      } else {
+        QMessageBox::critical(this, "Ошибка", "Необходимо войти в систему");
+        return;
+      }
+
+      auto deadline =
+          std::chrono::system_clock::now() + std::chrono::seconds(5);
+      ctx->set_deadline(deadline);
+
+      google::protobuf::Empty request;
+      auto reader = chatStub_->GetActiveChats(ctx.get(), request);
+
+      chat::ChatInfo chatInfo;
+      while (reader->Read(&chatInfo)) {
+        QString chatId = QString::fromStdString(chatInfo.chat_id());
+        QString partiName = "";
+
+        for (const auto& participant : chatInfo.participants()) {
+          QString p = QString::fromStdString(participant);
+          if (p != SessionManager::instance().username()) {
+            partiName = p;
+            break;
+          }
+        }
+
+        QMetaObject::invokeMethod(
+            this, [this, chatId, partiName, chatInfo]() -> void {
+              onChatReceived(chatId, partiName, chatInfo.peer_params(),
+                             chatInfo.encryption_params());
+            });
+      }
+
+      reader->Finish();
+
+      QMetaObject::invokeMethod(this, [this]() -> void {
+        refreshChatsList();
+        QMessageBox::information(this, "Успех", "Чаты обновлены");
+      });
+
+    } catch (const std::exception& e) {
+      qCritical() << "Ошибка синхронизации:" << e.what();
+      QMetaObject::invokeMethod(this, [this, e]() -> void {
+        QMessageBox::critical(
+            this, "Ошибка",
+            QString("Не удалось обновить чаты: %1").arg(e.what()));
+      });
+    }
+  });
 }

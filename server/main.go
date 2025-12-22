@@ -149,7 +149,7 @@ func main() {
 		select {
 		case <-stopped:
 			sugar.Info("Server stopped gracefully")
-		case <-time.After(15 * time.Second):
+		case <-time.After(30 * time.Second):
 			sugar.Warn("Graceful shutdown timed out, forcing stop")
 			server.Stop()
 		}

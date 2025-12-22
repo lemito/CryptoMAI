@@ -214,33 +214,48 @@ auto DatabaseManager::addChat(
 
 auto DatabaseManager::removeChat(const QString& chatId,
                                  const QString& createdName) -> bool {
-  QSqlDatabase::database().transaction();
+  qDebug() << "removeChat вызван:" << chatId << createdName;
 
-  QSqlQuery deleteMessagesQuery;
-  deleteMessagesQuery.prepare(
-      "DELETE FROM messages WHERE chat_id = ? AND created_name = ?");
+  if (!m_database.transaction()) {
+    qCritical() << "Не удалось начать транзакцию";
+    return false;
+  }
+
+  QSqlQuery deleteMessagesQuery(m_database);
+  if (!deleteMessagesQuery.prepare(
+          "DELETE FROM messages WHERE chat_id = ? AND created_name = ?")) {
+    qCritical() << "Ошибка prepare messages:"
+                << deleteMessagesQuery.lastError().text();
+    m_database.rollback();
+    return false;
+  }
   deleteMessagesQuery.addBindValue(chatId);
   deleteMessagesQuery.addBindValue(createdName);
 
   if (!deleteMessagesQuery.exec()) {
     qCritical() << "Ошибка удаления сообщений чата:"
                 << deleteMessagesQuery.lastError().text();
-    QSqlDatabase::database().rollback();
+    m_database.rollback();
     return false;
   }
 
-  QSqlQuery deleteChatQuery;
-  deleteChatQuery.prepare(
-      "DELETE FROM chats WHERE chat_id = ? AND created_name = ?");
+  QSqlQuery deleteChatQuery(m_database);
+  if (!deleteChatQuery.prepare(
+          "DELETE FROM chats WHERE chat_id = ? AND created_name = ?")) {
+    qCritical() << "Ошибка prepare chats:"
+                << deleteChatQuery.lastError().text();
+    m_database.rollback();
+    return false;
+  }
   deleteChatQuery.addBindValue(chatId);
   deleteChatQuery.addBindValue(createdName);
 
   bool success = deleteChatQuery.exec();
   if (success) {
-    QSqlDatabase::database().commit();
+    m_database.commit();
     qDebug() << "Чат удален:" << chatId << "для пользователя:" << createdName;
   } else {
-    QSqlDatabase::database().rollback();
+    m_database.rollback();
     qCritical() << "Ошибка удаления чата:"
                 << deleteChatQuery.lastError().text();
   }
@@ -551,9 +566,10 @@ auto DatabaseManager::updateChatParams(const QString& chatId,
       "UPDATE chats SET prime = :prime, generator = :generator, "
       "peer_public_key = :peerPublicKey, iv = :iv, dh_exchange_complete = "
       ":dhComplete "
-      "WHERE chat_id = :chatId");
+      "WHERE chat_id = :chatId AND created_name = :createdName");
 
   query.bindValue(":chatId", chatId);
+  query.bindValue(":createdName", SessionManager::instance().username());
   query.bindValue(":prime", prime);
   query.bindValue(":generator", generator);
   query.bindValue(":peerPublicKey", peerPublicKey);
@@ -570,7 +586,8 @@ auto DatabaseManager::getFileMessageByFileId(const QString& fileId) -> Message {
       "SELECT id, chat_id, created_name, message_id, sender, content, "
       "timestamp, is_encrypted, is_outgoing, status, is_file, file_name, "
       "mime_type, file_size, original_filename "
-      "FROM messages WHERE file_name = ? AND is_file = TRUE AND created_name = ? LIMIT 1");
+      "FROM messages WHERE file_name = ? AND is_file = TRUE AND created_name = "
+      "? LIMIT 1");
   query.addBindValue(fileId);
   query.addBindValue(SessionManager::instance().username());
 
@@ -597,7 +614,9 @@ auto DatabaseManager::getFileMessageByFileId(const QString& fileId) -> Message {
 auto DatabaseManager::updateMessageFilePath(const QString& messageId,
                                             const QString& filePath) -> bool {
   QSqlQuery query(m_database);
-  query.prepare("UPDATE messages SET content = ? WHERE message_id = ? AND created_name = ?");
+  query.prepare(
+      "UPDATE messages SET content = ? WHERE message_id = ? AND created_name = "
+      "?");
   query.addBindValue(filePath.toUtf8());
   query.addBindValue(messageId);
   query.addBindValue(SessionManager::instance().username());

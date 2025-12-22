@@ -217,6 +217,33 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
        </property>
       </spacer>
      </item>
+     <item>
+      <widget class="QPushButton" name="refreshButton">
+       <property name="styleSheet">
+        <string notr="true">QPushButton {
+    background-color: rgb(158, 255, 176);
+    border-radius: 8px;
+    border: none;
+    color: rgb(36, 31, 49);
+    font-weight: bold;
+    font-size: 10pt;
+    padding: 8px 12px;
+}
+
+QPushButton:hover {
+    background-color: #7c3aed;
+}
+
+QPushButton:pressed {
+    background-color: #6d28d9;
+}
+</string>
+       </property>
+       <property name="text">
+        <string>🔃 Обновить</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
   </layout>
