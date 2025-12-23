@@ -410,8 +410,12 @@ void MainWindow::processChatInBackground(
           ::chat::EncryptionAlgorithm_Name(algoParams.algorithm()));
       const QString modeName = QString::fromStdString(
           ::chat::EncryptionMode_Name(algoParams.mode()));
-      const QString padName = QString::fromStdString(
+      QString padName = QString::fromStdString(
           ::chat::PaddingMode_Name(algoParams.padding()));
+      if (padName == "ANSI_X923") {
+        // TODO(lemito): по хорошему, любое использование перевеода в строке параметров должно использовать PaddingMode_Name
+        padName = QString("ANSIX923");
+      }
       const QString IV =
           QByteArray::fromStdString(algoParams.chat_iv()).toHex().toUpper();
 
@@ -1187,11 +1191,11 @@ void MainWindow::onSendFileClicked() {
           [this, curChatId, fileId, originalFileName, originalFileSize,
            tempEncryptedFilePath, filePath, conn](const QString& objectName) {
             if (m_isDestroying) {
-                disconnect(*conn);
-              if (conn != nullptr){
-                  delete conn;
+              disconnect(*conn);
+              if (conn != nullptr) {
+                delete conn;
               }
-                return;
+              return;
             }
             qDebug() << "uploadFinished сигнал получен для:" << objectName;
             if (objectName == fileId) {
@@ -1209,7 +1213,7 @@ void MainWindow::onSendFileClicked() {
                 m_chatManager->loadChatHistory(curChatId);
               }
               disconnect(*conn);
-              if (conn != nullptr){
+              if (conn != nullptr) {
                 delete conn;
               }
             }
