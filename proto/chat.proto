@@ -1,0 +1,264 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/lemito/CryptoMAI/proto;chat";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+message CommonResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UsernameRequest { string username = 1; }
+
+message ChatIdRequest { string chat_id = 1; }
+
+// === АВТОРИЗАЦИЯ ===
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  bool success = 1;
+  string session_token = 2;
+  string message = 3;
+}
+
+message LogoutRequest { string session_token = 1; }
+
+message ValidateTokenRequest { string session_token = 1; }
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string username = 3;
+}
+
+// === ШИФРОВАНИЕ ===
+enum EncryptionAlgorithm { LOKI97 = 0; RC6 = 1; }
+
+enum EncryptionMode {
+  ECB = 0; CBC = 1; PCBC = 2; CFB = 3; OFB = 4; CTR = 5; RANDOM_DELTA = 6;
+}
+
+enum PaddingMode { ZEROS = 0; ANSI_X923 = 1; PKCS7 = 2; ISO10126 = 3; }
+
+message DHParameters {
+  bytes prime = 1;
+  bytes generator = 2;
+  bytes public_key = 3;
+}
+
+message EncryptionParameters {
+  EncryptionAlgorithm algorithm = 1;
+  EncryptionMode mode = 2;
+  PaddingMode padding = 3;
+  bytes chat_iv = 4;
+}
+
+// === УПРАВЛЕНИЕ КОНТАКТАМИ ===
+message ContactRequest {
+  string target_username = 1;  // кому
+}
+
+message ContactActionRequest {
+  string request_id = 1;  // ID запроса
+  bool approve = 2;       // Принять/отклонить
+}
+
+message RemoveContactRequest { string contact_username = 1; }
+
+message ContactInfo {
+  string username = 1;
+  string status = 2;  // "online", "offline", "pending"
+  string request_id = 3;
+}
+
+// === УПРАВЛЕНИЕ ЧАТАМИ ===
+message CreateChatRequest {
+  string contact_username = 1;
+  EncryptionParameters encryption_params = 2;
+  DHParameters initiator_params = 3;
+}
+
+message ChatInfo {
+  string chat_id = 1;
+  repeated string participants = 2;
+  EncryptionParameters encryption_params = 3;
+  DHParameters peer_params = 4;
+  bool is_active = 5;
+}
+
+message JoinChatRequest {
+  string chat_id = 1;
+  DHParameters peer_params = 2;  // DH присоединяющегося
+}
+
+message CloseChatRequest { string chat_id = 1; }
+
+message DHParametersExchange {
+  string chat_id = 1;
+  oneof message {
+    DHParameters parameters = 2;
+    bool ready = 3;
+    string error = 4;
+  }
+}
+
+message DHParametersResponse {
+  oneof response {
+    DHParameters peer_params = 1;
+    bool success = 2;
+    string error = 3;
+    bool exchange_complete = 4;
+  }
+}
+
+// === ПЕРЕДАЧА СООБЩЕНИЙ ===
+message ChunkMetadata {
+  string chat_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string file_id = 3;
+  bool is_file = 4;
+  int32 chunk_index = 5;
+  int32 total_chunks = 6;
+  bool is_last_chunk = 7;
+  string original_filename = 8;
+  int64 file_size = 9;
+  string message_id = 10;
+  bool is_cancellation = 11;
+}
+
+message EncryptedChunk {
+  ChunkMetadata metadata = 1;
+  bytes encrypted_content = 2;
+}
+
+message ChunkAcknowledgement {
+  string file_id = 1;
+  int32 chunk_index = 2;
+  bool success = 3;
+  string error = 4;
+}
+
+message TransferCancellation {
+  string message_id = 1;
+  string file_id = 2;
+  string chat_id = 3;
+  string reason = 4;
+}
+
+message TransferStatus {
+  string message_id = 1;
+  TransferState state = 2;
+  float progress = 3;
+  string error = 4;
+}
+
+enum TransferState {
+  PENDING = 0; TRANSFERRING = 1; COMPLETED = 2; CANCELLED = 3; FAILED = 4;
+}
+
+message TransferStatusRequest { string message_id = 1; }
+
+message ContactUpdate {
+  string type = 1;  // "added", "removed", "status_changed", "request"
+  ContactInfo contact = 2;
+}
+
+message ChatUpdate {
+  string type = 1;  // "created", "closed", "user_joined", "user_left"
+  ChatInfo chat = 2;
+}
+
+message GetChatDHParamsRequest { string chat_id = 1; }
+
+message GetChatDHParamsResponse {
+  bool success = 1;
+  DHParameters initiator_params = 2;
+  bytes peer_public_key = 3;
+  string error = 4;
+}
+
+// === СЕРВИСЫ ===
+service AuthService {
+  // Рега
+  rpc Register(RegisterRequest) returns(CommonResponse);
+  // Вход
+  rpc Login(LoginRequest) returns(AuthResponse);
+  // выход
+  rpc Logout(LogoutRequest) returns(CommonResponse);
+  // проверка токена
+  rpc ValidateToken(ValidateTokenRequest) returns(ValidateTokenResponse);
+}
+
+service ContactService {
+  // Добавить контакт
+  rpc AddContact(ContactRequest) returns(CommonResponse);
+
+  // Получить список контактов
+  rpc GetContacts(google.protobuf.Empty) returns(stream ContactInfo);
+
+  // Обработать входящий запрос на добавление в контакты
+  rpc HandleContactRequest(ContactActionRequest) returns(CommonResponse);
+
+  // Удалить контакт
+  rpc RemoveContact(RemoveContactRequest) returns(CommonResponse);
+
+  // Стриминг обновлений контактов
+  rpc SubscribeToContactUpdates(google.protobuf.Empty)
+      returns(stream ContactUpdate);
+}
+
+service ChatService {
+  // Создать новый чат
+  rpc CreateChat(CreateChatRequest) returns(ChatInfo);
+
+  // Присоединиться к существующему чату
+  rpc JoinChat(JoinChatRequest) returns(CommonResponse);
+
+  // Закрыть чат
+  rpc CloseChat(CloseChatRequest) returns(CommonResponse);
+
+  // Получить активные чаты пользователя
+  rpc GetActiveChats(google.protobuf.Empty) returns(stream ChatInfo);
+
+  // Покинуть чат
+  rpc LeaveChat(CloseChatRequest) returns(CommonResponse);
+
+  // Стриминг чатов
+  rpc SubscribeToChatUpdates(google.protobuf.Empty) returns(stream ChatUpdate);
+
+  // DH
+  rpc ExchangeDHParametersStream(stream DHParametersExchange) returns (stream DHParametersResponse);
+  rpc GetChatDHParams(GetChatDHParamsRequest) returns(GetChatDHParamsResponse);
+}
+
+message SubscribeToChunksRequest { string chatId = 1; }
+
+service MessagingService {
+  // Отправка зашифрованных чанков
+  rpc SendChunks(stream EncryptedChunk) returns(stream ChunkAcknowledgement);
+
+  // Получение чанков
+  rpc SubscribeToChunks(SubscribeToChunksRequest)
+      returns(stream EncryptedChunk);
+
+  // Отмена передачи файла
+  rpc CancelTransfer(TransferCancellation) returns(CommonResponse);
+
+  // Получить историю сообщений для чата
+  rpc GetChatHistory(ChatIdRequest) returns(stream EncryptedChunk);
+
+  // Статус о получении/отмены
+  rpc GetTransferStatus(TransferStatusRequest) returns(stream TransferStatus);
+}

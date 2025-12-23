@@ -5,24 +5,23 @@ module;
 
 #include <unistd.h>
 
+#include <array>
 #include <bit>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <iomanip>
 #include <ios>
 #include <iostream>
+#include <memory>
+#include <span>
+#include <stdexcept>
+#include <tuple>
+#include <vector>
 
 #include "debug.h"
 
 export module cypher.DES;
-
-import <cstdint>;
-import <array>;
-import <cstddef>;
-import <memory>;
-import <span>;
-import <stdexcept>;
-import <tuple>;
-import <vector>;
 
 import cypher.FeistelNet;
 import cypher.utils;

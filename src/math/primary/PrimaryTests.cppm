@@ -16,7 +16,7 @@ constexpr double default_epsilon = std::numeric_limits<double>::epsilon();
 
 constexpr bool doubleEqual(const double a, const double b,
                            const double epsilon = default_epsilon) {
-  return std::abs(a - b) < epsilon;
+  return std::fabs(a - b) < epsilon;
 }
 
 constexpr bool doubleLess(const double a, const double b,

@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package crypto;
+
+// TODO: перенести во что-то общее
+option go_package = "github.com/lemito/CryptoMAI/proto;crypto";
+
+enum EncryptionMode {
+  ECB = 0;           
+  CBC = 1;          
+  PCBC = 2;        
+  CFB = 3;          
+  OFB = 4;          
+  CTR = 5;          
+  RANDOM_DELTA = 6;  
+}
+
+enum PaddingMode {
+  ZEROS = 0;        
+  ANSI_X923 = 1;  
+  PKCS7 = 2;      
+  ISO10126 = 3;    
+}
+
+message EncryptRequest {
+  bytes key = 1;
+  bytes data = 2;
+  EncryptionMode mode = 3;
+  PaddingMode padding = 4;
+  bytes iv_bytes = 5;
+  string iv_bigint = 6;
+  double random_delta = 7;
+  string algorithm = 8;
+}
+
+message EncryptResponse {
+  bytes ciphertext = 1;
+  string error = 2;
+  bool success = 3;
+}
+
+message DecryptRequest {
+  bytes key = 1;
+  bytes ciphertext = 2;
+  EncryptionMode mode = 3;
+  PaddingMode padding = 4;
+  bytes iv_bytes = 5;
+  string iv_bigint = 6;
+  double random_delta = 7;
+  string algorithm = 8;
+}
+
+message DecryptResponse {
+  bytes plaintext = 1;
+  string error = 2;
+  bool success = 3;
+}
+
+message Empty {}
+
+message Algorithm {
+  string name = 1;
+  int32 key_size_bits = 2;
+  int32 block_size_bits = 3;
+}
+
+message AlgorithmList {
+  repeated Algorithm algorithms = 1;
+}
+
+service CypherService {
+  rpc Encrypt(EncryptRequest) returns (EncryptResponse) {}
+  rpc Decrypt(DecryptRequest) returns (DecryptResponse) {}
+  rpc GetSupportedAlgorithms(Empty) returns (AlgorithmList) {}
+}
