@@ -1687,7 +1687,7 @@ auto MainWindow::createContext(const Chat& chatInfo, const BI& symmetricKey)
 
   try {
     meow::cypher::symm::SymmetricCypherContext ctx =
-        meow::cypher::symm::SymmetricCypherContext(key, mode, pad, IV);
+        meow::cypher::symm::SymmetricCypherContext(key, mode, pad, IV, BI(42));
     ctx.setAlgo(algo);
 
     return ctx;

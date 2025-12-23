@@ -64,7 +64,7 @@ void CreateChatDialog::setupUi() {
   encryptionLayout->addWidget(new QLabel("Набивка:"), 2, 0);
   paddingCombo = new QComboBox();
   paddingCombo->addItem("ZEROS", 0);
-  paddingCombo->addItem("ANSI_X923", 1);
+  paddingCombo->addItem("ANSIX923", 1);
   paddingCombo->addItem("PKCS7", 2);
   paddingCombo->addItem("ISO10126", 3);
   encryptionLayout->addWidget(paddingCombo, 2, 1);
