@@ -61,7 +61,7 @@ class MainWindow;
 }
 QT_END_NAMESPACE
 
-class MainWindow : public QMainWindow {
+class MainWindow final : public QMainWindow {
   Q_OBJECT
 
  public:
@@ -117,15 +117,15 @@ class MainWindow : public QMainWindow {
   absl::Mutex activeDHMutex_;
 
   absl::Mutex chatKeysMutex;
-  QThreadPool* chatThreadPool;
+  QThreadPool* chatThreadPool{nullptr};
   std::atomic<bool> m_isDestroying{false};
 
-  QLabel* m_statusLabel;
-  QProgressBar* m_progressBar;
-  QPlainTextEdit* m_logWidget;
+  QLabel* m_statusLabel{nullptr};
+  QProgressBar* m_progressBar{nullptr};
+  QPlainTextEdit* m_logWidget{nullptr};
   QString m_currentDownload;
 
-  QTimer* m_syncTimer;
+  QTimer* m_syncTimer{nullptr};
 
   void reinitializeForNewUser();
   void refreshChatsList();

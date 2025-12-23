@@ -117,26 +117,6 @@ auto DatabaseManager::createTables() -> bool {
     return false;
   }
 
-  success = query.exec(
-      "CREATE TABLE IF NOT EXISTS encryption_keys ("
-      "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-      "chat_id TEXT NOT NULL,"
-      "username TEXT NOT NULL,"
-      "key_data BLOB NOT NULL,"
-      "created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
-      "algorithm TEXT,"
-      "key_size INTEGER,"
-      "is_active BOOLEAN DEFAULT TRUE,"
-      "FOREIGN KEY (chat_id) REFERENCES chats (chat_id) ON DELETE CASCADE,"
-      "UNIQUE(chat_id, username)"
-      ")");
-
-  if (!success) {
-    qCritical() << "не удалось создать табличку encryption_keys:"
-                << query.lastError().text();
-    return false;
-  }
-
   query.exec(
       "CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)");
   query.exec(
@@ -150,9 +130,6 @@ auto DatabaseManager::createTables() -> bool {
   query.exec(
       "CREATE INDEX IF NOT EXISTS idx_chats_last_message ON "
       "chats(last_message_time)");
-  query.exec(
-      "CREATE INDEX IF NOT EXISTS idx_encryption_keys_chat_user ON "
-      "encryption_keys(chat_id, username)");
 
   qDebug() << "все таблички создались";
   return true;

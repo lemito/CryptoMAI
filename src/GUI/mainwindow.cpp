@@ -124,7 +124,7 @@ MainWindow::MainWindow(QWidget* parent)
               &MainWindow::onSendFileClicked);
 
       connect(ui->updateChatsButton, &QPushButton::clicked, this,
-              [this] -> void {
+              [this]() -> void {
                 this->manualSyncChats();
                 // refreshChatsList();
                 // initializeExistingChats();
@@ -161,7 +161,7 @@ MainWindow::MainWindow(QWidget* parent)
                   //   return;
                   // }
 
-                  // m_dbManager->markMessagesAsRead(chatid);
+                  m_dbManager->markMessagesAsRead(chatid);
 
                   m_chatManager->onChatSelected(chatid);
                   const QString nameChat = item->text();
@@ -1480,10 +1480,10 @@ void MainWindow::onChatSettingsButton_clicked() {
               if (!stat) {
                 std::string errorMsg = "БД";
                 qCritical() << "Ошибка: " << errorMsg.c_str();
-                QMessageBox::critical(
-                    this, "Ошибка",
-                    QString("Не удалось ливнуть к чату: %1")
-                        .arg(QString::fromStdString(errorMsg)));
+                // QMessageBox::critical(
+                //     this, "Ошибка",
+                //     QString("Не удалось ливнуть к чату: %1")
+                //         .arg(QString::fromStdString(errorMsg)));
                 settingsDialog.reject();
               }
               {
@@ -1550,10 +1550,10 @@ void MainWindow::onChatSettingsButton_clicked() {
               if (!stat) {
                 std::string errorMsg = "БД";
                 qCritical() << "Ошибка: " << errorMsg.c_str();
-                QMessageBox::critical(
-                    this, "Ошибка",
-                    QString("Не удалось покинуть к чату: %1")
-                        .arg(QString::fromStdString(errorMsg)));
+                // QMessageBox::critical(
+                //     this, "Ошибка",
+                //     QString("Не удалось покинуть к чату: %1")
+                //         .arg(QString::fromStdString(errorMsg)));
                 settingsDialog.reject();
               }
               {

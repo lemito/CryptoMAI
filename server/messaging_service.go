@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -380,7 +381,7 @@ func (s *MessagingService) SendChunks(stream pb.MessagingService_SendChunksServe
 		default:
 			chunk, err := stream.Recv()
 			if err != nil {
-				if err.Error() == "EOF" {
+				if err == io.EOF {
 					return nil
 				}
 				return status.Errorf(codes.Internal, "ошибка получения данных от клиента: %v", err)
